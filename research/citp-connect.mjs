@@ -3,10 +3,19 @@
 //   node research/citp-connect.mjs [--observe]   (default) connect, send NOTHING, log 20 s
 //   node research/citp-connect.mjs --hello        connect, send one PINF/PNam, log 30 s
 //   node research/citp-connect.mjs --caex         --hello, then CAEX FixtureListRequest; decode FixtureList
+//   node research/citp-connect.mjs --sync         CAEX spec F show-sync handshake, 45 s (see below)
 //
-// Read-only toward the show: the only messages ever sent are PINF/PNam (name announcement) and the CAEX
-// FixtureListRequest (0x00020200). Nothing that changes the show, patch, selection or DMX is built anywhere.
-// EnterShow is deliberately NOT sent (it declares a show on our side and is not a read request).
+// Read-only toward the show. The ONLY messages this script may ever send (enforced by isAllowedOutgoing() in
+// lib/citp.mjs, which refuses everything else) are: PINF/PNam, CAEX LaserFeedList (empty), EnterShow,
+// FixtureListRequest, NACK and LeaveShow. Nothing that changes the patch, selection, DMX or state is built
+// anywhere (no FixtureList/Modify/Remove/Identify/Selection/ConsoleStatus, no SetFixtureTransformationSpace).
+// EnterShow and LeaveShow are only ever sent in --sync.
+//
+// --sync (CAEX spec F, rules of interaction): send PNam; answer Capture's GetLaserFeedList with an empty
+// LaserFeedList; when Capture sends EnterShow, send our own EnterShow then a FixtureListRequest (one retry
+// after 5 s without a FixtureList); NACK (Reason 3, refused) any other request from Capture; log every message,
+// print every fixture of each FixtureList as tables, log every FixtureSelection with a timestamp; before
+// closing send LeaveShow (only if we sent EnterShow), wait 500 ms, close.
 //
 // Test/dev options: --host <ip> --port <n> (skip discovery), --duration <s> (override log time),
 //   --report-dir <dir> (default ./reports), --citp-version <maj.min> (default 1.0; only bytes 4-5 change).
@@ -19,8 +28,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import {
-  CAEX, CitpFramer, buildFixtureListRequest, buildPNam, decodeMessage, fourcc, hexOf,
+  CAEX, CitpFramer, buildEnterShow, buildFixtureListRequest, buildLaserFeedList, buildLeaveShow, buildNack, buildPNam,
+  decodeMessage, formatFixtureTables, fourcc, hexOf, isAllowedOutgoing,
 } from './lib/citp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,8 +39,8 @@ const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);
 const opt = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 
-const PHASE = flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
-const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000 }[PHASE];
+const PHASE = flag('--sync') ? 'sync' : flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
+const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000, sync: 45000 }[PHASE];
 const DURATION_MS = opt('--duration') ? Math.round(parseFloat(opt('--duration')) * 1000) : DEFAULT_MS;
 const REPORT_DIR = opt('--report-dir') ? path.resolve(opt('--report-dir')) : path.join(ROOT, 'reports');
 const [VMAJ, VMIN] = (opt('--citp-version') || '1.0').split('.').map(Number);
@@ -105,7 +116,9 @@ function tryConnect(host, port, timeoutMs = 3000) {
 async function main() {
   out(`CITP connect probe   phase=${PHASE}   ${new Date().toISOString()}   node ${process.version} ${process.platform}/${process.arch}`);
   out(`CITP header version used for anything we send: ${VMAJ}.${VMIN};  log duration: ${DURATION_MS / 1000} s`);
-  out(PHASE === 'observe' ? 'Sends: NOTHING.' : PHASE === 'hello' ? 'Sends: one PINF/PNam ("' + PROBE_NAME + '").' : 'Sends: PINF/PNam, then CAEX FixtureListRequest (0x00020200) only.');
+  out(PHASE === 'observe' ? 'Sends: NOTHING.' : PHASE === 'hello' ? 'Sends: one PINF/PNam ("' + PROBE_NAME + '").'
+    : PHASE === 'sync' ? 'Sends (only): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest, NACK (Reason 3), LeaveShow.'
+    : 'Sends: PINF/PNam, then CAEX FixtureListRequest (0x00020200) only.');
   out('');
 
   const ifaces = localIPv4();
@@ -141,11 +154,78 @@ async function main() {
   // ---- session ----
   const framer = new CitpFramer();
   let rx = 0, msgCount = 0, sawEnterShow = false, sawFixtureList = false, closedByPeer = false;
+  let closing = false;
   const send = (label, buf) => new Promise((res) => {
+    if (!isAllowedOutgoing(buf)) { out(`  ${since()} REFUSED to send ${label}: not on the outgoing allowlist (${hexOf(buf, 32)})`); res(); return; }
+    if (closing && !/LeaveShow/.test(label)) { out(`  ${since()} not sending ${label}: shutting down`); res(); return; }
     out(`  ${since()} SEND ${label} (${buf.length} bytes): ${hexOf(buf)}`);
     decodeMessage(buf, '      ').lines.forEach(out);
     sock.write(buf, (e) => { if (e) out(`  send error: ${errStr(e)}`); res(); });
   });
+  // sends are queued so their order on the wire is the order they were decided in
+  let sendChain = Promise.resolve();
+  const enqueue = (label, buf) => (sendChain = sendChain.then(() => send(label, buf)));
+
+  // --- sync state ---
+  const S = { laserRequests: 0, laserReplies: 0, nacks: 0, captureEnterShow: 0, weEntered: false, weLeft: false, fixtureRequests: 0,
+    fixtureLists: 0, latest: null, selections: [], modifies: 0, removes: 0, unsolicitedOther: [], timers: [] };
+  const sourceKey = randomBytes(4).readUInt32LE(0);
+  const REQUESTS = new Set([CAEX.GetLiveViewStatus, CAEX.GetLiveViewImage, CAEX.FixtureListRequest, CAEX.FixtureIdentify]);
+  const requestFixtures = (why) => {
+    if (S.fixtureRequests >= 6) { out(`  (not sending another FixtureListRequest: 6 already sent)`); return; }
+    const n = ++S.fixtureRequests; const before = S.fixtureLists;
+    enqueue(`CAEX FixtureListRequest #${n} (${why})`, buildFixtureListRequest(HDR_OPTS));
+    S.timers.push(setTimeout(() => {
+      if (S.fixtureLists === before && !closing && !S.retried?.has(n)) {
+        (S.retried ||= new Set()).add(n);
+        out(`  ${since()} no FixtureList within 5 s of request #${n}; sending one retry`);
+        enqueue(`CAEX FixtureListRequest #${n}b (retry: no FixtureList within 5 s)`, buildFixtureListRequest(HDR_OPTS));
+      }
+    }, 5000));
+  };
+  function handleSync(m, dm) {
+    const at = since();
+    switch (dm.code) {
+      case CAEX.GetLaserFeedList:
+        S.laserRequests++;
+        out(`  ${at} -> Capture asked GetLaserFeedList (#${S.laserRequests}); replying with an empty LaserFeedList (SourceKey 0x${sourceKey.toString(16).padStart(8, '0')}, FeedCount 0)`);
+        S.laserReplies++; enqueue('CAEX LaserFeedList (empty)', buildLaserFeedList(sourceKey, [], HDR_OPTS));
+        return;
+      case CAEX.EnterShow:
+        S.captureEnterShow++;
+        out(`  ${at} -> Capture entered show ${JSON.stringify(dm.showName)}`);
+        if (!S.weEntered) { S.weEntered = true; enqueue('CAEX EnterShow (ours)', buildEnterShow(PROBE_NAME, HDR_OPTS)); }
+        requestFixtures('Capture entered a show while we are in a show');
+        return;
+      case CAEX.FixtureList:
+        S.fixtureLists++; S.latest = dm.fixtures;
+        out(`  ${at} -> FixtureList #${S.fixtureLists}: Type=${dm.fixtures.type} count=${dm.fixtures.count}${dm.fixtures.error ? ' DECODE ERROR: ' + dm.fixtures.error : ''}`);
+        out('  ---- fixture tables (every fixture) ----');
+        formatFixtureTables(dm.fixtures.fixtures).forEach(out);
+        out('  ---- end fixture tables ----');
+        return;
+      case CAEX.FixtureSelection: {
+        const names = (dm.selection || []).map((id) => {
+          const f = S.latest && S.latest.fixtures.find((x) => x.identifier === id);
+          return `0x${id.toString(16).padStart(8, '0')}${f ? ` (${f.manufacturer} ${f.name}, ch ${f.channel})` : ''}`;
+        });
+        S.selections.push({ at, ids: names });
+        out(`  ${at} -> FIXTURE SELECTION: ${names.length ? names.join('; ') : '(empty selection)'}`);
+        return;
+      }
+      case CAEX.FixtureModify: S.modifies++; return;
+      case CAEX.FixtureRemove: S.removes++; return;
+      default:
+        if (dm.layer === 'CAEX' && REQUESTS.has(dm.code)) {
+          S.nacks++;
+          out(`  ${at} -> request ${dm.sub} (${dm.code === CAEX.FixtureListRequest ? 'FixtureListRequest' : 'not served'}) from Capture; replying NACK Reason 3 (refused)`);
+          enqueue(`CAEX NACK (refused) to ${dm.sub}`, buildNack(3, HDR_OPTS));
+        } else if (dm.layer === 'CAEX' && dm.code !== CAEX.NACK && dm.code !== CAEX.LeaveShow) {
+          S.unsolicitedOther.push(dm.sub);
+          out(`  ${at} -> CAEX ${dm.sub} is not a request we serve or track; no reply sent`);
+        }
+    }
+  }
   let onEnterShow = () => {};
 
   sock.on('data', (d) => {
@@ -158,8 +238,9 @@ async function main() {
       out(`  ${since()} RECV message #${msgCount}: ${m.length} bytes, layer="${fourcc(m, 16)}"` +
         `${fourcc(m, 16) === 'PINF' ? ` sub="${fourcc(m, 20)}"` : ''}`);
       out(`    hex(first 256): ${hexOf(m, 256)}${m.length > 256 ? ' ...' : ''}`);
-      const dm = decodeMessage(m);
+      const dm = decodeMessage(m, '    ', { maxFixtures: PHASE === 'sync' ? 0 : 20 });
       dm.lines.forEach(out);
+      if (PHASE === 'sync') handleSync(m, dm);
       if (dm.code === CAEX.EnterShow) { sawEnterShow = true; onEnterShow(); }
       if (dm.code === CAEX.FixtureList) sawFixtureList = true;
     }
@@ -172,18 +253,33 @@ async function main() {
   out('');
   out(`== Session (${PHASE}) ==`);
   const sessionStart = Date.now();
-  if (PHASE !== 'observe') await send('PINF/PNam', buildPNam(PROBE_NAME, HDR_OPTS));
+  if (PHASE !== 'observe') await enqueue('PINF/PNam', buildPNam(PROBE_NAME, HDR_OPTS));
+  if (PHASE === 'sync') out('  waiting for Capture (it sends EnterShow after it has received our PNam)...');
   if (PHASE === 'caex') {
     let sent = 0;
-    const requestFixtures = async (why) => { sent++; await send(`CAEX FixtureListRequest #${sent} (${why})`, buildFixtureListRequest(HDR_OPTS)); };
-    onEnterShow = () => { if (sent < 3 && !sawFixtureList) requestFixtures('after Capture sent EnterShow'); };
+    const requestFixturesCaex = async (why) => { sent++; await send(`CAEX FixtureListRequest #${sent} (${why})`, buildFixtureListRequest(HDR_OPTS)); };
+    onEnterShow = () => { if (sent < 3 && !sawFixtureList) requestFixturesCaex('after Capture sent EnterShow'); };
     await sleep(500);
-    await requestFixtures('after hello');
-    setTimeout(() => { if (!sawFixtureList && sent < 3 && !closedByPeer) requestFixtures('retry: no FixtureList after 5 s'); }, 5000);
+    await requestFixturesCaex('after hello');
+    setTimeout(() => { if (!sawFixtureList && sent < 3 && !closedByPeer) requestFixturesCaex('retry: no FixtureList after 5 s'); }, 5000);
   }
   await sleep(Math.max(0, sessionStart + DURATION_MS - Date.now()));
 
   out('');
+  if (PHASE === 'sync') {
+    closing = true; S.timers.forEach(clearTimeout);
+    await sendChain;
+    if (S.weEntered && !closedByPeer && !sock.destroyed) {
+      await send('CAEX LeaveShow (ours)', buildLeaveShow(HDR_OPTS)); S.weLeft = true;
+      await sleep(500);
+    } else out(`  LeaveShow not sent (${S.weEntered ? 'connection already closed' : 'we never sent EnterShow'})`);
+    out('== Sync summary ==');
+    out(`  GetLaserFeedList requests: ${S.laserRequests} (replies sent: ${S.laserReplies}); Capture EnterShow messages: ${S.captureEnterShow}; our EnterShow sent: ${S.weEntered}; FixtureListRequests sent: ${S.fixtureRequests}`);
+    out(`  FixtureList messages received: ${S.fixtureLists}${S.latest ? ` (latest: ${S.latest.fixtures.length} fixture(s))` : ''}; NACKs sent: ${S.nacks}; FixtureModify: ${S.modifies}; FixtureRemove: ${S.removes}; other CAEX ignored: ${S.unsolicitedOther.join(', ') || 'none'}`);
+    out(`  FixtureSelection events: ${S.selections.length}`);
+    S.selections.forEach((x) => out(`    ${x.at}  ${x.ids.join('; ') || '(empty)'}`));
+    if (!S.captureEnterShow) out('  Capture never sent EnterShow in this run.');
+  }
   out(`== Summary ==\n  ${msgCount} CITP message(s) received, ${rx} byte(s) total; peer closed first: ${closedByPeer}` +
     (PHASE === 'caex' ? `; EnterShow seen: ${sawEnterShow}; FixtureList seen: ${sawFixtureList}` : ''));
   if (framer.pending) out(`  ${framer.pending} trailing byte(s) never completed a message: ${hexOf(framer.buf, 64)}`);

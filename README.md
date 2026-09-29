@@ -25,5 +25,10 @@ folder holds extracts of a licensed Capture library and is gitignored, as are
   (port discovered from Capture's PLoc announcement, falling back to `lsof`) and logs everything Capture
   sends. `--observe` sends nothing; `--hello` sends one PINF/PNam; `--caex` also sends a read-only CAEX
   FixtureListRequest and decodes the reply. Writes `reports/citp-<phase>.txt`.
+- `npm run probe:citp -- --sync` (45 s) follows CAEX spec F's show-sync rules: replies to Capture's
+  GetLaserFeedList with an empty LaserFeedList, sends its own EnterShow when Capture enters a show, then a
+  FixtureListRequest, NACKs (refused) other requests, prints every fixture of the FixtureList as tables, logs
+  every FixtureSelection, and sends LeaveShow before closing. It only ever sends PNam, LaserFeedList (empty),
+  EnterShow, FixtureListRequest, NACK and LeaveShow (enforced in code). Writes `reports/citp-sync.txt`.
 - `npm run probe` runs the library and network probes in sequence.
 - `npm test` runs the unit and stub-server tests (synthetic data only).
