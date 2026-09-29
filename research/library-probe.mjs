@@ -34,15 +34,21 @@ function hexDump(buf, from, to) {
   return lines;
 }
 
-/** (a) length-prefixed: u32 LE len 1..200 followed by len printable bytes. Offsets = start of the length field. */
-function lengthPrefixed(buf) {
+/**
+ * (a) length-prefixed strings. `delta` is the interpretation:
+ *   delta 0: u32 LE len = number of string bytes (len 1..200)
+ *   delta 1: u32 LE len = number of string bytes + 1 (the rule verified for Index.c2t; unconfirmed for .c2o)
+ * followed by printable bytes. `off` = start of the length field, `start` = start of the string bytes.
+ */
+function lengthPrefixed(buf, delta) {
   const out = [];
   for (let i = 0; i + 5 <= buf.length; i++) {
     const len = buf.readUInt32LE(i);
-    if (len < 1 || len > 200 || i + 4 + len > buf.length) continue;
+    const n = len - delta;
+    if (n < 1 || n > 200 || i + 4 + n > buf.length) continue;
     let ok = true;
-    for (let k = 0; k < len; k++) if (!isPrintable(buf[i + 4 + k])) { ok = false; break; }
-    if (ok) out.push({ kind: 'lp', off: i, start: i + 4, len, str: buf.toString('latin1', i + 4, i + 4 + len) });
+    for (let k = 0; k < n; k++) if (!isPrintable(buf[i + 4 + k])) { ok = false; break; }
+    if (ok) out.push({ kind: delta ? 'lp1' : 'lp0', off: i, start: i + 4, len: n, rawLen: len, str: buf.toString('latin1', i + 4, i + 4 + n) });
   }
   return out;
 }
@@ -113,15 +119,18 @@ function reportFixture(lib, query) {
   result.ok = result.sizeOkTree && result.sizeOkFirstU32;
   result.record = rec; result.info = { offset: info.offset, size: info.size, inflatedLength: info.inflatedLength, firstU32 };
 
-  const lp = lengthPrefixed(buf);
+  const lp0 = lengthPrefixed(buf, 0);
+  const lp1 = lengthPrefixed(buf, 1);
   const raw = rawRuns(buf);
 
   // 3. all strings (capped at SECTION3_CAP lines total)
   p('== 3. All strings, file order, byte offsets ==');
   let used = 0, truncated = false;
   const emit = (line) => { if (used < SECTION3_CAP) { p(line); used++; } else truncated = true; };
-  emit(`(a) length-prefixed strings: u32 LE len 1..200 + printable bytes  [offset = start of length field; ${lp.length} found]`);
-  for (const s of lp) emit(`  ${hex(s.off)}  len=${String(s.len).padStart(3)}  ${JSON.stringify(s.str)}`);
+  emit(`(a1) length-prefixed, interpretation "len = string bytes": u32 LE len 1..200 + that many printable bytes  [offset = start of length field; ${lp0.length} found]`);
+  for (const s of lp0) emit(`  ${hex(s.off)}  len=${String(s.len).padStart(3)}  ${JSON.stringify(s.str)}`);
+  emit(`(a2) length-prefixed, interpretation "len = string bytes + 1" (the Index.c2t rule; unconfirmed for .c2o objects): u32 LE len-1 = 1..200 printable bytes  [offset = start of length field; ${lp1.length} found]`);
+  for (const s of lp1) emit(`  ${hex(s.off)}  len-field=${String(s.rawLen).padStart(3)} bytes=${String(s.len).padStart(3)}  ${JSON.stringify(s.str)}`);
   emit(`(b) raw printable ASCII runs (>=1 char) bounded by non-printable bytes  [${raw.length} found]`);
   for (const s of raw) emit(`  ${hex(s.off)}  len=${String(s.len).padStart(3)}  ${JSON.stringify(s.str)}`);
   if (truncated) p(`  ... TRUNCATED: section 3 capped at ${SECTION3_CAP} lines. Sections 4 and 5 use the full lists.`);
@@ -129,7 +138,7 @@ function reportFixture(lib, query) {
 
   // merged unique strings (same start + same text counted once)
   const uniq = new Map();
-  for (const s of [...lp, ...raw]) {
+  for (const s of [...lp1, ...lp0, ...raw]) {
     const k = `${s.start}:${s.str}`;
     if (!uniq.has(k)) uniq.set(k, s);
   }
@@ -140,7 +149,7 @@ function reportFixture(lib, query) {
   p(`== 4. Hex context (48 bytes before, 64 after) for strings matching ${ATTR_RE} — ${attrHits.length} hits ==`);
   for (const s of attrHits) {
     p('');
-    p(`-- ${JSON.stringify(s.str)}  string starts at 0x${hex(s.start)} (${s.start})  [${s.kind === 'lp' ? 'length-prefixed, len field at ' + s.off : 'raw run'}]`);
+    p(`-- ${JSON.stringify(s.str)}  string starts at 0x${hex(s.start)} (${s.start})  [${s.kind === 'lp1' ? 'length-prefixed (len = bytes+1), len field at ' + s.off : s.kind === 'lp0' ? 'length-prefixed (len = bytes), len field at ' + s.off : 'raw run'}]`);
     hexDump(buf, s.start - 48, s.start + s.len + 64).forEach((l) => p(l));
   }
   p('');

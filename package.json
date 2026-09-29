@@ -10,6 +10,8 @@
   "scripts": {
     "probe:library": "node research/library-probe.mjs",
     "probe:network": "node research/network-probe.mjs",
-    "probe": "npm run probe:library && npm run probe:network"
+    "probe": "npm run probe:library && npm run probe:network",
+    "probe:citp": "node research/citp-connect.mjs",
+    "test": "node --test research/test/c2z.test.mjs research/test/citp.test.mjs"
   }
 }

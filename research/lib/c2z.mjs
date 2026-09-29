@@ -9,7 +9,7 @@
 //     u32 LE offset (relative to H) and u32 LE uncompressed size. No full tree parser on purpose.
 //  4. Each entry at H+offset is its own zlib stream; inflated length must equal size.
 //  5. Index.c2t is the catalog; its offset/size come from the tree.
-//  6. Index.c2t strings are length-prefixed ASCII (u32 LE length + bytes).
+//  6. Index.c2t strings are length-prefixed ASCII: u32 LE length = BYTES + 1, no terminator stored.
 //
 // Nothing in here writes to disk. The library file is only ever opened read-only.
 
@@ -42,6 +42,44 @@ export function libPathFromArgs(argv = process.argv.slice(2)) {
   const i = argv.indexOf('--lib');
   if (i >= 0 && argv[i + 1]) return path.resolve(argv[i + 1].replace(/^~(?=$|\/)/, os.homedir()));
   return DEFAULT_LIB;
+}
+
+/**
+ * Index.c2t string rule (verified on real bytes): the u32 LE length = the string's BYTE length + 1,
+ * and NO terminator byte is stored. E.g. 04000000 426172 -> len 4, "Bar" (3 bytes).
+ * `lpString` returns {str, end, len} for a printable, non-empty string at `pos` (end = byte after
+ * the last string byte), or null. `maxBytes` bounds the string's byte length.
+ */
+export function lpString(buf, pos, maxBytes = 400) {
+  if (pos < 0 || pos + 4 > buf.length) return null;
+  const len = buf.readUInt32LE(pos);
+  const n = len - 1;
+  if (n < 1 || n > maxBytes || pos + 4 + n > buf.length) return null;
+  for (let i = 0; i < n; i++) if (!isPrintable(buf[pos + 4 + i])) return null;
+  return { str: buf.toString('latin1', pos + 4, pos + 4 + n), end: pos + 4 + n, len };
+}
+
+/** Encode a string with the Index.c2t rule (u32 LE bytes+1, then the bytes, no terminator). */
+export function lpEncode(str) {
+  const b = Buffer.from(str, 'latin1');
+  const out = Buffer.alloc(4 + b.length);
+  out.writeUInt32LE(b.length + 1, 0);
+  b.copy(out, 4);
+  return out;
+}
+
+/** Length-prefixed strings (Index.c2t rule) whose string bytes END exactly at `end`. Normally one. */
+export function lpStringsEndingAt(buf, end, maxBytes = 200) {
+  const found = [];
+  for (let n = 1; n <= maxBytes; n++) {
+    const at = end - n - 4;
+    if (at < 0) break;
+    if (buf.readUInt32LE(at) !== n + 1) continue;
+    let ok = true;
+    for (let i = 0; i < n; i++) if (!isPrintable(buf[at + 4 + i])) { ok = false; break; }
+    if (ok) found.push({ at, str: buf.toString('latin1', at + 4, end) });
+  }
+  return found;
 }
 
 export function openLibrary(libPath = DEFAULT_LIB) {
@@ -136,39 +174,16 @@ export function openLibrary(libPath = DEFAULT_LIB) {
 
   const readEntry = (name) => entryInfo(name).inflated;
 
-  /** Length-prefixed ASCII string at pos, or null. */
-  function lpString(buf, pos, maxLen = 400) {
-    if (pos < 0 || pos + 4 > buf.length) return null;
-    const len = buf.readUInt32LE(pos);
-    if (len < 1 || len > maxLen || pos + 4 + len > buf.length) return null;
-    for (let i = 0; i < len; i++) if (!isPrintable(buf[pos + 4 + i])) return null;
-    return { str: buf.toString('latin1', pos + 4, pos + 4 + len), end: pos + 4 + len };
-  }
-
   const PATH_PREFIX = '_LightingFixtures\\';
 
   let indexBuf = null;
   const getIndex = () => (indexBuf ||= readEntry('Index.c2t'));
 
-  /** Length-prefixed string that ENDS exactly at `end` (searches the length field backwards). */
-  function lpStringEndingAt(buf, end, maxLen = 200) {
-    const found = [];
-    for (let L = 1; L <= maxLen; L++) {
-      const at = end - L - 4;
-      if (at < 0) break;
-      if (buf.readUInt32LE(at) !== L) continue;
-      let ok = true;
-      for (let i = 0; i < L; i++) if (!isPrintable(buf[at + 4 + i])) { ok = false; break; }
-      if (ok) found.push({ at, str: buf.toString('latin1', at + 4, end) });
-    }
-    return found; // normally exactly one
-  }
-
   /**
    * Fixture lookup, using the layout verified on a real Capture 2026 library:
    *   [len]"_LightingFixtures\<Manufacturer>\<Category>\<guid>.c2o"  ... ~90-93 bytes binary ...
    *   [len]"<Manufacturer>" [len]"<Model>"  ...PNG...
-   * 1. exact match of u32LE(len(model)) + model bytes in Index.c2t (exact, not substring);
+   * 1. exact match of u32LE(len(model)+1) + model bytes in Index.c2t (exact, not substring);
    * 2. manufacturer = the length-prefixed string immediately before the hit;
    * 3. scan back up to 512 bytes for the nearest length-prefixed string that starts with
    *    "_LightingFixtures\" and ends with ".c2o"; otherwise the hit is rejected as a non-lighting
@@ -180,10 +195,7 @@ export function openLibrary(libPath = DEFAULT_LIB) {
    */
   function findFixtureRecords(model) {
     const idx = getIndex();
-    const mb = Buffer.from(model, 'latin1');
-    const needle = Buffer.alloc(4 + mb.length);
-    needle.writeUInt32LE(mb.length, 0);
-    mb.copy(needle, 4);
+    const needle = lpEncode(model); // u32LE(bytes+1) + model bytes
     const hits = [];
     let from = 0;
     for (;;) {
@@ -192,7 +204,7 @@ export function openLibrary(libPath = DEFAULT_LIB) {
       from = at + 1;
       const h = { accepted: false, indexOffset: at, modelTextOffset: at + 4, model,
         manufacturer: '', path: '', guidFile: '', reason: '', pathFound: '' };
-      const mfrs = lpStringEndingAt(idx, at);
+      const mfrs = lpStringsEndingAt(idx, at);
       if (mfrs.length) h.manufacturer = mfrs[0].str;
       else h.reason = 'no length-prefixed manufacturer string immediately before model';
       if (mfrs.length > 1) h.reason += ` (${mfrs.length} candidate manufacturer strings; used the shortest)`;
@@ -239,9 +251,7 @@ export function openLibrary(libPath = DEFAULT_LIB) {
       const mfrPath = segs[1] || '';
       let manufacturer = '', model = '';
       if (mfrPath) {
-        const mNeedle = Buffer.alloc(4 + Buffer.byteLength(mfrPath, 'latin1'));
-        mNeedle.writeUInt32LE(mNeedle.length - 4, 0);
-        mNeedle.write(mfrPath, 4, 'latin1');
+        const mNeedle = lpEncode(mfrPath);
         const w = idx.subarray(s.end, Math.min(idx.length, s.end + 300));
         const k = w.indexOf(mNeedle);
         if (k >= 0) {

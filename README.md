@@ -21,4 +21,9 @@ folder holds extracts of a licensed Capture library and is gitignored, as are
 - `node research/network-probe.mjs --announce` additionally announces a fake lighting console over CITP
   (PINF/PLoc, both multicast groups) and listens on an ephemeral TCP port, logging whatever Capture sends.
   Observation only: nothing is ever sent back over TCP. Writes `reports/network-report-announce.txt`.
-- `npm run probe` runs both in sequence.
+- `npm run probe:citp -- --observe|--hello|--caex` connects to Capture's CITP TCP port as a client
+  (port discovered from Capture's PLoc announcement, falling back to `lsof`) and logs everything Capture
+  sends. `--observe` sends nothing; `--hello` sends one PINF/PNam; `--caex` also sends a read-only CAEX
+  FixtureListRequest and decodes the reply. Writes `reports/citp-<phase>.txt`.
+- `npm run probe` runs the library and network probes in sequence.
+- `npm test` runs the unit and stub-server tests (synthetic data only).
