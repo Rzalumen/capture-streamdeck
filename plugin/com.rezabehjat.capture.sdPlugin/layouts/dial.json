@@ -1,0 +1,99 @@
+{
+  "id": "com.rezabehjat.capture.dial",
+  "controller": "Encoder",
+  "items": [
+    {
+      "key": "name",
+      "type": "text",
+      "rect": [
+        10,
+        6,
+        120,
+        20
+      ],
+      "font": {
+        "size": 14,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "mark",
+      "type": "text",
+      "rect": [
+        132,
+        6,
+        58,
+        20
+      ],
+      "font": {
+        "size": 13,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "right",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "value",
+      "type": "text",
+      "rect": [
+        10,
+        30,
+        130,
+        40
+      ],
+      "font": {
+        "size": 30,
+        "weight": 700
+      },
+      "color": "#E8E8E8",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "unit",
+      "type": "text",
+      "rect": [
+        142,
+        40,
+        48,
+        28
+      ],
+      "font": {
+        "size": 16,
+        "weight": 600
+      },
+      "color": "#8A8D91",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "bar",
+      "type": "bar",
+      "rect": [
+        10,
+        76,
+        180,
+        12
+      ],
+      "subtype": 0,
+      "range": {
+        "min": 0,
+        "max": 100
+      },
+      "value": 0,
+      "bar_bg_c": "#2A2E33",
+      "bar_fill_c": "#F5B82E",
+      "border_w": 0,
+      "bar_border_c": "#2A2E33",
+      "zOrder": 1
+    }
+  ]
+}

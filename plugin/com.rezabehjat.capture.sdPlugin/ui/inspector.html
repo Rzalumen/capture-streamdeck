@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Capture</title>
+  <link rel="stylesheet" href="pi.css" />
+</head>
+<body>
+  <div id="none" class="hint full hidden">This action has no settings.</div>
+
+  <!-- Capture Command -->
+  <section id="s-command" class="hidden">
+    <div class="row"><label for="cmd">Command</label>
+      <div class="ctl inline"><select id="cmd"></select><button id="reload" style="flex:0 0 auto" title="Read the menus from Capture again">Reload</button></div></div>
+    <div id="cmd-status" class="hint"></div>
+    <div id="cmd-err" class="err hidden"></div>
+    <div class="sect">Path</div>
+    <div class="row"><label for="path">Menu path</label><div class="ctl"><input id="path" type="text" placeholder="View &gt; Camera &gt; Position 1" /></div></div>
+    <div class="hint">Menu names separated by <code>&gt;</code>. Ends with the command.</div>
+    <div class="row"><label for="match">Match</label>
+      <div class="ctl"><select id="match">
+        <option value="exact">Exact name</option>
+        <option value="prefix">Starts with (Undo… / Redo…)</option>
+        <option value="alternates">Alternates (A|B)</option>
+      </select></div></div>
+    <div class="hint" id="match-hint"></div>
+    <div class="sect">Behaviour</div>
+    <div class="cbx"><input id="hold" type="checkbox" /><label for="hold">Hold to fire (1 s) — a short press only flashes “Hold”</label></div>
+    <div class="cbx"><input id="dim" type="checkbox" /><label for="dim">Dim when the command is disabled in Capture</label></div>
+    <div class="row"><label for="label">Label</label><div class="ctl"><input id="label" type="text" placeholder="(command name)" /></div></div>
+  </section>
+
+  <!-- Capture Tab -->
+  <section id="s-tab" class="hidden">
+    <div class="row"><label for="tab">Tab</label><div class="ctl"><select id="tab"></select></div></div>
+  </section>
+
+  <!-- Camera Slot -->
+  <section id="s-slot" class="hidden">
+    <div class="row"><label for="slot">Slot</label><div class="ctl"><select id="slot"></select></div></div>
+    <div class="hint">Recalls View › Camera › Position N. While a <b>Store Modifier</b> key is held it stores View › Store Camera › Position N instead.</div>
+  </section>
+
+  <!-- Show Position -->
+  <section id="s-position" class="hidden">
+    <div class="row"><label for="mode">Mode</label><div class="ctl"><select id="mode">
+      <option value="fixed">Fixed: catalog + position</option>
+      <option value="auto">Auto: k-th position of a catalog</option></select></div></div>
+    <div class="row"><label for="catalog">Catalog</label><div class="ctl"><input id="catalog" type="number" min="1" max="255" step="1" /></div></div>
+    <div class="row" id="row-position"><label for="position">Position</label><div class="ctl"><input id="position" type="number" min="1" max="255" step="1" /></div></div>
+    <div class="row" id="row-index"><label for="index">Index k</label><div class="ctl"><input id="index" type="number" min="1" max="255" step="1" /></div></div>
+    <div class="hint" id="pos-hint"></div>
+    <div class="row"><label for="pview">View</label><div class="ctl"><select id="pview"></select></div></div>
+    <div class="sect">Move (optional)</div>
+    <div class="row"><label for="time">Time (s)</label><div class="ctl"><input id="time" type="number" min="0" max="600" step="0.1" placeholder="0 = instant" /></div></div>
+    <div class="row"><label for="damp">Damp</label><div class="ctl"><input id="damp" type="number" min="0" max="1" step="0.05" placeholder="0–1 (needs time)" /></div></div>
+    <div class="row"><label for="curve">Curve</label><div class="ctl"><input id="curve" type="number" min="0" max="1" step="0.05" placeholder="0–1 (needs time + damp)" /></div></div>
+    <div class="row"><label></label><div class="ctl"><button id="reload-cats">Read catalogs from Capture</button></div></div>
+    <div id="cat-list" class="hint full"></div>
+    <div id="cat-err" class="err hidden"></div>
+  </section>
+
+  <!-- View Dial -->
+  <section id="s-dial" class="hidden">
+    <div class="row"><label for="dprop">Setting</label><div class="ctl"><select id="dprop"></select></div></div>
+    <div class="row"><label for="dview">View</label><div class="ctl"><select id="dview"></select></div></div>
+    <div class="row"><label for="dstep">Step</label><div class="ctl"><input id="dstep" type="number" step="any" /></div></div>
+    <div class="row"><label for="dreset">Reset value</label><div class="ctl"><input id="dreset" type="number" step="any" /></div></div>
+    <div class="hint" id="dial-hint"></div>
+    <div class="hint full">Turn: value += ticks × step, clamped. Push or touch: fine mode (step ÷ 10). Long touch: reset. Capture has no way to report a value, so the dial remembers the last value it sent; until it sends one this session the strip shows the value greyed with “~”. The reset value is this plugin’s own default, not Capture’s.</div>
+  </section>
+
+  <!-- View Toggle -->
+  <section id="s-toggle" class="hidden">
+    <div class="row"><label for="tprop">Setting</label><div class="ctl"><select id="tprop"></select></div></div>
+    <div class="row"><label for="tview">View</label><div class="ctl"><select id="tview"></select></div></div>
+    <div class="hint full">A press flips the remembered state and sends <code>T</code>/<code>F</code>. Capture cannot report the current state, so the first press after install may need a second press.</div>
+  </section>
+
+  <script src="props.js"></script>
+  <script src="pi.js"></script>
+</body>
+</html>

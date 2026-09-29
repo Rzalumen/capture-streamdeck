@@ -1,0 +1,38 @@
+{
+  "name": "com.rezabehjat.capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stream Deck+ plugin: an interface to Capture (lighting visualizer)",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.rezabehjat.capture\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node --import tsx --test test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts test/integration.test.ts",
+    "validate": "streamdeck validate com.rezabehjat.capture.sdPlugin",
+    "pack": "npm run gen-ui && npm run build && streamdeck validate com.rezabehjat.capture.sdPlugin && streamdeck pack com.rezabehjat.capture.sdPlugin --output dist --force",
+    "images": "node scripts/make-images.mjs",
+    "add-profile": "node scripts/add-profile.mjs",
+    "gen-ui": "node --import tsx scripts/gen-ui-data.mjs",
+    "test:unit": "node --import tsx --test test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^2.1.2"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.10.1",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@tsconfig/node20": "^20.1.10",
+    "@types/node": "^20.19.43",
+    "rollup": "^4.63.5",
+    "tslib": "^2.8.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

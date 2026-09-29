@@ -2,8 +2,8 @@
 
 A Stream Deck+ plugin for Capture (macOS lighting visualizer).
 
-**Status: research phase.** The only code here is two read-only probe tools that
-inspect Capture's installed fixture library and its network interfaces.
+**Status:** `research/` holds the read-only probe tools (fixture library, network, CITP). `plugin/` is the
+Stream Deck+ plugin, beta v0.1 — see [plugin/README.md](plugin/README.md).
 
 **No Capture library data or report output is ever committed.** The `reports/`
 folder holds extracts of a licensed Capture library and is gitignored, as are
@@ -36,4 +36,5 @@ folder holds extracts of a licensed Capture library and is gitignored, as are
   length-prefixed strings between mode markers. With no arguments it runs three built-in test rows. Exploration
   only. Writes `reports/modes-<first 8 of fixture guid>.txt`.
 - `npm run probe` runs the library and network probes in sequence.
-- `npm test` runs the unit and stub-server tests (synthetic data only).
+- `npm test` runs the unit and stub-server tests (synthetic data only). The plugin has its own
+  `npm test` inside `plugin/`.

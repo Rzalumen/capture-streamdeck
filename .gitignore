@@ -3,3 +3,7 @@ reports/
 *.c2z
 *.hex
 .DS_Store
+dist/
+*.streamDeckPlugin
+*.sdPlugin/bin
+*.sdPlugin/logs
