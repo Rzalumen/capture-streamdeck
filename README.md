@@ -30,5 +30,10 @@ folder holds extracts of a licensed Capture library and is gitignored, as are
   FixtureListRequest, NACKs (refused) other requests, prints every fixture of the FixtureList as tables, logs
   every FixtureSelection, and sends LeaveShow before closing. It only ever sends PNam, LaserFeedList (empty),
   EnterShow, FixtureListRequest, NACK and LeaveShow (enforced in code). Writes `reports/citp-sync.txt`.
+- `npm run probe:modes [-- --fixture <rawGuid> --mode <rawGuid> [--name <text>] [--expect <n>] ...]` opens a
+  fixture's library object directly by its AtlaBaseFixtureId (GUID bytes in the order Capture sends them, which
+  is how the library names `<guid>.c2o`) and looks for each DMX mode's GUID and name inside it, then lists the
+  length-prefixed strings between mode markers. With no arguments it runs three built-in test rows. Exploration
+  only. Writes `reports/modes-<first 8 of fixture guid>.txt`.
 - `npm run probe` runs the library and network probes in sequence.
 - `npm test` runs the unit and stub-server tests (synthetic data only).

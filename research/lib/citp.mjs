@@ -32,8 +32,15 @@ export function ucs2z(buf, pos) {
   return { s: buf.toString('utf16le', pos, e), next: e + 2 };
 }
 
+/** The 16 bytes as plain hex groups in the ORDER RECEIVED (8-4-4-4-12). Library .c2o filenames use this order (handoff 05). */
+export function guidRawStr(b) {
+  if (b.length !== 16) return null;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 /** Mixed-endian GUID (Microsoft COM/OLE) as in CAEX spec F: 33 22 11 00 55 44 77 66 88 99 aa bb cc dd ee ff -> 00112233-4455-6677-8899-aabbccddeeff */
-export function guidStr(b) {
+export function guidStr(b) { // spec form
   if (b.length !== 16) return null;
   const h = (i, n) => [...b.subarray(i, i + n)].map((x) => x.toString(16).padStart(2, '0')).join('');
   const r = (i, n) => [...b.subarray(i, i + n)].reverse().map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -154,8 +161,8 @@ class Cur {
 
 /** Identifier -> {type, name, size, hex, guid, value} (value: u16 / u64 as decimal string; guid: COM mixed-endian string). */
 function decodeIdentifier(t, d) {
-  const o = { type: t, name: ID_TYPES[t] || `unknown(0x${t.toString(16)})`, size: d.length, hex: hexOf(d), guid: null, value: null };
-  if (d.length === 16) o.guid = guidStr(d);
+  const o = { type: t, name: ID_TYPES[t] || `unknown(0x${t.toString(16)})`, size: d.length, hex: hexOf(d), guid: null, guidSpec: null, guidRaw: null, value: null };
+  if (d.length === 16) { o.guid = guidStr(d); o.guidSpec = o.guid; o.guidRaw = guidRawStr(d); }
   else if (d.length === 2) o.value = String(d.readUInt16LE(0));
   else if (d.length === 8) o.value = d.readBigUInt64LE(0).toString();
   return o;
@@ -196,7 +203,7 @@ export function decodeFixtureList(msg, maxLog = 20, indent = '    ') {
     lines.push(`${indent}#${f.index} id=0x${f.identifier.toString(16).padStart(8, '0')} manufacturer=${JSON.stringify(f.manufacturer)} model=${JSON.stringify(f.name)} mode=${JSON.stringify(f.mode)} channels=${f.channelCount} dimmer=${f.isDimmer}` +
       ` patched=${f.patched} universe=${f.universe} (0-based) address=${f.universeChannel} (0-based)`);
     lines.push(`${indent}    unit=${JSON.stringify(f.unit)} channel=${f.channel} circuit=${JSON.stringify(f.circuit)} note=${JSON.stringify(f.note)}`);
-    f.ids.forEach((d) => lines.push(`${indent}    id type=0x${d.type.toString(16).padStart(2, '0')} ${d.name} size=${d.size} ${d.guid ? 'guid=' + d.guid : d.value !== null ? 'value=' + d.value : ''} hex=${d.hex}`));
+    f.ids.forEach((d) => lines.push(`${indent}    id type=0x${d.type.toString(16).padStart(2, '0')} ${d.name} size=${d.size} ${d.guid ? `guid-spec=${d.guidSpec} guid-raw=${d.guidRaw}` : d.value !== null ? 'value=' + d.value : ''} hex=${d.hex}`));
   });
   if (fixtures.length > maxLog && maxLog > 0) lines.push(`${indent}... ${fixtures.length - maxLog} more fixture(s) decoded but not listed`);
   return { lines, type, count, fixtures, error };
@@ -222,8 +229,8 @@ export function formatFixtureTables(fixtures) {
   out.push('');
   out.push('Identifiers:');
   const idRows = [];
-  for (const f of fixtures) for (const d of f.ids) idRows.push([f.index, `0x${d.type.toString(16).padStart(2, '0')}`, d.name, d.size, d.guid ?? d.value ?? d.hex]);
-  out.push(...(idRows.length ? textTable(['#', 'type', 'name', 'size', 'value'], idRows) : ['  (none)']));
+  for (const f of fixtures) for (const d of f.ids) idRows.push([f.index, `0x${d.type.toString(16).padStart(2, '0')}`, d.name, d.size, d.guid ?? d.value ?? d.hex, d.guidRaw ?? '']);
+  out.push(...(idRows.length ? textTable(['#', 'type', 'name', 'size', 'value', 'raw'], idRows) : ['  (none)']));
   out.push('');
   out.push('Position (x, y, z; right-handed, Z downstage, Y up) and angles (radians, Tait-Bryan X1 Y2 Z3):');
   out.push(...textTable(['#', 'position', 'angles'], fixtures.map((f) => [f.index, f3(f.position), f3(f.angles)])));

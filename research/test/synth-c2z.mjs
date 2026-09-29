@@ -46,3 +46,29 @@ export function buildSyntheticLibrary() {
   })]);
   return { file: Buffer.concat([zlib.deflateSync(tree), ...data]), guids: GUIDS };
 }
+
+// ---- mode-probe fixture: one object with two DMX modes ----
+export const MODE_FIXTURE = '2f7c6351-e151-4c44-beca-80bb03902631';
+export const MODE_A = '9d6629e3-872b-4a74-a935-6675826f4313'; // stored in raw byte order
+export const MODE_B = '0691aaec-1491-40a2-b5c3-8942bb4d2402'; // stored in mixed-endian byte order
+
+export function mixedEndian(rawGuid) {
+  const b = Buffer.from(rawGuid.replace(/-/g, ''), 'hex');
+  b.subarray(0, 4).reverse(); b.subarray(4, 6).reverse(); b.subarray(6, 8).reverse();
+  return b;
+}
+
+/** Object: header, filler, [mode A guid raw][name "Standard"][Pan Tilt Dimmer], [mode B guid mixed][name "Extended"][6 attrs]. */
+export function buildModeLibrary() {
+  const raw = (g) => Buffer.from(g.replace(/-/g, ''), 'hex');
+  const body = Buffer.concat([
+    Buffer.alloc(8), filler(40),
+    raw(MODE_A), lpEncode('Standard'), ...['Pan', 'Tilt', 'Dimmer'].map(lpEncode), filler(6),
+    mixedEndian(MODE_B), lpEncode('Extended'), ...['Pan', 'Pan Fine', 'Tilt', 'Tilt Fine', 'Zoom', 'Dimmer'].map(lpEncode), filler(6),
+  ]);
+  body.writeUInt32LE(body.length, 0);
+  body.writeUInt32LE(0x78c24e87, 4);
+  const z = zlib.deflateSync(body);
+  const tree = Buffer.concat([Buffer.from('c2z '), Buffer.alloc(12), u16z(`${MODE_FIXTURE}.c2o`), (() => { const t = Buffer.alloc(8); t.writeUInt32LE(0); t.writeUInt32LE(body.length, 4); return t; })()]);
+  return { file: Buffer.concat([zlib.deflateSync(tree), z]), object: body };
+}

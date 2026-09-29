@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   CAEX, CitpFramer, HEADER_SIZE, buildCaexEmpty, buildEnterShow, buildFixtureListRequest, buildHeader, buildLaserFeedList,
-  buildLeaveShow, buildNack, buildPLoc, buildPNam, decodeFixtureList, decodeMessage, formatFixtureTables, guidStr, hexOf,
+  buildLeaveShow, buildNack, buildPLoc, buildPNam, decodeFixtureList, decodeMessage, formatFixtureTables, guidRawStr, guidStr, hexOf,
   isAllowedOutgoing,
 } from '../lib/citp.mjs';
 
@@ -156,7 +156,7 @@ for (const phase of ['observe', 'hello', 'caex']) {
         assert.match(rep, /FixtureList: Type=0 \(existing list\) FixtureCount=3/);
         assert.match(rep, /manufacturer="Martin" model="MAC Aura XB" mode="Extended" channels=22/);
         assert.match(rep, /universe=1 \(0-based\) address=100 \(0-based\)/);
-        assert.match(rep, /guid=00112233-4455-6677-8899-aabbccddeeff/);
+        assert.match(rep, /guid-spec=00112233-4455-6677-8899-aabbccddeeff guid-raw=33221100-5544-7766-8899-aabbccddeeff/);
         assert.match(rep, /buffered, waiting for the rest of a message/, 'split reply was buffered across chunks');
       }
     } finally { stub.server.close(); }
@@ -306,4 +306,19 @@ test('citp-connect --sync against a stub server', async () => {
     assert.match(rep, /SEND CAEX LeaveShow/);
     assert.match(rep, /buffered, waiting for the rest of a message/);
   } finally { stub.server.close(); }
+});
+
+test('GUID dual form: MAC Aura XB AtlaBaseFixtureId (raw order = library filename, spec = mixed-endian)', () => {
+  const rawStr = '2f7c6351-e151-4c44-beca-80bb03902631';
+  const bytes = Buffer.from(rawStr.replace(/-/g, ''), 'hex');
+  assert.equal(guidRawStr(bytes), rawStr);
+  assert.equal(guidStr(bytes), '51637c2f-51e1-444c-beca-80bb03902631');
+  // through the FixtureList decoder and the identifiers table
+  const fl = decodeFixtureList(buildFixtureList([{ mfr: 'Martin', name: 'MAC Aura XB', mode: 'Standard', channels: 14, universe: 0, address: 0, channel: 1, ids: [[0x02, bytes]] }]));
+  const id = fl.fixtures[0].ids[0];
+  assert.equal(id.guidRaw, rawStr);
+  assert.equal(id.guidSpec, '51637c2f-51e1-444c-beca-80bb03902631');
+  const table = formatFixtureTables(fl.fixtures).join('\n');
+  assert.match(table, /size \| value\s+\| raw/);
+  assert.match(table, /51637c2f-51e1-444c-beca-80bb03902631 \| 2f7c6351-e151-4c44-beca-80bb03902631/);
 });

@@ -174,6 +174,17 @@ export function openLibrary(libPath = DEFAULT_LIB) {
 
   const readEntry = (name) => entryInfo(name).inflated;
 
+  /**
+   * Fixture object by RAW guid (the 16 bytes in the order Capture sends them, formatted 8-4-4-4-12, which is
+   * how the library names the entry: "<guid>.c2o"). Direct tree lookup (UTF-16LE name + 00 00); no Index.c2t.
+   * Returns the inflated object Buffer. Use entryInfo(`${guid}.c2o`) for offset/size details.
+   */
+  function readObjectByGuid(rawGuid) {
+    const g = String(rawGuid).trim().replace(/^\{|\}$/g, '').toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(g)) throw new Error(`not a GUID (8-4-4-4-12 hex): ${JSON.stringify(rawGuid)}`);
+    return readEntry(`${g}.c2o`);
+  }
+
   const PATH_PREFIX = '_LightingFixtures\\';
 
   let indexBuf = null;
@@ -277,7 +288,7 @@ export function openLibrary(libPath = DEFAULT_LIB) {
 
   return {
     libPath, fileSize, H, tree, treeSize: tree.length, log,
-    entryInfo, readEntry, findEntryMatches, findFixtureRecords, findIndexRecords, allIndexRecords,
+    entryInfo, readEntry, readObjectByGuid, findEntryMatches, findFixtureRecords, findIndexRecords, allIndexRecords,
     close: () => fs.closeSync(fd),
   };
 }
