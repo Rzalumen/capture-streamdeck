@@ -1,0 +1,15 @@
+{
+  "name": "capture-streamdeck",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Stream Deck+ plugin for Capture (macOS) - research phase",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "probe:library": "node research/library-probe.mjs",
+    "probe:network": "node research/network-probe.mjs",
+    "probe": "npm run probe:library && npm run probe:network"
+  }
+}

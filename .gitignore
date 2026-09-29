@@ -1,0 +1,5 @@
+node_modules/
+reports/
+*.c2z
+*.hex
+.DS_Store
