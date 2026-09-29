@@ -1,5 +1,5 @@
 // Read-only probe: dump strings + hex context of fixture objects (.c2o) from Capture's Library.c2z.
-// Usage: node research/library-probe.mjs [--lib <path>] [--fixture "<model substring>"]...
+// Usage: node research/library-probe.mjs [--lib <path>] [--fixture "<exact model string>"]...
 // Writes reports/library-<slug>.txt per fixture and reports/library-summary.txt.
 // reports/ is gitignored: it contains extracts of a licensed library. Never commit it.
 
@@ -69,17 +69,25 @@ function reportFixture(lib, query) {
   p(`H (data base) = ${lib.H}`);
   p('');
 
-  // 1. index records
-  const recs = lib.findIndexRecords(query);
-  p('== 1. Index.c2t records ==');
-  if (!recs.length) {
-    p(`No _LightingFixtures record matched ${JSON.stringify(query)}.`);
-    result.note = 'no index record';
+  // 1. index records (exact model-string match, then verify a _LightingFixtures path precedes it)
+  const hits = lib.findFixtureRecords(query);
+  p('== 1. Index.c2t candidate hits (exact match of u32LE(len)+model bytes) ==');
+  p('   offsets: "len field" = position of the model\'s length field; "text" = len field + 4 (position of the model text)');
+  if (!hits.length) p(`  No exact occurrence of the model string ${JSON.stringify(query)} in Index.c2t.`);
+  hits.forEach((h, i) => {
+    p(`  [${i}] ${h.accepted ? 'ACCEPTED' : 'REJECTED'}  len-field@${h.indexOffset}  text@${h.modelTextOffset}  manufacturer=${JSON.stringify(h.manufacturer)}  model=${JSON.stringify(h.model)}`);
+    if (h.accepted) p(`       path=${h.path}`);
+    else p(`       reason: ${h.reason}`);
+  });
+  const acc = hits.filter((h) => h.accepted);
+  result.hits = hits;
+  if (!acc.length) {
+    p(`No accepted _LightingFixtures record for ${JSON.stringify(query)} (${hits.length} candidate hit(s), all rejected or none).`);
+    result.note = hits.length ? 'all candidate hits rejected' : 'model string not found in Index.c2t';
     return { text: L.join('\n') + '\n', result };
   }
-  recs.forEach((r, i) => p(`  [${i}] path=${r.path}  manufacturer=${JSON.stringify(r.manufacturer)}  model=${JSON.stringify(r.model)}`));
-  const rec = recs[0];
-  p(`Using record [0] (first _LightingFixtures match): ${rec.path}`);
+  const rec = acc[0];
+  p(`Using accepted hit [${hits.indexOf(rec)}] (first accepted of ${acc.length}): ${rec.path}`);
   p('');
 
   // 2. object
@@ -128,9 +136,9 @@ function reportFixture(lib, query) {
   const merged = [...uniq.values()].sort((x, y) => x.start - y.start);
 
   // 4. hex context for attribute-like strings
-  const hits = merged.filter((s) => ATTR_RE.test(s.str));
-  p(`== 4. Hex context (48 bytes before, 64 after) for strings matching ${ATTR_RE} — ${hits.length} hits ==`);
-  for (const s of hits) {
+  const attrHits = merged.filter((s) => ATTR_RE.test(s.str));
+  p(`== 4. Hex context (48 bytes before, 64 after) for strings matching ${ATTR_RE} — ${attrHits.length} hits ==`);
+  for (const s of attrHits) {
     p('');
     p(`-- ${JSON.stringify(s.str)}  string starts at 0x${hex(s.start)} (${s.start})  [${s.kind === 'lp' ? 'length-prefixed, len field at ' + s.off : 'raw run'}]`);
     hexDump(buf, s.start - 48, s.start + s.len + 64).forEach((l) => p(l));
@@ -180,6 +188,7 @@ try {
 S.push('');
 
 let allPass = true;
+const results = [];
 for (const q of fixtures) {
   let out;
   try { out = reportFixture(lib, q); } catch (e) {
@@ -188,12 +197,38 @@ for (const q of fixtures) {
   const file = path.join(REPORTS, `library-${out.result.slug}.txt`);
   fs.writeFileSync(file, out.text);
   const r = out.result;
+  results.push(r);
   allPass = allPass && r.ok;
   S.push(`Fixture ${JSON.stringify(q)}: size check ${r.ok ? 'PASS' : 'FAIL'}` +
     (r.info ? ` (tree size ${r.info.size}, inflated ${r.info.inflatedLength}, first u32 ${r.info.firstU32})` : '') +
     (r.note ? ` — ${r.note}` : ''));
   if (r.record) S.push(`  record: ${r.record.manufacturer} / ${r.record.model}  ${r.record.path}`);
   S.push(`  report: ${file}`);
+}
+S.push('');
+// ---- self-check against ground truth verified earlier on Reza's real library ----
+const GROUND_TRUTH = {
+  'VL3500 Spot': { modelOffset: 125630818, path: '_LightingFixtures\\Vari-Lite\\Moving Heads\\bcc93361-fc2a-4e06-8ddf-65ca480a84e7.c2o', treeOffset: 760644065, treeSize: 20785 },
+  'MAC Aura XB': { modelOffset: 85498405, path: '_LightingFixtures\\Martin\\Moving Heads\\2f7c6351-e151-4c44-beca-80bb03902631.c2o', treeOffset: 674244450, treeSize: 118160 },
+};
+S.push('== Self-check vs ground truth (Handoff 02 table) ==');
+S.push('   model-string offset convention: the table value is compared with the position of the model TEXT; if it equals the position of the length field instead, that is reported explicitly.');
+for (const [model, gt] of Object.entries(GROUND_TRUTH)) {
+  const r = results.find((x) => x.query === model);
+  S.push(`Fixture ${JSON.stringify(model)}:`);
+  if (!r) { S.push('  (not probed in this run)'); continue; }
+  const rec = r.record;
+  const cmp = (label, got, want) => S.push(`  ${label.padEnd(20)} ${got === want ? 'MATCH   ' : 'MISMATCH'} got=${JSON.stringify(got)} expected=${JSON.stringify(want)}`);
+  if (!rec) { S.push(`  no accepted record -> MISMATCH on all fields (${r.note || 'n/a'})`); continue; }
+  cmp('path', rec.path, gt.path);
+  cmp('guidFile', rec.guidFile, gt.path.slice(gt.path.lastIndexOf('\\') + 1));
+  cmp('tree offset', r.info ? r.info.offset : null, gt.treeOffset);
+  cmp('tree size', r.info ? r.info.size : null, gt.treeSize);
+  if (rec.modelTextOffset === gt.modelOffset) S.push(`  ${'model-string offset'.padEnd(20)} MATCH    (text position ${rec.modelTextOffset}; length field at ${rec.indexOffset})`);
+  else if (rec.indexOffset === gt.modelOffset) S.push(`  ${'model-string offset'.padEnd(20)} MATCH    (table value equals the LENGTH-FIELD position ${rec.indexOffset}; text at ${rec.modelTextOffset})`);
+  else S.push(`  ${'model-string offset'.padEnd(20)} MISMATCH got text@${rec.modelTextOffset} len-field@${rec.indexOffset} expected=${gt.modelOffset}`);
+  const acc = (r.hits || []).filter((h) => h.accepted).length;
+  S.push(`  candidate hits: ${(r.hits || []).length} total, ${acc} accepted, ${(r.hits || []).length - acc} rejected`);
 }
 S.push('');
 S.push(`Overall: ${allPass ? 'all fixtures PASS' : 'at least one fixture FAILED'}`);

@@ -145,37 +145,112 @@ export function openLibrary(libPath = DEFAULT_LIB) {
     return { str: buf.toString('latin1', pos + 4, pos + 4 + len), end: pos + 4 + len };
   }
 
+  const PATH_PREFIX = '_LightingFixtures\\';
+
+  let indexBuf = null;
+  const getIndex = () => (indexBuf ||= readEntry('Index.c2t'));
+
+  /** Length-prefixed string that ENDS exactly at `end` (searches the length field backwards). */
+  function lpStringEndingAt(buf, end, maxLen = 200) {
+    const found = [];
+    for (let L = 1; L <= maxLen; L++) {
+      const at = end - L - 4;
+      if (at < 0) break;
+      if (buf.readUInt32LE(at) !== L) continue;
+      let ok = true;
+      for (let i = 0; i < L; i++) if (!isPrintable(buf[at + 4 + i])) { ok = false; break; }
+      if (ok) found.push({ at, str: buf.toString('latin1', at + 4, end) });
+    }
+    return found; // normally exactly one
+  }
+
+  /**
+   * Fixture lookup, using the layout verified on a real Capture 2026 library:
+   *   [len]"_LightingFixtures\<Manufacturer>\<Category>\<guid>.c2o"  ... ~90-93 bytes binary ...
+   *   [len]"<Manufacturer>" [len]"<Model>"  ...PNG...
+   * 1. exact match of u32LE(len(model)) + model bytes in Index.c2t (exact, not substring);
+   * 2. manufacturer = the length-prefixed string immediately before the hit;
+   * 3. scan back up to 512 bytes for the nearest length-prefixed string that starts with
+   *    "_LightingFixtures\" and ends with ".c2o"; otherwise the hit is rejected as a non-lighting
+   *    record (the nearest other "_Xxx\..." path is reported, e.g. _Symbols\).
+   * Every hit is returned, accepted or not:
+   *   {accepted, indexOffset, modelTextOffset, manufacturer, model, path, guidFile, reason, pathFound}
+   * indexOffset = position of the model's LENGTH FIELD; modelTextOffset = indexOffset + 4
+   * (the position of the model text itself).
+   */
+  function findFixtureRecords(model) {
+    const idx = getIndex();
+    const mb = Buffer.from(model, 'latin1');
+    const needle = Buffer.alloc(4 + mb.length);
+    needle.writeUInt32LE(mb.length, 0);
+    mb.copy(needle, 4);
+    const hits = [];
+    let from = 0;
+    for (;;) {
+      const at = idx.indexOf(needle, from);
+      if (at < 0) break;
+      from = at + 1;
+      const h = { accepted: false, indexOffset: at, modelTextOffset: at + 4, model,
+        manufacturer: '', path: '', guidFile: '', reason: '', pathFound: '' };
+      const mfrs = lpStringEndingAt(idx, at);
+      if (mfrs.length) h.manufacturer = mfrs[0].str;
+      else h.reason = 'no length-prefixed manufacturer string immediately before model';
+      if (mfrs.length > 1) h.reason += ` (${mfrs.length} candidate manufacturer strings; used the shortest)`;
+      // nearest length-prefixed path within 512 bytes before the model's length field
+      const lo = Math.max(0, at - 512);
+      let lighting = null, other = null;
+      for (let pos = at - 5; pos >= lo && !lighting; pos--) {
+        const s = lpString(idx, pos, 300);
+        if (!s || s.end > at) continue;
+        if (s.str.startsWith(PATH_PREFIX) && s.str.endsWith('.c2o')) lighting = s.str;
+        else if (!other && /^_[A-Za-z]+\\/.test(s.str)) other = s.str;
+      }
+      if (lighting) {
+        h.accepted = true; h.path = lighting; h.guidFile = lighting.slice(lighting.lastIndexOf('\\') + 1);
+      } else {
+        h.pathFound = other || '(no "_Xxx\\" path found within 512 bytes before the model)';
+        h.reason = `non-lighting record: no ${PATH_PREFIX}...c2o within 512 bytes before the model; nearest path: ${h.pathFound}` + (h.reason ? ` [${h.reason}]` : '');
+      }
+      hits.push(h);
+    }
+    return hits;
+  }
+
   let indexRecords = null;
-  /** All `_LightingFixtures\...` records in Index.c2t, in file order. */
+  /**
+   * All `_LightingFixtures\...c2o` records in Index.c2t, in file order (for listing only; the fixture
+   * lookup above does not depend on it). The manufacturer/model strings sit ~90-93 bytes AFTER the
+   * path, not directly behind it; they're found by looking for the manufacturer name from the path
+   * followed by another length-prefixed string. Model parsing here is best-effort (unverified).
+   */
   function allIndexRecords() {
     if (indexRecords) return indexRecords;
-    const idx = readEntry('Index.c2t');
-    const marker = Buffer.from('_LightingFixtures\\', 'latin1');
+    const idx = getIndex();
+    const marker = Buffer.from(PATH_PREFIX, 'latin1');
     const recs = [];
     let from = 0;
     for (;;) {
       const at = idx.indexOf(marker, from);
       if (at < 0) break;
       from = at + 1;
-      const s = lpString(idx, at - 4);
-      if (!s || !s.str.startsWith('_LightingFixtures\\')) continue; // marker inside something else
-      const p = s.str;
-      // manufacturer + model: the next two length-prefixed strings (tolerate a few filler bytes)
-      let pos = s.end;
-      const next = () => {
-        for (let skip = 0; skip <= 32; skip++) {
-          const r = lpString(idx, pos + skip, 200);
-          if (r) { pos = r.end; return r.str; }
+      const s = lpString(idx, at - 4, 300);
+      if (!s || !s.str.startsWith(PATH_PREFIX) || !s.str.endsWith('.c2o')) continue;
+      const segs = s.str.split('\\');
+      const mfrPath = segs[1] || '';
+      let manufacturer = '', model = '';
+      if (mfrPath) {
+        const mNeedle = Buffer.alloc(4 + Buffer.byteLength(mfrPath, 'latin1'));
+        mNeedle.writeUInt32LE(mNeedle.length - 4, 0);
+        mNeedle.write(mfrPath, 4, 'latin1');
+        const w = idx.subarray(s.end, Math.min(idx.length, s.end + 300));
+        const k = w.indexOf(mNeedle);
+        if (k >= 0) {
+          const r = lpString(idx, s.end + k + mNeedle.length, 200);
+          manufacturer = mfrPath;
+          if (r) model = r.str;
         }
-        return '';
-      };
-      const manufacturer = next();
-      const model = next();
-      recs.push({
-        path: p, manufacturer, model,
-        guidFile: p.slice(p.lastIndexOf('\\') + 1),
-        indexOffset: at - 4,
-      });
+      }
+      recs.push({ path: s.str, manufacturer, model, guidFile: segs[segs.length - 1], indexOffset: at - 4 });
     }
     return (indexRecords = recs);
   }
@@ -192,7 +267,7 @@ export function openLibrary(libPath = DEFAULT_LIB) {
 
   return {
     libPath, fileSize, H, tree, treeSize: tree.length, log,
-    entryInfo, readEntry, findEntryMatches, findIndexRecords, allIndexRecords,
+    entryInfo, readEntry, findEntryMatches, findFixtureRecords, findIndexRecords, allIndexRecords,
     close: () => fs.closeSync(fd),
   };
 }
