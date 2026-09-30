@@ -1,6 +1,34 @@
-/** One-at-a-time async queue. Priority jobs go ahead of waiting (not running) normal jobs. */
+/** Thrown into the promise of a queued job that was dropped before it started. */
+export class DroppedError extends Error {
+  constructor(readonly tag: string) {
+    super(`dropped (${tag})`);
+    this.name = "DroppedError";
+  }
+}
+
+export interface EnqueueOptions {
+  /** Lower runs first (default 1). Presses use 0, polls 2, background reads 3. Equal levels run in arrival order. */
+  level?: number;
+  /** Legacy: true = level 0. */
+  priority?: boolean;
+  /** A waiting job with the same key is reused instead of queueing another. */
+  coalesceKey?: string;
+  /** Jobs with a tag can be dropped while they wait (`dropWaiting`). */
+  tag?: string;
+}
+
+interface Job {
+  run: () => Promise<void>;
+  level: number;
+  key?: string;
+  tag?: string;
+  promise: Promise<unknown>;
+  reject: (e: unknown) => void;
+}
+
+/** One-at-a-time async queue with priority levels. A job that is already running is never interrupted. */
 export class SerialQueue {
-  private waiting: { run: () => Promise<void>; priority: boolean; key?: string; promise: Promise<unknown> }[] = [];
+  private waiting: Job[] = [];
   private running = false;
   /** Set while a job runs (lets tests assert calls never overlap). */
   active = 0;
@@ -10,7 +38,26 @@ export class SerialQueue {
     return this.waiting.length + (this.running ? 1 : 0);
   }
 
-  enqueue<T>(task: () => Promise<T>, opts: { priority?: boolean; coalesceKey?: string } = {}): Promise<T> {
+  /** Number of jobs waiting (not running) that carry this tag. */
+  waitingWithTag(tag: string): number {
+    return this.waiting.filter((j) => j.tag === tag).length;
+  }
+
+  /** Reject and remove every waiting job with this tag (running jobs are left alone). Returns how many were dropped. */
+  dropWaiting(tag: string): number {
+    const keep: Job[] = [];
+    let n = 0;
+    for (const j of this.waiting) {
+      if (j.tag === tag) {
+        j.reject(new DroppedError(tag));
+        n++;
+      } else keep.push(j);
+    }
+    this.waiting = keep;
+    return n;
+  }
+
+  enqueue<T>(task: () => Promise<T>, opts: EnqueueOptions = {}): Promise<T> {
     if (opts.coalesceKey) {
       const dup = this.waiting.find((w) => w.key === opts.coalesceKey);
       if (dup) return dup.promise as Promise<T>;
@@ -21,10 +68,12 @@ export class SerialQueue {
       resolve = res;
       reject = rej;
     });
-    const job = {
-      priority: !!opts.priority,
+    const job: Job = {
+      level: opts.level ?? (opts.priority ? 0 : 1),
       key: opts.coalesceKey,
+      tag: opts.tag,
       promise,
+      reject,
       run: async () => {
         this.active++;
         this.maxActive = Math.max(this.maxActive, this.active);
@@ -37,11 +86,9 @@ export class SerialQueue {
         }
       },
     };
-    if (job.priority) {
-      let i = 0;
-      while (i < this.waiting.length && this.waiting[i].priority) i++;
-      this.waiting.splice(i, 0, job);
-    } else this.waiting.push(job);
+    let i = this.waiting.length;
+    while (i > 0 && this.waiting[i - 1].level > job.level) i--;
+    this.waiting.splice(i, 0, job);
     void this.pump();
     return promise;
   }

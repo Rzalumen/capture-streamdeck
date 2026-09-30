@@ -3,11 +3,18 @@ import { realTimers, type TimerApi } from "./limiter.js";
 export const HOLD_MS = 1000;
 
 /** Commands that are destructive enough to default to hold-to-fire (matched on the last path element). */
-export const HOLD_BY_DEFAULT = ["Delete", "Unpatch", "Remove Filters", "Remove Gobos", "Cut", "Paste"];
+export const HOLD_BY_DEFAULT = ["Delete", "Unpatch", "Remove Filters", "Remove Gobos", "Cut", "Paste", "Break Group"];
 
+/**
+ * Same set as the catalog's holdToFire entries: the list above, "Plot Adjustments > Clear", and every Import….
+ * (The Property Inspector repeats these rules in pi.js.)
+ */
 export function defaultHoldToFire(path: string[]): boolean {
   const last = (path[path.length - 1] ?? "").replace(/(…|\.\.\.)$/, "").trim();
-  return HOLD_BY_DEFAULT.some((n) => n.toLowerCase() === last.toLowerCase());
+  const l = last.toLowerCase();
+  if (HOLD_BY_DEFAULT.some((n) => n.toLowerCase() === l)) return true;
+  if (l === "clear" && path.some((p) => p.toLowerCase() === "plot adjustments")) return true;
+  return /^import\b/i.test(last) || path.slice(0, -1).some((p) => /^import\b/i.test(p.replace(/(…|\.\.\.)$/, "").trim()));
 }
 
 /**

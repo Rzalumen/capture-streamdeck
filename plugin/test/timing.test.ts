@@ -81,7 +81,13 @@ test("hold-to-fire defaults", () => {
     assert.equal(defaultHoldToFire(["Edit", n]), true, n);
   }
   assert.equal(defaultHoldToFire(["Edit", "Delete…"]), true);
-  for (const n of ["Undo", "Save", "Select All", "Duplicate…", "Group"]) assert.equal(defaultHoldToFire(["Edit", n]), false, n);
+  assert.equal(defaultHoldToFire(["Edit", "Break Group"]), true);
+  assert.equal(defaultHoldToFire(["Edit", "Plot Adjustments", "Clear"]), true);
+  assert.equal(defaultHoldToFire(["Edit", "Something", "Clear"]), false, "only Plot Adjustments > Clear");
+  assert.equal(defaultHoldToFire(["File", "Import", "Project…"]), true);
+  assert.equal(defaultHoldToFire(["File", "Import Fixture Data…"]), true);
+  assert.equal(defaultHoldToFire(["File", "Export", "Project…"]), false);
+  for (const n of ["Undo", "Save", "Select All", "Duplicate…", "Group", "Break Out of Group"]) assert.equal(defaultHoldToFire(["Edit", n]), false, n);
 });
 
 test("store modifier: held between key down and key up, multiple keys", () => {

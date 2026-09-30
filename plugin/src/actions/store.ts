@@ -1,6 +1,6 @@
 import { action, type KeyAction, type KeyDownEvent, type KeyUpEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import { rt } from "../runtime.js";
-import { draw } from "./util.js";
+import { draw, logEvent } from "./util.js";
 import { setStoreKeysRedraw } from "./slot.js";
 
 /** A held modifier: while this key is down, Camera Slot keys store instead of recall. */
@@ -33,10 +33,12 @@ export class StoreModifierKey extends SingletonAction {
   }
 
   override onKeyDown(ev: KeyDownEvent): void {
+    logEvent("Key down", this.manifestId, undefined, "store modifier held");
     rt.storeModifier.down(ev.action.id);
   }
 
   override onKeyUp(ev: KeyUpEvent): void {
+    logEvent("Key up", this.manifestId, undefined, "store modifier released");
     rt.storeModifier.up(ev.action.id);
   }
 }

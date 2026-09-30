@@ -93,6 +93,18 @@ export const ICONS: Record<string, string> = {
   streaks: `<path d="M12 3v18M4.200 7.500l15.600 9M4.200 16.500l15.600-9"/>`,
   autoexposure: `<circle cx="12" cy="12" r="4"/><path d="M12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21"/><path d="M8.500 15.500L12 8.500l3.500 7M9.800 13.500h4.400"/>`,
   laser: `<path d="M3 15h9"/><path d="M12 15l9-9M12 15l9-4M12 15l9 1" stroke-dasharray="2 2"/><circle cx="12" cy="15" r="1.200" fill="currentColor"/>`,
+  // --- category icons (one per catalog category; also the fallback glyph of commands without their own)
+  "cat-view": `<rect x="3.5" y="5" width="17" height="13" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M7 13.500l3-3.500 2.500 2.500 2-2.500 2.500 3.500"/>`,
+  "cat-camera": `${CAM}`,
+  "cat-select": `<path d="M5 4l6.500 15 2.200-6.300L20 10.500z"/><path d="M15 3.500h5.500V9" stroke-dasharray="2 2.500"/>`,
+  "cat-edit": `<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/>`,
+  "cat-patch": `<circle cx="7" cy="12" r="2.800"/><circle cx="17" cy="12" r="2.800"/><path d="M9.800 12h4.400M2.500 12H4.200M19.800 12h1.700"/>`,
+  "cat-navigate": `<circle cx="12" cy="12" r="8.500"/><path d="M15.500 8.500l-2 5-5 2 2-5z"/>`,
+  "cat-window": `<rect x="3.500" y="4.500" width="17" height="15" rx="2"/><path d="M3.500 9h17M6.500 6.800h.01M9 6.800h.01"/>`,
+  "cat-file": `<path d="M6 3.500h8l4 4V20.500H6z"/><path d="M14 3.500V8h4"/>`,
+  "cat-tabs": `<path d="M3.500 9.500h17V19a1.500 1.500 0 0 1-1.500 1.500H5A1.500 1.500 0 0 1 3.500 19z"/><path d="M3.500 9.500V6A1.500 1.500 0 0 1 5 4.500h4.500L11 7h8A1.500 1.500 0 0 1 20.500 8.500v1"/>`,
+  copy: `<path d="M9 7.500h9a1.500 1.500 0 0 1 1.500 1.500v10A1.500 1.500 0 0 1 18 20.500H9A1.500 1.500 0 0 1 7.500 19V9A1.500 1.500 0 0 1 9 7.500z"/><path d="M15.500 7.500V5A1.500 1.500 0 0 0 14 3.500H6A1.500 1.500 0 0 0 4.500 5v10A1.500 1.500 0 0 0 6 16.500h1.500M10.500 12.500h6M10.500 16h6"/>`,
+  import: `<path d="M12 3.500V15M7.500 10.500L12 15l4.500-4.500"/><path d="M5 13.500V19a1.500 1.500 0 0 0 1.500 1.500h11A1.500 1.500 0 0 0 19 19v-5.500"/>`,
   // --- connection
   connection: `<path d="M4.500 9.500a11 11 0 0 1 15 0M7.500 12.800a7 7 0 0 1 9 0M10.400 16a3 3 0 0 1 3.200 0"/><circle cx="12" cy="19" r="1" fill="currentColor"/>`,
 };

@@ -2,6 +2,7 @@ import { action, type KeyAction, type KeyDownEvent, SingletonAction, type WillAp
 import { VIEW_LABEL, type ViewId } from "../lib/properties.js";
 import { connectionSvg, svgDataUrl, type ConnectionView } from "../lib/render.js";
 import { rt } from "../runtime.js";
+import { logEvent } from "./util.js";
 
 @action({ UUID: "com.rezabehjat.capture.connection" })
 export class Connection extends SingletonAction {
@@ -48,12 +49,14 @@ export class Connection extends SingletonAction {
   /** Re-checks everything: OSC ping, Accessibility (read-only), and the live-view status query. */
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     if (this.checking) return;
+    logEvent("Key press", this.manifestId, undefined, `re-check (Accessibility ${rt.ax.status}, transport ${rt.ax.transport})`);
     if (rt.ax.status === "noPermission" || rt.ax.status === "noAutomation") rt.openSystemSettings(rt.ax.status);
     this.checking = true;
     this.redrawAll();
     try {
       const [conn] = await Promise.all([rt.monitor.check(1500), rt.ax.check()]);
       this.live = undefined;
+      logEvent("Key result", this.manifestId, undefined, `OSC ${conn.connected ? `connected (Capture ${conn.version ?? "?"})` : "offline"}, Accessibility ${rt.ax.status}`);
       if (conn.connected) {
         try {
           const r = await rt.osc.request("/view/live/getStatus", [], "/view/live/status", 1000);

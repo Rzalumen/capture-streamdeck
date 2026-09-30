@@ -70,3 +70,19 @@ export function reportAxFailure(action: KeyAction, e: unknown, flasher: Flasher)
     action.showAlert().catch(() => undefined);
   }
 }
+
+/** Settings as one compact log-safe string. */
+export function showSettings(s: unknown): string {
+  const t = JSON.stringify(s ?? {});
+  return t.length > 400 ? `${t.slice(0, 400)}…` : t;
+}
+
+/** One log line per key/dial event: what happened, on which action (UUID), with which settings, and the result. */
+export function logEvent(what: string, uuid: string | undefined, settings: unknown, result?: string): void {
+  rt.log.info(`${what} [${uuid ?? "?"}] settings=${showSettings(settings)}${result !== undefined ? ` → ${result}` : ""}`);
+}
+
+/** A Property Inspector edit reached the plugin as didReceiveSettings. */
+export function logSettingsChange(uuid: string | undefined, settings: unknown): void {
+  rt.log.info(`PI setting change [${uuid ?? "?"}] settings=${showSettings(settings)}`);
+}

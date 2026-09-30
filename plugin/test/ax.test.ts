@@ -102,7 +102,7 @@ test("menu dump is parsed and filtered", async () => {
   ]);
 });
 
-test("calls never overlap, clicks jump ahead of polling, identical polls coalesce", async () => {
+test("calls never overlap; a press drops the waiting polls; identical polls coalesce", async () => {
   const order: string[] = [];
   const runner: Runner = async (lines) => {
     order.push(lines.some((l) => l.includes('"click")')) ? "click" : "poll");
@@ -111,13 +111,18 @@ test("calls never overlap, clicks jump ahead of polling, identical polls coalesc
   };
   const ax = new AxBridge({ runner });
   const t = { path: ["Edit", "Delete"], match: "exact" as const };
-  const p1 = ax.enabledStates([t]); // starts running
+  const p1 = ax.enabledStates([t]); // starts running: never interrupted
   const p2 = ax.enabledStates([{ ...t, path: ["Edit", "Cut"] }]); // waits
-  const p3 = ax.enabledStates([{ ...t, path: ["Edit", "Cut"] }]); // identical → coalesced
-  const c = ax.clickMenu({ path: ["View", "Plot"], match: "exact" }); // jumps ahead of p2
-  await Promise.all([p1, p2, p3, c]);
+  const p3 = ax.enabledStates([{ ...t, path: ["Edit", "Cut"] }]); // identical → coalesced with p2
+  const dropped = Promise.allSettled([p2, p3]);
+  const c = ax.clickMenu({ path: ["View", "Plot"], match: "exact" }); // press: the waiting poll is dropped, click runs next
+  await Promise.all([p1, c]);
+  const [r2, r3] = await dropped;
+  assert.equal(r2.status, "rejected");
+  assert.equal((r2 as PromiseRejectedResult).reason.name, "DroppedError");
+  assert.equal(r3.status, "rejected");
   assert.equal(ax.queue.maxActive, 1);
-  assert.deepEqual(order, ["poll", "click", "poll"]);
+  assert.deepEqual(order, ["poll", "click"]);
 });
 
 test("latency median is tracked", async () => {

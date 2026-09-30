@@ -124,6 +124,57 @@ const lastSettings = () => toPlugin.filter((m) => m.event === "setSettings").at(
   await page.screenshot({ path: path.join(out, "position.png") });
   assert.deepEqual(errors, []);
 }
+// --- Named command (Handoff 08): nothing to choose, only Hold to fire / Dim when disabled
+{
+  const { page, errors } = await open(`${U}.cmd.camera.swing-to-front`, {});
+  assert.equal(await page.locator("#s-ncmd").isVisible(), true);
+  assert.equal(await page.locator("#s-command").isVisible(), false);
+  assert.match(await page.locator("#ncmd-what").textContent(), /View › Camera › Swing to Front/);
+  assert.equal(await page.locator("#nhold").isChecked(), false);
+  assert.equal(await page.locator("#ncmd-warn").isVisible(), false);
+  await page.check("#nhold");
+  assert.equal(lastSettings().holdToFire, true);
+  await page.uncheck("#ndim");
+  assert.equal(lastSettings().dimWhenDisabled, false);
+  await page.screenshot({ path: path.join(out, "named-command.png") });
+  assert.deepEqual(errors, []);
+}
+{
+  const { page } = await open(`${U}.cmd.edit.delete`, {});
+  assert.equal(await page.locator("#nhold").isChecked(), true, "Delete holds by default (from the catalog)");
+  await page.uncheck("#nhold");
+  assert.equal(lastSettings().holdToFire, false);
+}
+{
+  const { page } = await open(`${U}.cmd.file.import-project`, {});
+  assert.equal(await page.locator("#ncmd-warn").isVisible(), true, "guessed File paths carry a warning");
+}
+{
+  const { page } = await open(`${U}.cmd.tabs.fixtures`, {});
+  assert.equal(await page.locator("#none").isVisible(), true);
+  assert.equal(await page.locator("#s-ncmd").isVisible(), false);
+}
+// --- Named dial / toggle
+{
+  const { page, errors } = await open(`${U}.dial.flare-streaks`, {});
+  assert.equal(await page.locator("#s-ndial").isVisible(), true);
+  assert.equal(await page.locator("#s-dial").isVisible(), false);
+  assert.match(await page.locator("#ndial-hint").textContent(), /Flare Streaks: range 1 … 7 \(whole number\)/);
+  assert.equal(await page.locator("#ndstep").getAttribute("placeholder"), "1");
+  await page.selectOption("#ndview", "2");
+  assert.equal(lastSettings().view, "2");
+  await page.fill("#ndreset", "3");
+  await page.locator("#ndreset").dispatchEvent("change");
+  assert.equal(lastSettings().reset, 3);
+  await page.screenshot({ path: path.join(out, "named-dial.png") });
+  assert.deepEqual(errors, []);
+}
+{
+  const { page } = await open(`${U}.toggle.laser-flicker-effect`, {});
+  assert.equal(await page.locator("#s-ntoggle").isVisible(), true);
+  await page.selectOption("#ntview", "1");
+  assert.equal(lastSettings().view, "1");
+}
 // --- Actions without settings
 {
   const { page } = await open(`${U}.connection`, {});

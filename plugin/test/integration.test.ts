@@ -52,11 +52,17 @@ const DUMP = [
   [0, "View"], [1, "Plot"], [1, "Camera"], [2, "Swing to Front"], [1, "Enter Full Screen"],
 ].map(([d, n]) => `${d}|1|${enc(n as string)}|0`).join("\t") + "\t";
 
-test("startup: the only OSC traffic is /ping; no Accessibility call and no click", async () => {
+test("startup: the only OSC traffic is /ping; the only Accessibility traffic is read-only (status + menu tree), never a click or an activation", async () => {
   await deck.waitFor(() => capture.msgs.length > 0, 4000, "first OSC packet");
-  await sleep(500);
+  await sleep(800);
   assert.deepEqual([...new Set(capture.msgs.map((m) => m.address))], ["/ping"]);
-  assert.equal(deck.axCalls().length, 0);
+  const scripts = deck.axCalls().map((c) => c.lines.join("\n"));
+  assert.ok(scripts.length >= 1, "the menu tree is read in the background at start");
+  assert.ok(scripts.some((s) => s.includes("on dumpMenu")), "the background read is the menu dump");
+  for (const s of scripts) {
+    assert.ok(!s.includes("set frontmost to true"), "no activation at startup");
+    assert.ok(!s.includes('"click")'), "no click at startup");
+  }
   assert.ok(deck.received.some((m) => m.event === "getGlobalSettings"));
 });
 
@@ -286,4 +292,213 @@ test("Offline: after Capture stops answering, strips dim and say Offline (10 s t
   await deck.waitFor(() => deck.lastImage("conn").includes("Offline"), 3000, "Offline connection key");
   capture.answering = true;
   await deck.waitFor(() => deck.lastFeedback("dial1").mark.value !== "Offline", 9000, "back online");
+});
+
+// ================================================================== Handoff 08: named actions
+
+const N = (category: string, id: string) => `${U}.cmd.${category}.${id}`;
+const clickScripts = (from: number) => deck.axCalls().slice(from).map((c) => c.lines.join("\n")).filter((t) => t.includes('"click")'));
+
+test("every action in the manifest is handled by the plugin (named commands, dials, toggles and generic ones)", async () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
+  assert.equal(manifest.Actions.length, 142);
+  let i = 0;
+  const ctxs: [string, string, boolean][] = [];
+  for (const a of manifest.Actions) {
+    const dial = a.Controllers.includes("Encoder");
+    const ctx = `all${i++}`;
+    ctxs.push([a.UUID, ctx, dial]);
+    deck.willAppear(a.UUID, ctx, {}, dial ? "Encoder" : "Keypad");
+  }
+  for (const [uuid, ctx, dial] of ctxs) {
+    await deck.waitFor(() => (dial ? deck.lastFeedback(ctx) : deck.lastImage(ctx)), 8000, `first draw of ${uuid}`);
+  }
+  for (const [, ctx] of ctxs) deck.willDisappear(ctx.startsWith("all") ? manifest.Actions[Number(ctx.slice(3))].UUID : "", ctx);
+  await sleep(100);
+});
+
+test("named command: 'View: Plot' needs no settings, shows its title, and one press clicks View > Plot", async () => {
+  const uuid = N("view", "plot");
+  deck.willAppear(uuid, "n-plot", {});
+  await deck.waitFor(() => deck.lastImage("n-plot").includes(">Plot<"), 4000, "title Plot");
+  await sleep(150);
+  const before = deck.axCalls().length;
+  deck.keyDown(uuid, "n-plot", {});
+  const c = await deck.waitFor(() => clickScripts(before)[0], 3000, "click script");
+  assert.ok(c.includes('return my act("Capture", "View", {}, "exact", {"Plot"}, "click")'));
+  await deck.waitFor(() => deck.sent("n-plot", "showOk").length > 0, 3000, "showOk");
+  deck.keyUp(uuid, "n-plot", {});
+  assert.equal(clickScripts(before).length, 1, "exactly one click per press");
+});
+
+test("named command: nested path, prefix match, alternates, non-ASCII names", async () => {
+  const cases: [string, string, string][] = [
+    [N("camera", "swing-to-front"), 'return my act("Capture", "View", {"Camera"}, "exact", {"Swing to Front"}, "click")', "n-swing"],
+    [N("camera", "store-3"), 'return my act("Capture", "View", {"Store Camera"}, "exact", {"Position 3"}, "click")', "n-store3"],
+    [N("edit", "undo"), 'return my act("Capture", "Edit", {}, "prefix", {"Undo"}, "click")', "n-undo"],
+    [N("view", "full-screen"), '"alternates", {"Enter Full Screen", "Exit Full Screen"}, "click")', "n-fs"],
+    [N("edit", "duplicate"), '{("Duplicate" & (character id 8230))}', "n-dup"],
+    [N("select", "by-fixture-type"), 'return my act("Capture", "Edit", {"Select"}, "exact", {"By Fixture Type"}, "click")', "n-bft"],
+  ];
+  for (const [uuid, needle, ctx] of cases) {
+    deck.willAppear(uuid, ctx, {});
+    await sleep(120);
+    const before = deck.axCalls().length;
+    deck.keyDown(uuid, ctx, {});
+    const c = await deck.waitFor(() => clickScripts(before)[0], 3000, `click ${uuid}`);
+    assert.ok(c.includes(needle), `${uuid}: ${c.split("\n").filter((l) => l.startsWith("return my act")).join()}`);
+    deck.keyUp(uuid, ctx, {});
+  }
+});
+
+test("named command dims when Capture says it is disabled (Edit: Undo), and follows it back", async () => {
+  deck.setAx({ mode: "ok", enabled: { Undo: 0 } });
+  deck.willAppear(N("edit", "undo"), "n-undo2", {});
+  await deck.waitFor(() => deck.lastImage("n-undo2").includes('opacity="0.35"'), 5000, "dimmed");
+  deck.setAx({ mode: "ok", enabled: { Undo: 1 } });
+  deck.keyDown(N("edit", "undo"), "n-undo2", {}); // a press schedules a poll ~300 ms later
+  await deck.waitFor(() => !deck.lastImage("n-undo2").includes('opacity="0.35"'), 5000, "enabled again");
+  deck.keyUp(N("edit", "undo"), "n-undo2", {});
+  deck.setAx({ mode: "ok" });
+});
+
+test("named command: hold-to-fire comes from the catalog (Edit: Delete), and the setting can override it", async () => {
+  const uuid = N("edit", "delete");
+  deck.willAppear(uuid, "n-del", {});
+  await sleep(200);
+  const clicks = () => deck.axCalls().filter((c) => c.lines.join("\n").includes('{"Delete"}, "click")')).length;
+  const n0 = clicks();
+  deck.keyDown(uuid, "n-del", {});
+  await sleep(150);
+  deck.keyUp(uuid, "n-del", {});
+  await deck.waitFor(() => deck.lastImage("n-del").includes(">Hold<"), 2000, "Hold flash");
+  await sleep(1200);
+  assert.equal(clicks(), n0, "short press does not fire");
+  deck.keyDown(uuid, "n-del", {});
+  await deck.waitFor(() => clicks() === n0 + 1, 2500, "fires after 1 s");
+  deck.keyUp(uuid, "n-del", {});
+  // override: holdToFire=false in the key's settings fires at once
+  const S = { holdToFire: false };
+  deck.willAppear(uuid, "n-del2", S);
+  await sleep(200);
+  deck.keyDown(uuid, "n-del2", S);
+  await deck.waitFor(() => clicks() === n0 + 2, 1500, "immediate fire when overridden");
+  deck.keyUp(uuid, "n-del2", S);
+});
+
+test("named tab: 'Tabs: Fixtures' clicks the Fixtures radio button only", async () => {
+  const uuid = N("tabs", "fixtures");
+  deck.willAppear(uuid, "n-tab", {});
+  await deck.waitFor(() => deck.lastImage("n-tab").includes(">Fixtures<"), 3000, "title");
+  const n = deck.axCalls().length;
+  deck.keyDown(uuid, "n-tab", {});
+  const c = await deck.waitFor(() => deck.axCalls().slice(n).find((x) => x.lines.join("\n").includes("radio button")), 3000, "tab script");
+  assert.ok(c.lines.join("\n").includes('set rb to radio button "Fixtures" of g'));
+});
+
+test("named dial: 'Dial: Bloom' is preset (no settings), sends /view/live/bloom as `f`, clamps at 2", async () => {
+  const uuid = `${U}.dial.bloom`;
+  deck.willAppear(uuid, "d-bloom", {}, "Encoder");
+  const fb = await deck.waitFor(() => deck.lastFeedback("d-bloom"), 3000, "strip");
+  assert.equal(fb.name.value, "BLOOM");
+  capture.msgs.length = 0;
+  deck.dialRotate(uuid, "d-bloom", 3, {});
+  const m = await deck.waitFor(() => capture.msgs.find((x) => x.address === "/view/live/bloom"), 3000, "bloom");
+  assert.equal(m.types, "f");
+  assert.equal(m.args[0], Math.fround(1.12)); // reset default 1.0 + 3 × 0.04
+  deck.dialRotate(uuid, "d-bloom", 500, {});
+  await deck.waitFor(() => capture.msgs.at(-1)?.args[0] === 2, 3000, "clamped at 2 (manual: 0–200 %)");
+});
+
+test("named dial: 'Dial: Flare Streaks' sends an integer (`i`), whole steps, clamped 1–7", async () => {
+  const uuid = `${U}.dial.flare-streaks`;
+  deck.willAppear(uuid, "d-streaks", {}, "Encoder");
+  await deck.waitFor(() => deck.lastFeedback("d-streaks"), 3000, "strip");
+  capture.msgs.length = 0;
+  deck.dialRotate(uuid, "d-streaks", 2, {});
+  const m = await deck.waitFor(() => capture.msgs.find((x) => x.address === "/view/live/flareStreaks"), 3000, "streaks");
+  assert.deepEqual([m.types, m.args[0]], ["i", 6]); // reset default 4 + 2
+  deck.dialRotate(uuid, "d-streaks", 50, {});
+  await deck.waitFor(() => capture.msgs.at(-1)?.args[0] === 7, 3000, "clamped at 7");
+  deck.dialRotate(uuid, "d-streaks", -50, {});
+  await deck.waitFor(() => capture.msgs.at(-1)?.args[0] === 1, 3000, "clamped at 1");
+  assert.ok(capture.msgs.filter((x) => x.address === "/view/live/flareStreaks").every((x) => x.types === "i"));
+});
+
+test("every named dial sends exactly its own manual address, with the manual's type and range", async () => {
+  const table: [string, string, string, number, number][] = [
+    ["ambient-lighting", "ambientLighting", "f", 0, 1],
+    ["bloom", "bloom", "f", 0, 2],
+    ["contrast", "contrast", "f", 0, 1],
+    ["exposure-adjustment", "exposureAdjustment", "f", -3, 3],
+    ["fill-lighting", "fillLighting", "f", 0, 2],
+    ["flare", "flare", "f", 0, 2],
+    ["flare-streaks", "flareStreaks", "i", 1, 7],
+    ["flare-angle", "flareAngle", "f", 0, 180],
+    ["flare-size", "flareSize", "f", 0, 2],
+    ["hue-clamp", "hueClamp", "f", 0, 1],
+    ["saturation", "saturation", "f", 0, 1],
+    ["white-balance", "whiteBalance", "f", 2500, 10000],
+  ];
+  for (const [slug, prop, type, lo, hi] of table) {
+    const uuid = `${U}.dial.${slug}`;
+    const ctx = `dd-${slug}`;
+    deck.willAppear(uuid, ctx, {}, "Encoder");
+    await deck.waitFor(() => deck.lastFeedback(ctx), 3000, `strip ${slug}`);
+    capture.msgs.length = 0;
+    deck.dialRotate(uuid, ctx, 100000, {});
+    await deck.waitFor(() => capture.msgs.some((m) => m.address === `/view/live/${prop}` && m.args[0] === Math.fround(hi)), 3000, `${prop} max`);
+    deck.dialRotate(uuid, ctx, -200000, {});
+    await deck.waitFor(() => capture.msgs.some((m) => m.address === `/view/live/${prop}` && m.args[0] === Math.fround(lo)), 3000, `${prop} min`);
+    for (const m of capture.msgs.filter((x) => x.address.includes(prop))) {
+      assert.equal(m.types, type, `${prop} wire type`);
+      assert.ok(m.args[0] >= lo && m.args[0] <= hi, `${prop} within manual range`);
+    }
+    assert.ok(capture.msgs.every((m) => m.address === `/view/live/${prop}`), `only ${prop} was sent`);
+  }
+});
+
+test("named toggles: 'Toggle: Laser Flicker' sends T then F on /view/live/laserFlickerEffect", async () => {
+  const uuid = `${U}.toggle.laser-flicker-effect`;
+  deck.willAppear(uuid, "t-laser", {});
+  await sleep(200);
+  capture.msgs.length = 0;
+  deck.keyDown(uuid, "t-laser", {});
+  await deck.waitFor(() => capture.msgs.find((m) => m.address === "/view/live/laserFlickerEffect"), 3000, "T");
+  assert.deepEqual([capture.msgs.at(-1)!.types, capture.msgs.at(-1)!.args], ["T", [true]]);
+  deck.keyDown(uuid, "t-laser", {});
+  await deck.waitFor(() => capture.msgs.filter((m) => m.address === "/view/live/laserFlickerEffect").length === 2, 3000, "F");
+  assert.deepEqual([capture.msgs.at(-1)!.types, capture.msgs.at(-1)!.args], ["F", [false]]);
+});
+
+test("generic Capture Command pressed with nothing configured: alert + 'Not set' flash, logged as 'no command configured', no click", async () => {
+  deck.willAppear(A.command, "unconf", {});
+  await deck.waitFor(() => deck.lastImage("unconf").includes("Choose"), 3000, "placeholder");
+  const before = deck.axCalls().length;
+  deck.keyDown(A.command, "unconf", {});
+  await deck.waitFor(() => deck.lastImage("unconf").includes(">Not set<"), 3000, "Not set flash");
+  await deck.waitFor(() => deck.sent("unconf", "showAlert").length > 0, 3000, "alert");
+  assert.equal(clickScripts(before).length, 0);
+  await deck.waitFor(() => deck.logText().includes("no command configured"), 4000, "log line");
+  assert.match(deck.logText(), /Key press \[com\.rezabehjat\.capture\.command\] settings=\{\} → no command configured/);
+});
+
+test("logging: every key press names the action UUID, its settings and the result; PI setting changes are logged; polls are not logged one by one", async () => {
+  const uuid = N("view", "grid");
+  const S = { dimWhenDisabled: false };
+  deck.willAppear(uuid, "n-grid", S);
+  await sleep(200);
+  deck.keyDown(uuid, "n-grid", S);
+  await deck.waitFor(() => deck.logText().includes(`Key result [${uuid}] settings={"dimWhenDisabled":false} → OK View > Grid`), 4000, "result line");
+  assert.match(deck.logText(), new RegExp(`Key press \\[${uuid.replace(/\./g, "\\.")}\\] settings=\\{"dimWhenDisabled":false\\} → View > Grid`));
+  assert.match(deck.logText(), /AX press click View > Grid: \d+ ms/);
+  deck.send({ event: "didReceiveSettings", action: uuid, context: "n-grid", device: "DEV1", payload: { settings: { dimWhenDisabled: true }, coordinates: { column: 0, row: 0 }, isInMultiAction: false } });
+  await deck.waitFor(() => deck.logText().includes(`PI setting change [${uuid}] settings={"dimWhenDisabled":true}`), 3000, "PI change logged");
+  assert.ok(!/AX enabled x\d+: \d+ ms/.test(deck.logText()), "no per-poll lines");
+  const dial = `${U}.dial.contrast`;
+  deck.willAppear(dial, "d-log", {}, "Encoder");
+  await sleep(100);
+  deck.dialRotate(dial, "d-log", 2, {});
+  deck.dialRotate(dial, "d-log", 3, {});
+  await deck.waitFor(() => /Dial rotate \[com\.rezabehjat\.capture\.dial\.contrast\][^\n]*2 events, \+5 ticks → contrast=\d/.test(deck.logText()), 4000, "one line per gesture");
 });

@@ -1,33 +1,55 @@
 import type { MenuTarget } from "./applescript.js";
 import type { AxBridge, AxStatus } from "./axBridge.js";
 import { nullLogger, type Logger } from "./log.js";
+import { DroppedError } from "./queue.js";
 import type { KeyOptions, Tone } from "./render.js";
 
 export interface AxKey {
   id: string;
-  /** Menu commands whose enabled state this key shows (polled in one batch with all other keys). */
-  targets?: MenuTarget[];
+  /** Menu commands whose enabled state this key shows (polled in one batch with all other keys). May be a function so a self-healed path is picked up. */
+  targets?: MenuTarget[] | (() => MenuTarget[]);
   redraw(): void;
 }
 
 export const targetId = (t: MenuTarget): string => JSON.stringify([t.path, t.match]);
 
+export interface RegistryOptions {
+  /** Idle polling period while keys are visible (default 5000 ms). */
+  intervalMs?: number;
+  /** Poll this long after a press (default 300 ms): the press usually changed which commands are enabled. */
+  afterPressMs?: number;
+  /** Batching delay after keys appear (default 25 ms): a whole page of keys appearing costs ONE poll. */
+  appearDelayMs?: number;
+  backoffMs?: number;
+  logger?: Logger;
+  now?: () => number;
+}
+
 /**
- * All keys that depend on Capture's Accessibility tree register here. While at least one is visible
- * the registry polls the enabled state of every registered target — in ONE osascript call — on
- * appear and every `intervalMs` (1.5 s). Polling only READS; it never clicks and never activates Capture.
+ * All keys that depend on Capture's Accessibility tree register here (registered = visible: from willAppear to
+ * willDisappear). While at least one is visible the registry polls the enabled state of every registered target in ONE
+ * request:
+ *   - right after keys appear (batched),
+ *   - `afterPressMs` after each press,
+ *   - otherwise every `intervalMs` (5 s).
+ * There is never more than one poll in flight, and a poll that is still waiting when a press arrives is dropped by the
+ * bridge (the after-press poll replaces it). Polling only READS; it never clicks and never activates Capture.
  * While Accessibility access is missing it backs off to `backoffMs`.
  */
 export class AxKeyRegistry {
   private keys = new Map<string, AxKey>();
   private enabled = new Map<string, boolean | null>();
-  private timer: NodeJS.Timeout | undefined;
+  private interval: NodeJS.Timeout | undefined;
+  private soon: NodeJS.Timeout | undefined;
+  private soonAt = 0;
   private lastPoll = 0;
   private polling = false;
+  /** Number of polls started (tests). */
+  polls = 0;
 
   constructor(
     private ax: AxBridge,
-    private opts: { intervalMs?: number; backoffMs?: number; logger?: Logger; now?: () => number } = {},
+    private opts: RegistryOptions = {},
   ) {
     const prev = ax.onStatus;
     ax.onStatus = (s) => {
@@ -37,7 +59,7 @@ export class AxKeyRegistry {
   }
 
   private get intervalMs(): number {
-    return this.opts.intervalMs ?? 1500;
+    return this.opts.intervalMs ?? 5000;
   }
   private get now(): number {
     return (this.opts.now ?? Date.now)();
@@ -49,16 +71,42 @@ export class AxKeyRegistry {
 
   register(k: AxKey): void {
     this.keys.set(k.id, k);
-    if (!this.timer) this.timer = setInterval(() => void this.tick(), Math.min(this.intervalMs, 1500));
-    void this.pollNow();
+    if (!this.interval) {
+      this.interval = setInterval(() => void this.tick(), this.intervalMs);
+      this.interval.unref?.();
+    }
+    this.pollSoon(this.opts.appearDelayMs ?? 25);
   }
 
   unregister(id: string): void {
     this.keys.delete(id);
-    if (this.keys.size === 0 && this.timer) {
-      clearInterval(this.timer);
-      this.timer = undefined;
+    if (this.keys.size === 0) {
+      if (this.interval) clearInterval(this.interval);
+      this.interval = undefined;
+      if (this.soon) clearTimeout(this.soon);
+      this.soon = undefined;
     }
+  }
+
+  /** A user press was just handled: check what changed shortly afterwards. */
+  pressed(): void {
+    this.pollSoon(this.opts.afterPressMs ?? 300, true);
+  }
+
+  /** Poll in `ms`. An earlier pending poll wins unless `replace` (used after a press, which is worth waiting for). */
+  private pollSoon(ms: number, replace = false): void {
+    if (this.keys.size === 0) return;
+    const at = this.now + ms;
+    if (this.soon) {
+      if (!replace && this.soonAt <= at) return;
+      clearTimeout(this.soon);
+    }
+    this.soonAt = at;
+    this.soon = setTimeout(() => {
+      this.soon = undefined;
+      void this.pollNow();
+    }, ms);
+    this.soon.unref?.();
   }
 
   /** undefined = not polled yet, null = menu item not found, boolean = enabled state. */
@@ -85,28 +133,36 @@ export class AxKeyRegistry {
   async pollNow(): Promise<void> {
     if (this.polling || this.keys.size === 0) return;
     this.polling = true;
+    this.polls++;
     this.lastPoll = this.now;
+    let changed = false;
     try {
       const targets = new Map<string, MenuTarget>();
-      for (const k of this.keys.values()) for (const t of k.targets ?? []) targets.set(targetId(t), t);
+      for (const k of this.keys.values()) for (const t of typeof k.targets === "function" ? k.targets() : (k.targets ?? [])) targets.set(targetId(t), t);
       if (targets.size === 0) {
-        await this.ax.check();
+        await this.ax.check("poll");
       } else {
         const list = [...targets.entries()];
         const res = await this.ax.enabledStates(list.map(([, t]) => t));
-        list.forEach(([id], i) => this.enabled.set(id, res[i]));
+        list.forEach(([id], i) => {
+          if (this.enabled.get(id) !== res[i]) changed = true;
+          this.enabled.set(id, res[i]);
+        });
       }
-    } catch {
-      /* status has been recorded by the bridge; keys redraw from it */
+    } catch (e) {
+      // Dropped for a press: the after-press poll follows. Anything else: the bridge has recorded the status; keys redraw from it.
+      if (!(e instanceof DroppedError)) changed = true;
     } finally {
       this.polling = false;
-      this.redrawAll();
+      if (changed) this.redrawAll();
     }
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = undefined;
+    if (this.interval) clearInterval(this.interval);
+    if (this.soon) clearTimeout(this.soon);
+    this.interval = undefined;
+    this.soon = undefined;
     this.keys.clear();
   }
 }

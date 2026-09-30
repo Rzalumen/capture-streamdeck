@@ -3,7 +3,7 @@ import type { MenuTarget } from "../lib/applescript.js";
 import { axKeyOptions } from "../lib/axKeys.js";
 import { slotAction } from "../lib/storeModifier.js";
 import { rt } from "../runtime.js";
-import { draw, Flasher, num, openSettingsIfBlocked, reportAxFailure } from "./util.js";
+import { draw, Flasher, logEvent, logSettingsChange, num, openSettingsIfBlocked, reportAxFailure } from "./util.js";
 
 type Settings = { slot?: number | string };
 interface Ctx {
@@ -57,6 +57,7 @@ export class CameraSlot extends SingletonAction<Settings> {
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<Settings>): void {
+    logSettingsChange(this.manifestId, ev.payload.settings);
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onWillDisappear(ev: WillDisappearEvent<Settings>): void {
@@ -69,14 +70,22 @@ export class CameraSlot extends SingletonAction<Settings> {
   override async onKeyDown(ev: KeyDownEvent<Settings>): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
     if (!c) return;
-    if (openSettingsIfBlocked()) return;
+    if (openSettingsIfBlocked()) {
+      logEvent("Key press", this.manifestId, ev.payload.settings, `blocked: Accessibility ${rt.ax.status}; opened System Settings`);
+      return;
+    }
     const a = slotAction(c.slot, rt.storeModifier.isHeld);
+    const t0 = Date.now();
     try {
       const r = await rt.ax.clickMenu({ path: a.path, match: "exact" });
+      logEvent("Key press", this.manifestId, ev.payload.settings, `${r} ${a.path.join(" > ")} in ${Date.now() - t0} ms`);
       if (r === "DISABLED") ev.action.showAlert().catch(() => undefined);
       else if (a.kind === "store") c.flasher.show({ text: "Stored", tone: "accent" }, 1200);
     } catch (e) {
+      logEvent("Key press", this.manifestId, ev.payload.settings, `ERROR ${(e as Error).message}`);
       reportAxFailure(c.action, e, c.flasher);
+    } finally {
+      rt.axKeys.pressed();
     }
   }
 }

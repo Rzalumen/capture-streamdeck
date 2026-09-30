@@ -1,8 +1,2760 @@
 {
   "Name": "Capture",
-  "Version": "0.1.0.0",
+  "Version": "0.2.0.0",
   "Author": "Reza Behjat",
   "Actions": [
+    {
+      "Name": "View: Wireframe",
+      "UUID": "com.rezabehjat.capture.cmd.view.wireframe",
+      "Icon": "imgs/icons/wireframe",
+      "Tooltip": "Fires View › Wireframe in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/wireframe",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/wireframe",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Plot",
+      "UUID": "com.rezabehjat.capture.cmd.view.plot",
+      "Icon": "imgs/icons/plot",
+      "Tooltip": "Fires View › Plot in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/plot",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/plot",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Live",
+      "UUID": "com.rezabehjat.capture.cmd.view.live",
+      "Icon": "imgs/icons/live",
+      "Tooltip": "Fires View › Live in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/live",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/live",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Custom",
+      "UUID": "com.rezabehjat.capture.cmd.view.custom",
+      "Icon": "imgs/icons/custom",
+      "Tooltip": "Fires View › Custom in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/custom",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/custom",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Grid",
+      "UUID": "com.rezabehjat.capture.cmd.view.grid",
+      "Icon": "imgs/icons/grid",
+      "Tooltip": "Fires View › Grid in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/grid",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/grid",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Widgets",
+      "UUID": "com.rezabehjat.capture.cmd.view.widgets",
+      "Icon": "imgs/icons/widgets",
+      "Tooltip": "Fires View › Widgets in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/widgets",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/widgets",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Hidden Objects",
+      "UUID": "com.rezabehjat.capture.cmd.view.hidden-objects",
+      "Icon": "imgs/icons/hidden",
+      "Tooltip": "Fires View › Hidden Objects in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/hidden",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/hidden",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Project Info",
+      "UUID": "com.rezabehjat.capture.cmd.view.project-info",
+      "Icon": "imgs/icons/info",
+      "Tooltip": "Fires View › Project Information in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/info",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/info",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Fixture Info",
+      "UUID": "com.rezabehjat.capture.cmd.view.fixture-info",
+      "Icon": "imgs/icons/info",
+      "Tooltip": "Fires View › Fixture Information in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/info",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/info",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Selection Navigator",
+      "UUID": "com.rezabehjat.capture.cmd.view.selection-navigator",
+      "Icon": "imgs/icons/navigator",
+      "Tooltip": "Fires View › Selection Navigator in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/navigator",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/navigator",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: View Navigator",
+      "UUID": "com.rezabehjat.capture.cmd.view.view-navigator",
+      "Icon": "imgs/icons/navigator",
+      "Tooltip": "Fires View › View Navigator in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/navigator",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/navigator",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Dim Background",
+      "UUID": "com.rezabehjat.capture.cmd.view.dim-background",
+      "Icon": "imgs/icons/dim",
+      "Tooltip": "Fires View › Dim Background in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/dim",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/dim",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Full Screen",
+      "UUID": "com.rezabehjat.capture.cmd.view.full-screen",
+      "Icon": "imgs/icons/fullscreen",
+      "Tooltip": "Fires View › Enter Full Screen / Exit Full Screen in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fullscreen",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/fullscreen",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Save Image",
+      "UUID": "com.rezabehjat.capture.cmd.view.save-image",
+      "Icon": "imgs/icons/image",
+      "Tooltip": "Fires View › Save Image… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/image",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/image",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View: Render Image",
+      "UUID": "com.rezabehjat.capture.cmd.view.render-image",
+      "Icon": "imgs/icons/render",
+      "Tooltip": "Fires View › Render Image… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/render",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/render",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Swing to Top",
+      "UUID": "com.rezabehjat.capture.cmd.camera.swing-to-top",
+      "Icon": "imgs/icons/swing-top",
+      "Tooltip": "Fires View › Camera › Swing to Top in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/swing-top",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/swing-top",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Swing to Front",
+      "UUID": "com.rezabehjat.capture.cmd.camera.swing-to-front",
+      "Icon": "imgs/icons/swing-front",
+      "Tooltip": "Fires View › Camera › Swing to Front in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/swing-front",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/swing-front",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Swing to Right",
+      "UUID": "com.rezabehjat.capture.cmd.camera.swing-to-right",
+      "Icon": "imgs/icons/swing-right",
+      "Tooltip": "Fires View › Camera › Swing to Right in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/swing-right",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/swing-right",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Swing to Left",
+      "UUID": "com.rezabehjat.capture.cmd.camera.swing-to-left",
+      "Icon": "imgs/icons/swing-left",
+      "Tooltip": "Fires View › Camera › Swing to Left in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/swing-left",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/swing-left",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Swing to Selection",
+      "UUID": "com.rezabehjat.capture.cmd.camera.swing-to-selection",
+      "Icon": "imgs/icons/swing-selection",
+      "Tooltip": "Fires View › Camera › Swing to Selection in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/swing-selection",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/swing-selection",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Focus Selection",
+      "UUID": "com.rezabehjat.capture.cmd.camera.focus-selection",
+      "Icon": "imgs/icons/focus-selection",
+      "Tooltip": "Fires View › Camera › Focus Selection in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/focus-selection",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/focus-selection",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Focus All",
+      "UUID": "com.rezabehjat.capture.cmd.camera.focus-all",
+      "Icon": "imgs/icons/focus-all",
+      "Tooltip": "Fires View › Camera › Focus All in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/focus-all",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/focus-all",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Position 1",
+      "UUID": "com.rezabehjat.capture.cmd.camera.position-1",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Fires View › Camera › Position 1 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Position 2",
+      "UUID": "com.rezabehjat.capture.cmd.camera.position-2",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Fires View › Camera › Position 2 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Position 3",
+      "UUID": "com.rezabehjat.capture.cmd.camera.position-3",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Fires View › Camera › Position 3 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Position 4",
+      "UUID": "com.rezabehjat.capture.cmd.camera.position-4",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Fires View › Camera › Position 4 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Position 5",
+      "UUID": "com.rezabehjat.capture.cmd.camera.position-5",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Fires View › Camera › Position 5 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Position 1",
+      "UUID": "com.rezabehjat.capture.cmd.camera.store-1",
+      "Icon": "imgs/icons/store",
+      "Tooltip": "Fires View › Store Camera › Position 1 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Position 2",
+      "UUID": "com.rezabehjat.capture.cmd.camera.store-2",
+      "Icon": "imgs/icons/store",
+      "Tooltip": "Fires View › Store Camera › Position 2 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Position 3",
+      "UUID": "com.rezabehjat.capture.cmd.camera.store-3",
+      "Icon": "imgs/icons/store",
+      "Tooltip": "Fires View › Store Camera › Position 3 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Position 4",
+      "UUID": "com.rezabehjat.capture.cmd.camera.store-4",
+      "Icon": "imgs/icons/store",
+      "Tooltip": "Fires View › Store Camera › Position 4 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Position 5",
+      "UUID": "com.rezabehjat.capture.cmd.camera.store-5",
+      "Icon": "imgs/icons/store",
+      "Tooltip": "Fires View › Store Camera › Position 5 in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Select All",
+      "UUID": "com.rezabehjat.capture.cmd.select.select-all",
+      "Icon": "imgs/icons/select-all",
+      "Tooltip": "Fires Edit › Select All in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select-all",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select-all",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Deselect All",
+      "UUID": "com.rezabehjat.capture.cmd.select.deselect-all",
+      "Icon": "imgs/icons/deselect",
+      "Tooltip": "Fires Edit › Deselect All in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/deselect",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/deselect",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Layer",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-layer",
+      "Icon": "imgs/icons/layer",
+      "Tooltip": "Fires Edit › Select › By Layer in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/layer",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/layer",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Location",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-location",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select › By Location in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Model",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-model",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select › By Model in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Drawing Block Name",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-drawing-block-name",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select › By Drawing Block Name in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Motion Controlled",
+      "UUID": "com.rezabehjat.capture.cmd.select.motion-controlled",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select › Motion Controlled in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Connected Truss",
+      "UUID": "com.rezabehjat.capture.cmd.select.connected-truss",
+      "Icon": "imgs/icons/truss",
+      "Tooltip": "Fires Edit › Select › Connected Truss in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/truss",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/truss",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Fixtures on Truss",
+      "UUID": "com.rezabehjat.capture.cmd.select.fixtures-on-truss",
+      "Icon": "imgs/icons/truss",
+      "Tooltip": "Fires Edit › Select › Fixtures on Truss in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/truss",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/truss",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Fixture Type",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-fixture-type",
+      "Icon": "imgs/icons/select-type",
+      "Tooltip": "Fires Edit › Select › By Fixture Type in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select-type",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select-type",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Fixture Group",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-fixture-group",
+      "Icon": "imgs/icons/select-group",
+      "Tooltip": "Fires Edit › Select › By Fixture Group in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select-group",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select-group",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: By Cable Type",
+      "UUID": "com.rezabehjat.capture.cmd.select.by-cable-type",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select › By Cable Type in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Only Front Annotations",
+      "UUID": "com.rezabehjat.capture.cmd.select.only-front-annotations",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select Only › Front Annotations in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Only Centre Annotations",
+      "UUID": "com.rezabehjat.capture.cmd.select.only-centre-annotations",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select Only › Centre Annotations in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Select: Only Tail Annotations",
+      "UUID": "com.rezabehjat.capture.cmd.select.only-tail-annotations",
+      "Icon": "imgs/icons/select",
+      "Tooltip": "Fires Edit › Select Only › Tail Annotations in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/select",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Undo",
+      "UUID": "com.rezabehjat.capture.cmd.edit.undo",
+      "Icon": "imgs/icons/undo",
+      "Tooltip": "Fires Edit › Undo in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/undo",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/undo",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Redo",
+      "UUID": "com.rezabehjat.capture.cmd.edit.redo",
+      "Icon": "imgs/icons/redo",
+      "Tooltip": "Fires Edit › Redo in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/redo",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/redo",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Cut",
+      "UUID": "com.rezabehjat.capture.cmd.edit.cut",
+      "Icon": "imgs/icons/cut",
+      "Tooltip": "Fires Edit › Cut in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cut",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cut",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Copy",
+      "UUID": "com.rezabehjat.capture.cmd.edit.copy",
+      "Icon": "imgs/icons/copy",
+      "Tooltip": "Fires Edit › Copy in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/copy",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/copy",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Paste",
+      "UUID": "com.rezabehjat.capture.cmd.edit.paste",
+      "Icon": "imgs/icons/paste",
+      "Tooltip": "Fires Edit › Paste in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/paste",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/paste",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Duplicate",
+      "UUID": "com.rezabehjat.capture.cmd.edit.duplicate",
+      "Icon": "imgs/icons/duplicate",
+      "Tooltip": "Fires Edit › Duplicate… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/duplicate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/duplicate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Replace",
+      "UUID": "com.rezabehjat.capture.cmd.edit.replace",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Replace in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Split",
+      "UUID": "com.rezabehjat.capture.cmd.edit.split",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Split in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Delete",
+      "UUID": "com.rezabehjat.capture.cmd.edit.delete",
+      "Icon": "imgs/icons/delete",
+      "Tooltip": "Fires Edit › Delete in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/delete",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/delete",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Group",
+      "UUID": "com.rezabehjat.capture.cmd.edit.group",
+      "Icon": "imgs/icons/group",
+      "Tooltip": "Fires Edit › Group in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Break Out of Group",
+      "UUID": "com.rezabehjat.capture.cmd.edit.break-out-of-group",
+      "Icon": "imgs/icons/group",
+      "Tooltip": "Fires Edit › Break Out of Group in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Break Group",
+      "UUID": "com.rezabehjat.capture.cmd.edit.break-group",
+      "Icon": "imgs/icons/group",
+      "Tooltip": "Fires Edit › Break Group in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/group",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Transform",
+      "UUID": "com.rezabehjat.capture.cmd.edit.transform",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Transform… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Align",
+      "UUID": "com.rezabehjat.capture.cmd.edit.align",
+      "Icon": "imgs/icons/align",
+      "Tooltip": "Fires Edit › Align… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/align",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/align",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Spread Even",
+      "UUID": "com.rezabehjat.capture.cmd.edit.spread-even",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Spread Even… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Mirror",
+      "UUID": "com.rezabehjat.capture.cmd.edit.mirror",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Mirror… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Position Rotation Anchor",
+      "UUID": "com.rezabehjat.capture.cmd.edit.position-rotation-anchor",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Position Rotation Anchor… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Plot Adjustments Enable",
+      "UUID": "com.rezabehjat.capture.cmd.edit.plot-adjustments-enable",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Plot Adjustments › Enable in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Plot Adjustments Clear",
+      "UUID": "com.rezabehjat.capture.cmd.edit.plot-adjustments-clear",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Plot Adjustments › Clear in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Map Material",
+      "UUID": "com.rezabehjat.capture.cmd.edit.map-material",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Map Material… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Measure",
+      "UUID": "com.rezabehjat.capture.cmd.edit.measure",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Measure… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Sequential Unit",
+      "UUID": "com.rezabehjat.capture.cmd.patch.sequential-unit",
+      "Icon": "imgs/icons/sequential",
+      "Tooltip": "Fires Edit › Sequential › Unit… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Sequential Circuit",
+      "UUID": "com.rezabehjat.capture.cmd.patch.sequential-circuit",
+      "Icon": "imgs/icons/sequential",
+      "Tooltip": "Fires Edit › Sequential › Circuit… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Sequential Patch",
+      "UUID": "com.rezabehjat.capture.cmd.patch.sequential-patch",
+      "Icon": "imgs/icons/patch",
+      "Tooltip": "Fires Edit › Sequential › Patch… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/patch",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/patch",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Sequential Channel",
+      "UUID": "com.rezabehjat.capture.cmd.patch.sequential-channel",
+      "Icon": "imgs/icons/sequential",
+      "Tooltip": "Fires Edit › Sequential › Channel… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Sequential P3 Number",
+      "UUID": "com.rezabehjat.capture.cmd.patch.sequential-p3-number",
+      "Icon": "imgs/icons/sequential",
+      "Tooltip": "Fires Edit › Sequential › P3 Fixture Number… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/sequential",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Fixture Details",
+      "UUID": "com.rezabehjat.capture.cmd.patch.fixture-details",
+      "Icon": "imgs/icons/fixture-details",
+      "Tooltip": "Fires Edit › Fixture Details… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fixture-details",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/fixture-details",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Focus",
+      "UUID": "com.rezabehjat.capture.cmd.patch.focus",
+      "Icon": "imgs/icons/focus",
+      "Tooltip": "Fires Edit › Focus… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/focus",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/focus",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Remove Filters",
+      "UUID": "com.rezabehjat.capture.cmd.patch.remove-filters",
+      "Icon": "imgs/icons/cat-patch",
+      "Tooltip": "Fires Edit › Remove Filters in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-patch",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-patch",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Remove Gobos",
+      "UUID": "com.rezabehjat.capture.cmd.patch.remove-gobos",
+      "Icon": "imgs/icons/cat-patch",
+      "Tooltip": "Fires Edit › Remove Gobos in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-patch",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-patch",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Patch & Focus: Unpatch",
+      "UUID": "com.rezabehjat.capture.cmd.patch.unpatch",
+      "Icon": "imgs/icons/unpatch",
+      "Tooltip": "Fires Edit › Unpatch in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/unpatch",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/unpatch",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Alpha View",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.alpha-view",
+      "Icon": "imgs/icons/alpha",
+      "Tooltip": "Fires Navigate › Alpha View in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/alpha",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/alpha",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Beta View",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.beta-view",
+      "Icon": "imgs/icons/beta",
+      "Tooltip": "Fires Navigate › Beta View in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/beta",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/beta",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Gamma View",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.gamma-view",
+      "Icon": "imgs/icons/gamma",
+      "Tooltip": "Fires Navigate › Gamma View in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/gamma",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/gamma",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Selected Items",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.selected-items",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Selected Items in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Views",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.views",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Views in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Layers",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.layers",
+      "Icon": "imgs/icons/layer",
+      "Tooltip": "Fires Navigate › Layers in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/layer",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/layer",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Filters",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.filters",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Filters in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Fixture Groups",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.fixture-groups",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Fixture Groups in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Camera Positions",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.camera-positions",
+      "Icon": "imgs/icons/positions",
+      "Tooltip": "Fires Navigate › Camera Positions in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/positions",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/positions",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Materials",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.materials",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Materials in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Fixtures",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.fixtures",
+      "Icon": "imgs/icons/fixture-details",
+      "Tooltip": "Fires Navigate › Fixtures in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fixture-details",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/fixture-details",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Navigate: Universes",
+      "UUID": "com.rezabehjat.capture.cmd.navigate.universes",
+      "Icon": "imgs/icons/cat-navigate",
+      "Tooltip": "Fires Navigate › Universes in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-navigate",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Minimize",
+      "UUID": "com.rezabehjat.capture.cmd.window.minimize",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Minimize in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Zoom",
+      "UUID": "com.rezabehjat.capture.cmd.window.zoom",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Zoom in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Quad",
+      "UUID": "com.rezabehjat.capture.cmd.window.quad",
+      "Icon": "imgs/icons/arrange",
+      "Tooltip": "Fires Window › Arrangements › Quad in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/arrange",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/arrange",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Wide",
+      "UUID": "com.rezabehjat.capture.cmd.window.wide",
+      "Icon": "imgs/icons/arrange",
+      "Tooltip": "Fires Window › Arrangements › Wide in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/arrange",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/arrange",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Selected Items Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.selected-items",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Selected Items… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Layers Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.layers",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Layers… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Filters Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.filters",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Filters… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Fixture Groups Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.fixture-groups",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Fixture Groups… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Camera Positions Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.camera-positions",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Camera Positions… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Materials Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.materials",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Materials… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Fixtures Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.fixtures",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Fixtures… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Window: Universes Window",
+      "UUID": "com.rezabehjat.capture.cmd.window.universes",
+      "Icon": "imgs/icons/cat-window",
+      "Tooltip": "Fires Window › Universes… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-window",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Save",
+      "UUID": "com.rezabehjat.capture.cmd.file.save",
+      "Icon": "imgs/icons/save",
+      "Tooltip": "Fires File › Save in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/save",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/save",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Save As",
+      "UUID": "com.rezabehjat.capture.cmd.file.save-as",
+      "Icon": "imgs/icons/save-as",
+      "Tooltip": "Fires File › Save As… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/save-as",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/save-as",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Send to Production Assist",
+      "UUID": "com.rezabehjat.capture.cmd.file.send-to-production-assist",
+      "Icon": "imgs/icons/cat-file",
+      "Tooltip": "Fires File › Send to Production Assist… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-file",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-file",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Import Project",
+      "UUID": "com.rezabehjat.capture.cmd.file.import-project",
+      "Icon": "imgs/icons/import",
+      "Tooltip": "Fires File › Import › Project… in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Import Model",
+      "UUID": "com.rezabehjat.capture.cmd.file.import-model",
+      "Icon": "imgs/icons/import",
+      "Tooltip": "Fires File › Import › Model… in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Import Fixture Data",
+      "UUID": "com.rezabehjat.capture.cmd.file.import-fixture-data",
+      "Icon": "imgs/icons/import",
+      "Tooltip": "Fires File › Import › Fixture Data… in Capture. Hold the key for 1 s to fire.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/import",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Project",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-project",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Project… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Model",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-model",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Model… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Fixture Data",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-fixture-data",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Fixture Data… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Focus Sheets",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-focus-sheets",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Focus Sheets… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Documentation",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-documentation",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Documentation… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "File: Export Presentation",
+      "UUID": "com.rezabehjat.capture.cmd.file.export-presentation",
+      "Icon": "imgs/icons/export",
+      "Tooltip": "Fires File › Export › Presentation… in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/export",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Design",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.design",
+      "Icon": "imgs/icons/tab-design",
+      "Tooltip": "Switches Capture to the Design tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-design",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-design",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Fixtures",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.fixtures",
+      "Icon": "imgs/icons/tab-fixtures",
+      "Tooltip": "Switches Capture to the Fixtures tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-fixtures",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-fixtures",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Universes",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.universes",
+      "Icon": "imgs/icons/tab-universes",
+      "Tooltip": "Switches Capture to the Universes tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-universes",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-universes",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Media",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.media",
+      "Icon": "imgs/icons/tab-media",
+      "Tooltip": "Switches Capture to the Media tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-media",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-media",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Snapshots",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.snapshots",
+      "Icon": "imgs/icons/tab-snapshots",
+      "Tooltip": "Switches Capture to the Snapshots tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-snapshots",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-snapshots",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Tabs: Library",
+      "UUID": "com.rezabehjat.capture.cmd.tabs.library",
+      "Icon": "imgs/icons/tab-library",
+      "Tooltip": "Switches Capture to the Library tab.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/tab-library",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/tab-library",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Dial: Exposure",
+      "UUID": "com.rezabehjat.capture.dial.exposure-adjustment",
+      "Icon": "imgs/icons/exposure",
+      "Tooltip": "Turn to adjust Exposure over OSC (-3 … 3). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/exposure",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Ambient",
+      "UUID": "com.rezabehjat.capture.dial.ambient-lighting",
+      "Icon": "imgs/icons/ambient",
+      "Tooltip": "Turn to adjust Ambient over OSC (0 … 1). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/ambient",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Bloom",
+      "UUID": "com.rezabehjat.capture.dial.bloom",
+      "Icon": "imgs/icons/bloom",
+      "Tooltip": "Turn to adjust Bloom over OSC (0 … 2). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/bloom",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: White Balance",
+      "UUID": "com.rezabehjat.capture.dial.white-balance",
+      "Icon": "imgs/icons/whitebalance",
+      "Tooltip": "Turn to adjust White Balance over OSC (2500 … 10000). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/whitebalance",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Fill",
+      "UUID": "com.rezabehjat.capture.dial.fill-lighting",
+      "Icon": "imgs/icons/fill",
+      "Tooltip": "Turn to adjust Fill over OSC (0 … 2). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fill",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Hue Clamp",
+      "UUID": "com.rezabehjat.capture.dial.hue-clamp",
+      "Icon": "imgs/icons/hueclamp",
+      "Tooltip": "Turn to adjust Hue Clamp over OSC (0 … 1). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/hueclamp",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Contrast",
+      "UUID": "com.rezabehjat.capture.dial.contrast",
+      "Icon": "imgs/icons/contrast",
+      "Tooltip": "Turn to adjust Contrast over OSC (0 … 1). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/contrast",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Saturation",
+      "UUID": "com.rezabehjat.capture.dial.saturation",
+      "Icon": "imgs/icons/saturation",
+      "Tooltip": "Turn to adjust Saturation over OSC (0 … 1). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/saturation",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Flare",
+      "UUID": "com.rezabehjat.capture.dial.flare",
+      "Icon": "imgs/icons/flare",
+      "Tooltip": "Turn to adjust Flare over OSC (0 … 2). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/flare",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Flare Size",
+      "UUID": "com.rezabehjat.capture.dial.flare-size",
+      "Icon": "imgs/icons/flaresize",
+      "Tooltip": "Turn to adjust Flare Size over OSC (0 … 2). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/flaresize",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Flare Angle",
+      "UUID": "com.rezabehjat.capture.dial.flare-angle",
+      "Icon": "imgs/icons/flareangle",
+      "Tooltip": "Turn to adjust Flare Angle over OSC (0 … 180). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/flareangle",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Dial: Flare Streaks",
+      "UUID": "com.rezabehjat.capture.dial.flare-streaks",
+      "Icon": "imgs/icons/streaks",
+      "Tooltip": "Turn to adjust Flare Streaks over OSC (1 … 7). Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/streaks",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Toggle: Auto Exposure",
+      "UUID": "com.rezabehjat.capture.toggle.automatic-exposure",
+      "Icon": "imgs/icons/autoexposure",
+      "Tooltip": "Toggles Auto Exposure over OSC.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/autoexposure",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/autoexposure",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Toggle: Laser Flicker",
+      "UUID": "com.rezabehjat.capture.toggle.laser-flicker-effect",
+      "Icon": "imgs/icons/laser",
+      "Tooltip": "Toggles Laser Flicker over OSC.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/laser",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/laser",
+          "ShowTitle": false
+        }
+      ]
+    },
     {
       "Name": "Capture Command",
       "UUID": "com.rezabehjat.capture.command",

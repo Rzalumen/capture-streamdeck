@@ -1,7 +1,7 @@
-import { action, type DidReceiveSettingsEvent, type KeyAction, type KeyDownEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
+import { type DidReceiveSettingsEvent, type KeyAction, type KeyDownEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import { BOOL_PROPERTIES, findBoolProperty, normaliseView, type BoolProperty, type ViewId } from "../lib/properties.js";
 import { rt } from "../runtime.js";
-import { draw } from "./util.js";
+import { draw, logEvent, logSettingsChange } from "./util.js";
 
 type Settings = { property?: string; view?: string };
 interface Ctx {
@@ -12,13 +12,14 @@ interface Ctx {
 
 const ICON: Record<string, string> = { automaticExposure: "autoexposure", laserFlickerEffect: "laser" };
 
-@action({ UUID: "com.rezabehjat.capture.toggle" })
-export class ViewToggle extends SingletonAction<Settings> {
+abstract class ToggleBase extends SingletonAction<Settings> {
   private ctxs = new Map<string, Ctx>();
+  protected preset?: BoolProperty;
 
   constructor() {
     super();
     rt.monitor.on("change", () => this.redrawAll());
+    rt.onValueSent(() => this.redrawAll());
   }
 
   private redrawAll(): void {
@@ -39,7 +40,7 @@ export class ViewToggle extends SingletonAction<Settings> {
   }
 
   private attach(a: KeyAction<Settings>, s: Settings): void {
-    const c: Ctx = { action: a, prop: findBoolProperty(s.property ?? "") ?? BOOL_PROPERTIES[0], view: normaliseView(s.view) };
+    const c: Ctx = { action: a, prop: this.preset ?? findBoolProperty(s.property ?? "") ?? BOOL_PROPERTIES[0], view: normaliseView(s.view) };
     this.ctxs.set(a.id, c);
     this.view(c);
   }
@@ -48,6 +49,7 @@ export class ViewToggle extends SingletonAction<Settings> {
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<Settings>): void {
+    logSettingsChange(this.manifestId, ev.payload.settings);
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onWillDisappear(ev: WillDisappearEvent<Settings>): void {
@@ -61,10 +63,26 @@ export class ViewToggle extends SingletonAction<Settings> {
     const next = !rt.values.getBool(c.view, c.prop.id, false);
     try {
       await rt.sendBool(c.view, c.prop.id, next);
+      logEvent("Key press", this.manifestId, ev.payload.settings, `OSC /view/${c.view}/${c.prop.id} ${next ? "T" : "F"}`);
     } catch (e) {
+      logEvent("Key press", this.manifestId, ev.payload.settings, `ERROR ${(e as Error).message}`);
       rt.log.warn("Toggle send failed", e);
       ev.action.showAlert().catch(() => undefined);
     }
     this.redrawAll();
+  }
+}
+
+export class ViewToggle extends ToggleBase {
+  override readonly manifestId = "com.rezabehjat.capture.toggle";
+}
+
+/** "Toggle: Auto Exposure" etc. */
+export class NamedToggle extends ToggleBase {
+  override readonly manifestId: string;
+  constructor(uuid: string, prop: BoolProperty) {
+    super();
+    this.manifestId = uuid;
+    this.preset = prop;
   }
 }

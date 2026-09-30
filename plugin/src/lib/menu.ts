@@ -106,3 +106,63 @@ export function parseEnabledBatch(out: string, n: number): (boolean | null)[] {
   const parts = out.trim().split(",");
   return Array.from({ length: n }, (_, i) => (parts[i] === "1" ? true : parts[i] === "0" ? false : null));
 }
+
+// ---------------------------------------------------------------- catalog vs live menus
+
+/** Case-, ellipsis- and whitespace-insensitive form of one menu name. */
+export const normName = (s: string): string => s.replace(/(…|\.\.\.)\s*$/, "").replace(/\s+/g, " ").trim().toLowerCase();
+const pathKey = (path: string[]): string => JSON.stringify(path.map(normName));
+
+/** Commands in the live tree that the catalog deliberately doesn't cover. */
+const NOT_CATALOGUED = new Set(["file › new", "file › open"]);
+const CATALOGUED_MENUS = new Set(["file", "edit", "view", "navigate", "window"]);
+
+export interface CatalogLike {
+  menuPath: string[];
+  match: MatchMode;
+  fallbackPaths?: string[][];
+  kind?: string;
+}
+
+/**
+ * Compare the catalog with the live menu tree. `missing`: catalog entries whose path (or fallback path) doesn't exist in
+ * this Capture. `extra`: live commands in File/Edit/View/Navigate/Window that no entry covers (New, Open… excluded).
+ */
+export function diffCatalog<E extends CatalogLike>(live: FlatCommand[], entries: E[]): { missing: E[]; extra: FlatCommand[] } {
+  const liveKeys = new Set(live.map((c) => pathKey(c.path)));
+  const covered = new Set<string>();
+  const missing: E[] = [];
+  for (const e of entries) {
+    if (e.kind === "tab") continue;
+    const paths = [e.menuPath, ...(e.fallbackPaths ?? [])];
+    const hit = paths.find((p) => liveKeys.has(pathKey(p)));
+    if (hit) covered.add(pathKey(hit));
+    else missing.push(e);
+  }
+  const extra = live.filter((c) => {
+    if (!CATALOGUED_MENUS.has(normName(c.path[0]))) return false;
+    if (NOT_CATALOGUED.has(c.path.map(normName).join(" › "))) return false;
+    return !covered.has(pathKey(c.path));
+  });
+  return { missing, extra };
+}
+
+/**
+ * The catalog path wasn't found when pressing: find where the command really is. Tries the entry's fallback paths, then
+ * the one live command in the same top-level menu whose name equals the entry's last element ignoring case and "…".
+ */
+export function resolveMissing(entry: CatalogLike, live: FlatCommand[]): MenuTarget | undefined {
+  const liveByKey = new Map(live.map((c) => [pathKey(c.path), c]));
+  for (const p of entry.fallbackPaths ?? []) {
+    const c = liveByKey.get(pathKey(p));
+    if (c) return { path: c.path, match: c.match };
+  }
+  const last = normName(entry.menuPath[entry.menuPath.length - 1] ?? "");
+  const top = normName(entry.menuPath[0] ?? "");
+  const same = live.filter((c) => normName(c.path[0]) === top && normName(c.path[c.path.length - 1]) === last);
+  if (same.length === 1) return { path: same[0].path, match: same[0].match };
+  return undefined;
+}
+
+/** Records → tree (used by tests that feed already-split records). */
+export const flatKeys = (live: FlatCommand[]): string[] => live.map((c) => c.path.join(" > "));

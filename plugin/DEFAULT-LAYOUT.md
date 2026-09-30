@@ -1,5 +1,8 @@
 # Default layout (approved) — build it once in Stream Deck, export, ship
 
+> **v0.2:** the keys below can now be dragged from the named actions (e.g. *View: Plot*, *Camera: Swing to Front*, *Edit: Undo*, *Tabs: Fixtures*, *Dial: Bloom*) with nothing to configure; the generic *Capture Command* is only needed for commands the catalog doesn't cover. The default profile itself is still yours to build in the Stream Deck app.
+
+
 Stream Deck profiles can only be produced by the Stream Deck app (Elgato: “profiles must be created through the
 Stream Deck application … then export”), and the file format is undocumented, so v0.1 ships **without** a
 generated profile. Build this layout with ordinary folders and pages, then run

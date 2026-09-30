@@ -21,6 +21,12 @@ export class FakeDeck {
   globals: Record<string, unknown> = {};
   proc?: ChildProcess;
   procOut = "";
+  pluginDir = "";
+  /** The plugin's own log (Stream Deck SDK logger → <plugin>/logs/com.rezabehjat.capture.0.log, newest run). */
+  logText(): string {
+    const f = path.join(this.pluginDir, "logs", "com.rezabehjat.capture.0.log");
+    return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : "";
+  }
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fakedeck-"));
   axState = path.join(this.tmp, "ax-state.json");
   axLog = path.join(this.tmp, "ax-log.jsonl");
@@ -41,8 +47,9 @@ export class FakeDeck {
     return fs.existsSync(this.openLog) ? fs.readFileSync(this.openLog, "utf8").split("\n").filter(Boolean) : [];
   }
 
-  async start(opts: { oscPort: number; pluginDir: string; fixtures: string }): Promise<void> {
-    this.setAx({ mode: "ok" });
+  async start(opts: { oscPort: number; pluginDir: string; fixtures: string; worker?: boolean; ax?: object }): Promise<void> {
+    this.pluginDir = opts.pluginDir;
+    this.setAx(opts.ax ?? { mode: "ok" });
     this.wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
     await new Promise<void>((r) => this.wss.on("listening", () => r()));
     const port = (this.wss.address() as { port: number }).port;
@@ -63,7 +70,7 @@ export class FakeDeck {
       colors: { buttonMouseOverBackgroundColor: "#464646", buttonPressedBackgroundColor: "#303030", buttonPressedBorderColor: "#646464", buttonPressedTextColor: "#969696", highlightColor: "#0078FF" },
       devicePixelRatio: 2,
       devices: [{ id: "DEV1", name: "Stream Deck +", size: { columns: 4, rows: 2 }, type: 7 }],
-      plugin: { uuid: "com.rezabehjat.capture", version: "0.1.0.0" },
+      plugin: { uuid: "com.rezabehjat.capture", version: "0.2.0.0" },
     };
     this.proc = spawn(
       process.execPath,
@@ -74,6 +81,8 @@ export class FakeDeck {
           ...process.env,
           CAPTURE_TEST_OSC_PORT: String(opts.oscPort),
           CAPTURE_TEST_OSASCRIPT: path.join(opts.fixtures, "fake-osascript.mjs"),
+          // per-call osascript unless the test wants the persistent worker (then a fake worker process stands in for osascript -l JavaScript)
+          ...(opts.worker ? { CAPTURE_TEST_WORKER: path.join(opts.fixtures, "fake-worker.mjs") } : { CAPTURE_NO_WORKER: "1" }),
           CAPTURE_TEST_OPEN: path.join(opts.fixtures, "fake-open.mjs"),
           FAKE_AX_STATE: this.axState,
           FAKE_AX_LOG: this.axLog,

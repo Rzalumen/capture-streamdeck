@@ -2,7 +2,7 @@ import streamDeck, { action, type DidReceiveSettingsEvent, type KeyAction, type 
 import { nthPosition, type CatalogInfo } from "../lib/discovery.js";
 import { normaliseView, positionArgs, viewAddress, type ViewId } from "../lib/properties.js";
 import { rt } from "../runtime.js";
-import { draw, Flasher, num, optNum } from "./util.js";
+import { draw, Flasher, logEvent, logSettingsChange, num, optNum } from "./util.js";
 
 type Settings = {
   mode?: "fixed" | "auto";
@@ -94,6 +94,7 @@ export class ShowPosition extends SingletonAction<Settings> {
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<Settings>): void {
+    logSettingsChange(this.manifestId, ev.payload.settings);
     if (ev.action.isKey()) this.attach(ev.action, ev.payload.settings ?? {});
   }
   override onWillDisappear(ev: WillDisappearEvent<Settings>): void {
@@ -115,12 +116,15 @@ export class ShowPosition extends SingletonAction<Settings> {
       if (c.s.mode === "auto" && !cat) cat = await rt.catalogs.get(nr, REFRESH_MS);
       const r = resolve(c.s, cat);
       if (!r) {
+        logEvent("Key press", this.manifestId, ev.payload.settings, "no position to recall (catalog not read or index out of range)");
         ev.action.showAlert().catch(() => undefined);
         return;
       }
       const view: ViewId = normaliseView(c.s.view);
       await rt.osc.send(viewAddress(view, "position"), positionArgs(nr, r.nr, { time: optNum(c.s.time), damp: optNum(c.s.damp), curve: optNum(c.s.curve) }));
+      logEvent("Key press", this.manifestId, ev.payload.settings, `OSC ${viewAddress(view, "position")} catalog ${nr} position ${r.nr}`);
     } catch (e) {
+      logEvent("Key press", this.manifestId, ev.payload.settings, `ERROR ${(e as Error).message}`);
       rt.log.warn("Show Position failed", e);
       ev.action.showAlert().catch(() => undefined);
     }

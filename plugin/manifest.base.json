@@ -1,0 +1,175 @@
+{
+  "Name": "Capture",
+  "Version": "0.1.0.0",
+  "Author": "Reza Behjat",
+  "Actions": [
+    {
+      "Name": "Capture Command",
+      "UUID": "com.rezabehjat.capture.command",
+      "Icon": "imgs/actions/command/icon",
+      "Tooltip": "Fires any Capture menu command (View, Edit, File…). Dims when the command is disabled.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/command/key",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/actions/command/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Capture Tab",
+      "UUID": "com.rezabehjat.capture.tab",
+      "Icon": "imgs/actions/tab/icon",
+      "Tooltip": "Switches Capture to Design, Fixtures, Universes, Media, Snapshots or Library.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/tab/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera Slot",
+      "UUID": "com.rezabehjat.capture.slot",
+      "Icon": "imgs/actions/slot/icon",
+      "Tooltip": "Recalls Camera Position 1–5. While a Store Modifier key is held, stores it instead.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/slot/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Store Modifier",
+      "UUID": "com.rezabehjat.capture.store",
+      "Icon": "imgs/actions/store/icon",
+      "Tooltip": "Hold this key, then press a Camera Slot to store the camera there.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/store/key",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/actions/store/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Show Position",
+      "UUID": "com.rezabehjat.capture.position",
+      "Icon": "imgs/actions/position/icon",
+      "Tooltip": "Recalls a camera position from the open show over OSC, titled with its name in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/position/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "View Dial",
+      "UUID": "com.rezabehjat.capture.dial",
+      "Icon": "imgs/actions/dial/icon",
+      "Tooltip": "Turn to adjust a Capture view setting over OSC. Push or touch: fine mode. Long touch: reset.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/dial/key",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Reset"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "View Toggle",
+      "UUID": "com.rezabehjat.capture.toggle",
+      "Icon": "imgs/actions/toggle/icon",
+      "Tooltip": "Toggles Auto Exposure or Laser Flicker Effect over OSC.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/toggle/key",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/actions/toggle/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Connection",
+      "UUID": "com.rezabehjat.capture.connection",
+      "Icon": "imgs/actions/connection/icon",
+      "Tooltip": "Shows whether Capture answers over OSC, its version, and whether Accessibility access is OK. Press to re-check.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/connection/key",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ],
+  "Category": "Capture",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "CodePath": "bin/plugin.js",
+  "Description": "An interface to Capture: keys fire Capture's own menu commands and tabs and recall camera positions; dials adjust view settings over OSC.",
+  "Icon": "imgs/plugin/marketplace",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20"
+  },
+  "UUID": "com.rezabehjat.capture",
+  "URL": "https://github.com/Rzalumen/capture-streamdeck"
+}

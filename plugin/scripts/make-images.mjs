@@ -34,6 +34,17 @@ for (const [a, icon] of Object.entries(actions)) {
     add(`actions/${a}/key${suffix}.png`, 72 * k, icon, { color: COLORS.accent, bg: COLORS.bg, frac: 0.55 });
   }
 }
+// One action-list icon (20 px) and one key image (72 px) per glyph used by the generated actions (imgs/icons, imgs/keys).
+const manifest = JSON.parse(fs.readFileSync("com.rezabehjat.capture.sdPlugin/manifest.json", "utf8"));
+const used = new Set(manifest.Actions.map((a) => a.Icon).filter((i) => i.startsWith("imgs/icons/")).map((i) => i.slice("imgs/icons/".length)));
+for (const n of Object.keys(ICONS)) if (n.startsWith("cat-")) used.add(n);
+for (const name of used) {
+  if (!ICONS[name]) throw new Error(`manifest uses icon "${name}" which is not in src/lib/icons.ts`);
+  for (const [suffix, k] of [["", 1], ["@2x", 2]]) {
+    add(`icons/${name}${suffix}.png`, 20 * k, name, { color: "#FFFFFF", frac: 0.9, stroke: 1.8 });
+    add(`keys/${name}${suffix}.png`, 72 * k, name, { color: COLORS.accent, bg: COLORS.bg, frac: 0.55 });
+  }
+}
 for (const [suffix, k] of [["", 1], ["@2x", 2]]) {
   add(`plugin/category-icon${suffix}.png`, 28 * k, "plugin", { color: "#FFFFFF", frac: 0.9, stroke: 1.8 });
   add(`plugin/marketplace${suffix}.png`, 256 * k, "plugin", { color: COLORS.accent, bg: COLORS.bg, frac: 0.62, radius: 56 * k, stroke: 1.3 });

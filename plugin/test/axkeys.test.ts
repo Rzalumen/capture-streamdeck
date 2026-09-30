@@ -19,11 +19,11 @@ test("registry: one batched call for all visible keys, enabled state exposed, re
   let redraws = 0;
   reg.register({ id: "a", targets: [DEL], redraw: () => redraws++ });
   reg.register({ id: "b", targets: [UNDO, DEL], redraw: () => redraws++ });
-  await wait(20);
+  await wait(70);
   // both keys visible, DEL is shared → 2 unique targets in one call
   const first = calls[0];
   assert.equal(first.filter((l) => l.includes("my act(")).length >= 1, true);
-  await wait(120);
+  await wait(150);
   assert.ok(calls.length >= 2, "polls repeatedly while visible");
   assert.ok(redraws > 0);
   assert.equal(typeof reg.isEnabled(DEL), "boolean");
