@@ -7,12 +7,12 @@ Stream Deck SDK v2 manifest, Node 20 runtime, Stream Deck 6.6+, macOS 13+.
 ## Straight commands only (v0.3)
 
 There are **no dropdown or configurable actions** in the Stream Deck action list. Every action is one named command
-(`<Group>: <Title>`), 150 in all, and the plugin offers a ready-made Stream Deck+ profile that organises them in
+(`<Group>: <Title>`), 154 in all, and the plugin offers a ready-made Stream Deck+ profile that organises them in
 folders (below).
 
 | Group | Actions |
 |---|---|
-| `View:`, `Camera:`, `Select:`, `Edit:`, `Patch & Focus:`, `Navigate:`, `Window:`, `File:`, `Tabs:` | 120 Capture menu commands and tabs from the catalog (`src/catalog/commands.json`), e.g. *View: Plot*, *Camera: Swing to Front*, *Edit: Undo*, *Tabs: Fixtures*. Includes *Camera: Position 1–5* and *Camera: Store Position 1–5*. |
+| `View:`, `Camera:`, `Select:`, `Edit:`, `Patch & Focus:`, `Navigate:`, `Window:`, `File:`, `Tabs:` | 124 Capture menu commands and tabs from the catalog (`src/catalog/commands.json`), e.g. *View: Plot*, *Camera: Swing to Front*, *Edit: Undo*, *Tabs: Fixtures*. Includes *Camera: Position 1–5*, *Camera: Store Position 1–5* and the four *Edit › Model* items. |
 | `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
 | `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
 | `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
@@ -48,6 +48,7 @@ it; it switches to it automatically whenever **Capture 2026** is the active app 
 **HOME** — row 0: View · Camera · Select · Edit; row 1: Patch & Focus · Windows · File · Look (all folders).
 Every folder page has **Back** at the top-left key; commands fill the other seven keys in catalog order, and a folder
 with more than seven commands ends its page with **More ▸**, a folder to the next page (which has its own Back).
+In Camera, *Position 1–5* and *Store Modifier* share one page (Camera › Positions ▸).
 See [DEFAULT-LAYOUT.md](DEFAULT-LAYOUT.md) for the full table. **Dials** on every page: Exposure · Ambient · Bloom ·
 White Balance; on the View pages Contrast · Saturation · Fill · Hue Clamp; in the Look folder Flare · Flare Streaks ·
 Flare Angle · Flare Size.
@@ -56,6 +57,11 @@ Flare Angle · Flare Size.
 click). The profile art is `profile-art/` (144×144 PNGs drawn from the plugin's own icons, `npm run images -- --profile`).
 To ship a profile you built yourself instead: `npm run add-profile -- Capture.streamDeckProfile` (leaves a
 `profiles/CUSTOM` marker; `npm run gen-profile -- --force` goes back to the generated one).
+
+**Menu titles.** Capture's live menu titles use three ASCII periods (`Patch...`), and so does the catalog. Every path is
+resolved against Capture's cached live menu tree before it is used (`src/lib/resolve.ts`: `…` ≡ `...`, whitespace,
+case) and the *exact live title* is what is clicked, polled and reported at startup, so "found" in the log means
+"clickable". A command Capture doesn't have shows `?` and is not clicked; the log names the closest live titles.
 
 ## OSC properties
 

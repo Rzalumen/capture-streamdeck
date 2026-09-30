@@ -58,22 +58,23 @@ test("contents: the commands of the real menu dump (Handoff 07) are all there", 
   const must = [
     "View > Wireframe", "View > Plot", "View > Live", "View > Custom", "View > Grid", "View > Widgets", "View > Hidden Objects",
     "View > Project Information", "View > Fixture Information", "View > Selection Navigator", "View > View Navigator", "View > Dim Background",
-    "View > Save Image…", "View > Render Image…",
+    "View > Save Image...", "View > Render Image...",
     "View > Camera > Swing to Top", "View > Camera > Swing to Front", "View > Camera > Swing to Right", "View > Camera > Swing to Left", "View > Camera > Swing to Selection",
     "View > Camera > Focus Selection", "View > Camera > Focus All",
-    "Edit > Undo", "Edit > Redo", "Edit > Cut", "Edit > Copy", "Edit > Paste", "Edit > Duplicate…", "Edit > Replace", "Edit > Split", "Edit > Delete",
-    "Edit > Select All", "Edit > Deselect All", "Edit > Group", "Edit > Break Out of Group", "Edit > Break Group", "Edit > Transform…", "Edit > Align…",
-    "Edit > Spread Even…", "Edit > Mirror…", "Edit > Position Rotation Anchor…", "Edit > Plot Adjustments > Enable", "Edit > Plot Adjustments > Clear",
-    "Edit > Map Material…", "Edit > Measure…", "Edit > Fixture Details…", "Edit > Focus…", "Edit > Remove Filters", "Edit > Remove Gobos", "Edit > Unpatch",
-    "Edit > Sequential > Unit…", "Edit > Sequential > Circuit…", "Edit > Sequential > Patch…", "Edit > Sequential > Channel…", "Edit > Sequential > P3 Fixture Number…",
+    "Edit > Undo", "Edit > Redo", "Edit > Cut", "Edit > Copy", "Edit > Paste", "Edit > Duplicate...", "Edit > Replace", "Edit > Split", "Edit > Delete",
+    "Edit > Select All", "Edit > Deselect All", "Edit > Group", "Edit > Break Out of Group", "Edit > Break Group", "Edit > Transform...", "Edit > Align...",
+    "Edit > Spread Even...", "Edit > Mirror...", "Edit > Position Rotation Anchor...", "Edit > Plot Adjustments > Enable", "Edit > Plot Adjustments > Clear",
+    "Edit > Map Material...", "Edit > Measure...", "Edit > Fixture Details...", "Edit > Focus...", "Edit > Remove Filters", "Edit > Remove Gobos", "Edit > Unpatch",
+    "Edit > Sequential > Unit...", "Edit > Sequential > Circuit...", "Edit > Sequential > Patch...", "Edit > Sequential > Channel...", "Edit > Sequential > P3 Fixture Number...",
     "Edit > Select > By Layer", "Edit > Select > By Location", "Edit > Select > By Model", "Edit > Select > By Drawing Block Name", "Edit > Select > Motion Controlled",
     "Edit > Select > Connected Truss", "Edit > Select > Fixtures on Truss", "Edit > Select > By Fixture Type", "Edit > Select > By Fixture Group", "Edit > Select > By Cable Type",
     "Edit > Select Only > Front Annotations", "Edit > Select Only > Centre Annotations", "Edit > Select Only > Tail Annotations",
     "Navigate > Alpha View", "Navigate > Beta View", "Navigate > Gamma View", "Navigate > Selected Items", "Navigate > Views", "Navigate > Layers", "Navigate > Filters",
     "Navigate > Fixture Groups", "Navigate > Camera Positions", "Navigate > Materials", "Navigate > Fixtures", "Navigate > Universes",
-    "Window > Minimize", "Window > Zoom", "Window > Arrangements > Quad", "Window > Arrangements > Wide", "Window > Selected Items…", "Window > Layers…", "Window > Filters…",
-    "Window > Fixture Groups…", "Window > Camera Positions…", "Window > Materials…", "Window > Fixtures…", "Window > Universes…",
-    "File > Save", "File > Save As…", "File > Send to Production Assist…",
+    "Window > Minimize", "Window > Zoom", "Window > Arrangements > Quad", "Window > Arrangements > Wide", "Window > Selected Items...", "Window > Layers...", "Window > Filters...",
+    "Window > Fixture Groups...", "Window > Camera Positions...", "Window > Materials...", "Window > Fixtures...", "Window > Universes...",
+    "File > Save", "File > Save As...", "File > Send to Production Assist...", "File > Import Project Content...",
+    "Edit > Model > Hide Distracting Edges", "Edit > Model > Convert Lines to Pipes", "Edit > Model > Edit...", "Edit > Model > Scale Drawing Unit...",
   ];
   for (const p of must) assert.ok(paths.has(p), `missing ${p}`);
   for (let n = 1; n <= 5; n++) {
@@ -86,7 +87,7 @@ test("contents: the commands of the real menu dump (Handoff 07) are all there", 
 
 test("excluded: New, Open…, Open Recent, Quit and macOS-injected items", () => {
   const all = ENTRIES.map((e) => `${e.menuPath.join(" > ")} ${e.title}`.toLowerCase()).join("\n");
-  for (const bad of ["file > new", "open…", "open recent", "quit", "writing tools", "autofill", "dictation", "emoji"]) assert.ok(!all.includes(bad), bad);
+  for (const bad of ["file > new", "open…", "open...", "open recent", "quit", "writing tools", "autofill", "dictation", "emoji"]) assert.ok(!all.includes(bad), bad);
 });
 
 test("Undo/Redo are prefix matches; Full Screen has alternates", () => {
@@ -133,4 +134,28 @@ test("guessed paths are flagged so nobody mistakes them for observed ones", () =
 test("the catalog's holdToFire agrees with the generic key's default rule (same commands hold everywhere)", async () => {
   const { defaultHoldToFire } = await import("../src/lib/holdToFire.ts");
   for (const e of ENTRIES.filter((x) => x.kind !== "tab")) assert.equal(defaultHoldToFire(e.menuPath), e.holdToFire, e.title);
+});
+
+test("v0.3.1: Capture's live titles use three ASCII periods, so the catalog has no Unicode ellipsis left (menu paths, fallbacks, titles)", () => {
+  assert.equal(JSON.stringify(ENTRIES).includes("…"), false);
+  assert.ok(ENTRIES.some((e) => e.menuPath.at(-1) === "Patch..."));
+});
+
+test("v0.3.1: File: Import Project Content is File > Import Project Content...; the four Edit > Model items are named Edit actions", () => {
+  const imp = entry("file", "import-project");
+  assert.deepEqual(imp.menuPath, ["File", "Import Project Content..."]);
+  assert.equal(imp.holdToFire, true);
+  assert.equal(actionName(imp), "File: Import Project Content");
+  assert.equal(ENTRIES.some((e) => e.menuPath.join(" > ") === "File > Import > Project..." && !(e.fallbackPaths ?? []).length), false);
+  const model = ENTRIES.filter((e) => e.menuPath[1] === "Model");
+  assert.deepEqual(
+    model.map((e) => [actionName(e), e.menuPath.join(" > ")]),
+    [
+      ["Edit: Hide Distracting Edges", "Edit > Model > Hide Distracting Edges"],
+      ["Edit: Convert Lines to Pipes", "Edit > Model > Convert Lines to Pipes"],
+      ["Edit: Model Edit...", "Edit > Model > Edit..."],
+      ["Edit: Scale Drawing Unit...", "Edit > Model > Scale Drawing Unit..."],
+    ],
+  );
+  for (const e of model) assert.equal(e.category, "edit");
 });

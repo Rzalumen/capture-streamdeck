@@ -301,7 +301,7 @@ const clickScripts = (from: number) => deck.axCalls().slice(from).map((c) => c.l
 
 test("every action in the manifest is handled by the plugin (named commands, dials, toggles and generic ones)", async () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
-  assert.equal(manifest.Actions.length, 150);
+  assert.equal(manifest.Actions.length, 154);
   let i = 0;
   const ctxs: [string, string, boolean][] = [];
   for (const a of manifest.Actions) {
@@ -337,7 +337,7 @@ test("named command: nested path, prefix match, alternates, non-ASCII names", as
     [N("camera", "store-3"), 'return my act("Capture", "View", {"Store Camera"}, "exact", {"Position 3"}, "click")', "n-store3"],
     [N("edit", "undo"), 'return my act("Capture", "Edit", {}, "prefix", {"Undo"}, "click")', "n-undo"],
     [N("view", "full-screen"), '"alternates", {"Enter Full Screen", "Exit Full Screen"}, "click")', "n-fs"],
-    [N("edit", "duplicate"), '{("Duplicate" & (character id 8230))}', "n-dup"],
+    [N("edit", "duplicate"), '{"Duplicate..."}', "n-dup"], // menu tree not read in this state: the catalog path, in ASCII
     [N("select", "by-fixture-type"), 'return my act("Capture", "Edit", {"Select"}, "exact", {"By Fixture Type"}, "click")', "n-bft"],
   ];
   for (const [uuid, needle, ctx] of cases) {
@@ -349,6 +349,62 @@ test("named command: nested path, prefix match, alternates, non-ASCII names", as
     assert.ok(c.includes(needle), `${uuid}: ${c.split("\n").filter((l) => l.startsWith("return my act")).join()}`);
     deck.keyUp(uuid, ctx, {});
   }
+});
+
+test("v0.3.1: a press sends Capture's EXACT live title, polling asks for the same title, and a command Capture doesn't have shows '?' and is never clicked", async () => {
+  const rows: [number, string][] = [
+    [0, "Apple"], [0, "Capture"],
+    [0, "File"], [1, "Save"], [1, "Import Project Content..."],
+    [0, "Edit"], [1, "Sequential"], [2, "Patch\u2026"], [2, "Unit..."], [1, "Focus..."],
+    [0, "View"], [1, "Plot"],
+  ];
+  const dump = rows.map(([d, n]) => `${d}|1|${enc(n)}|0`).join("\t") + "\t";
+  deck.setAx({ mode: "ok", dump });
+  const seen = deck.received.filter((m) => m.event === "sendToPropertyInspector").length;
+  deck.inspectorAppeared(A.command, "undo");
+  deck.sendToPlugin(A.command, "undo", { cmd: "listMenus", force: true });
+  await deck.waitFor(() => deck.received.filter((m) => m.event === "sendToPropertyInspector").length > seen, 8000, "tree read");
+
+  // catalog says "Patch...", Capture's live title is "Patch…": the click carries Capture's spelling
+  const patch = N("patch", "sequential-patch");
+  deck.willAppear(patch, "n-seqp", {});
+  const pollScript = await deck.waitFor(
+    () => deck.axCalls().map((c) => c.lines.join("\n")).find((t) => t.includes('"enabled")') && t.includes('("Patch" & (character id 8230))')),
+    4000,
+    "the enabled-state poll asks for the live title",
+  );
+  assert.ok(pollScript.includes('{"Sequential"}'));
+  const before = deck.axCalls().length;
+  deck.keyDown(patch, "n-seqp", {});
+  const c = await deck.waitFor(() => clickScripts(before)[0], 3000, "click");
+  assert.ok(c.includes('return my act("Capture", "Edit", {"Sequential"}, "exact", {("Patch" & (character id 8230))}, "click")'), c);
+  deck.keyUp(patch, "n-seqp", {});
+  // the same, with the live title spelled "..." like the catalog: still exactly the live title
+  const unit = N("patch", "sequential-unit");
+  deck.willAppear(unit, "n-sequ", {});
+  await sleep(150);
+  const b2 = deck.axCalls().length;
+  deck.keyDown(unit, "n-sequ", {});
+  assert.ok((await deck.waitFor(() => clickScripts(b2)[0], 3000, "click")).includes('{"Sequential"}, "exact", {"Unit..."}, "click")'));
+  deck.keyUp(unit, "n-sequ", {});
+
+  // Sequential Channel... is not in this Capture: "?", no click, and the log names the closest live titles
+  const chan = N("patch", "sequential-channel");
+  deck.willAppear(chan, "n-seqc", {});
+  await deck.waitFor(() => deck.lastImage("n-seqc").includes(">?<"), 4000, "? badge");
+  const b3 = deck.axCalls().length;
+  deck.keyDown(chan, "n-seqc", {});
+  await deck.waitFor(() => deck.logText().includes("Edit > Sequential > Channel... not found in Capture's menus; closest live titles:"), 4000, "log line");
+  await sleep(200);
+  assert.equal(clickScripts(b3).length, 0, "nothing is clicked for a command Capture does not have");
+  assert.match(deck.logText(), /closest live titles: Edit > Sequential > (Unit\.\.\.|Patch…)/);
+  deck.keyUp(chan, "n-seqc", {});
+  for (const [u, ctx] of [[patch, "n-seqp"], [unit, "n-sequ"], [chan, "n-seqc"]]) deck.willDisappear(u, ctx);
+  // leave the shared plugin as we found it: an empty menu tree (later tests expect the catalog paths to be used as they are)
+  deck.setAx({ mode: "ok" });
+  const seen2 = deck.received.filter((m) => m.event === "sendToPropertyInspector").length;
+  deck.sendToPlugin(A.command, "undo", { cmd: "listMenus", force: true });
+  await deck.waitFor(() => deck.received.filter((m) => m.event === "sendToPropertyInspector").length > seen2, 8000, "tree reset");
 });
 
 test("named command dims when Capture says it is disabled (Edit: Undo), and follows it back", async () => {

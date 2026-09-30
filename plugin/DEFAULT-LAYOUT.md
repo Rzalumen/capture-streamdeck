@@ -24,7 +24,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | Folder | Contents (catalog order) |
 |---|---|
 | View | the View category |
-| Camera | Swing/Focus commands, Camera Position 1–5, Store Modifier, then a **Positions ▸** folder holding Show Position 1–8 and Store Camera 1–5 |
+| Camera | Swing/Focus commands (5 on the first page, 2 on the second) and a **Positions ▸** folder on the first page. *Positions ▸* is one page of its own: Camera Position 1–5, **Store Modifier** and a **Show ▸** folder (Show Position 1–8, Store Camera 1–5) |
 | Select | the Select category |
 | Edit | the Edit category (chains four pages) |
 | Patch & Focus | the Patch & Focus category |
@@ -32,9 +32,8 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | File | the File category |
 | Look | Auto Exposure, Laser Flicker, Connection |
 
-Note the Camera folder: its 14 entries make three pages, so *Camera: Store Modifier* lands on the third page, not next to
-*Camera: Position 1–5* (page two). A held modifier can't survive a page change, so either move the key next to the positions
-in the app, or use **Positions ▸ Store Camera 1–5**, which store directly.
+Camera Position 1–5 and Store Modifier share one page (Camera › Positions ▸), so holding Store Modifier while pressing a
+position works without changing page. Edit has four pages (25 commands, including the four *Edit › Model* items).
 
 ## The generated tree
 
@@ -48,16 +47,16 @@ in the app, or use **Positions ▸ Store Camera 1–5**, which store directly.
       dials: Contrast · Saturation · Fill · Hue Clamp
       - **view/3** — Full Screen · Save Image · Render Image   
         dials: Contrast · Saturation · Fill · Hue Clamp
-  - **camera** — Swing to Top · Swing to Front · Swing to Right · Swing to Left · Swing to Selection · Focus Selection · More ▸   
+  - **camera** — Swing to Top · Swing to Front · Swing to Right · Swing to Left · Swing to Selection · Positions ▸ · More ▸   
     dials: Exposure · Ambient · Bloom · White Balance
-    - **camera/2** — Focus All · Position 1 · Position 2 · Position 3 · Position 4 · Position 5 · More ▸   
+    - **camera/positions** — Position 1 · Position 2 · Position 3 · Position 4 · Position 5 · Store Modifier · Show ▸   
       dials: Exposure · Ambient · Bloom · White Balance
-      - **camera/3** — Store Modifier · Positions ▸   
+      - **camera/positions/show** — Show Position 1 · Show Position 2 · Show Position 3 · Show Position 4 · Show Position 5 · Show Position 6 · More ▸   
         dials: Exposure · Ambient · Bloom · White Balance
-        - **camera/3/positions** — Show Position 1 · Show Position 2 · Show Position 3 · Show Position 4 · Show Position 5 · Show Position 6 · More ▸   
+        - **camera/positions/show/2** — Show Position 7 · Show Position 8 · Store Position 1 · Store Position 2 · Store Position 3 · Store Position 4 · Store Position 5   
           dials: Exposure · Ambient · Bloom · White Balance
-          - **camera/3/positions/2** — Show Position 7 · Show Position 8 · Store Position 1 · Store Position 2 · Store Position 3 · Store Position 4 · Store Position 5   
-            dials: Exposure · Ambient · Bloom · White Balance
+    - **camera/2** — Focus Selection · Focus All   
+      dials: Exposure · Ambient · Bloom · White Balance
   - **select** — Select All · Deselect All · By Layer · By Location · By Model · By Drawing Block Name · More ▸   
     dials: Exposure · Ambient · Bloom · White Balance
     - **select/2** — Motion Controlled · Connected Truss · Fixtures on Truss · By Fixture Type · By Fixture Group · By Cable Type · More ▸   
@@ -70,7 +69,7 @@ in the app, or use **Positions ▸ Store Camera 1–5**, which store directly.
       dials: Exposure · Ambient · Bloom · White Balance
       - **edit/3** — Transform · Align · Spread Even · Mirror · Position Rotation Anchor · Plot Adjustments Enable · More ▸   
         dials: Exposure · Ambient · Bloom · White Balance
-        - **edit/4** — Plot Adjustments Clear · Map Material · Measure   
+        - **edit/4** — Plot Adjustments Clear · Map Material · Measure · Hide Distracting Edges · Convert Lines to Pipes · Model Edit... · Scale Drawing Unit...   
           dials: Exposure · Ambient · Bloom · White Balance
   - **patch** — Sequential Unit · Sequential Circuit · Sequential Patch · Sequential Channel · Sequential P3 Number · Fixture Details · More ▸   
     dials: Exposure · Ambient · Bloom · White Balance
@@ -86,7 +85,7 @@ in the app, or use **Positions ▸ Store Camera 1–5**, which store directly.
           dials: Exposure · Ambient · Bloom · White Balance
           - **windows/5** — Filters Window · Fixture Groups Window · Camera Positions Window · Materials Window · Fixtures Window · Universes Window   
             dials: Exposure · Ambient · Bloom · White Balance
-  - **file** — Save · Save As · Send to Production Assist · Import Project · Import Model · Import Fixture Data · More ▸   
+  - **file** — Save · Save As · Send to Production Assist · Import Project Content · Import Model · Import Fixture Data · More ▸   
     dials: Exposure · Ambient · Bloom · White Balance
     - **file/2** — Export Project · Export Model · Export Fixture Data · Export Focus Sheets · Export Documentation · Export Presentation   
       dials: Exposure · Ambient · Bloom · White Balance

@@ -70,7 +70,7 @@ export function uuidFrom(seed: string): string {
 }
 
 // ---- content
-type Item = { kind: "action"; key: Extract<Key, { type: "action" }> } | { kind: "folder"; title: string; icon: string; items: Item[]; dials: DialSet };
+type Item = { kind: "action"; key: Extract<Key, { type: "action" }> } | { kind: "folder"; title: string; icon: string; items: Item[]; dials: DialSet; slug?: string };
 
 const cmd = (e: CatalogEntry): Item => ({ kind: "action", key: { type: "action", uuid: uuidOf(e), name: actionName(e), title: e.title, icon: e.icon } });
 const inCat = (slug: string): CatalogEntry[] => ENTRIES.filter((e) => e.category === slug);
@@ -109,7 +109,12 @@ export const FOLDERS: FolderDef[] = [
         kind: "action",
         key: { type: "action", uuid: showPositionUuid(i + 1), name: showPositionName(i + 1), title: `Show Position ${i + 1}`, icon: "position" },
       }));
-      return [...swing.map(cmd), ...positions.map(cmd), store, { kind: "folder", title: "Positions ▸", icon: "positions", dials: "standard", items: [...show, ...stores.map(cmd)] }];
+      // Positions 1–5 + Store Modifier share ONE page (a held modifier can't survive a page change), reached from the
+      // Camera folder's first page; the Swing/Focus commands fill the Camera pages around it.
+      const showAndStore: Item = { kind: "folder", title: "Show ▸", slug: "show", icon: "positions", dials: "standard", items: [...show, ...stores.map(cmd)] };
+      const positionsPage: Item = { kind: "folder", title: "Positions ▸", slug: "positions", icon: "positions", dials: "standard", items: [...positions.map(cmd), store, showAndStore] };
+      const onFirstPage = COMMAND_SLOTS.length - 2; // the first page also has the Positions folder and More ▸
+      return [...swing.slice(0, onFirstPage).map(cmd), positionsPage, ...swing.slice(onFirstPage).map(cmd)];
     },
   },
   { slug: "select", title: "Select", icon: catIcon("select"), dials: "standard", items: () => inCat("select").map(cmd) },
@@ -152,7 +157,7 @@ function buildChain(path: string, items: Item[], dials: DialSet, parent: Page, p
   here.forEach((it, i) => {
     const pos = COMMAND_SLOTS[i];
     if (it.kind === "action") page.keys.set(pos, it.key);
-    else page.keys.set(pos, { type: "folder", title: it.title, icon: it.icon, child: buildChain(`${path}/${it.title.replace(/\s*▸$/, "").toLowerCase()}`, it.items, it.dials, page, pages) });
+    else page.keys.set(pos, { type: "folder", title: it.title, icon: it.icon, child: buildChain(`${path}/${it.slug ?? it.title.replace(/\s*▸$/, "").toLowerCase()}`, it.items, it.dials, page, pages) });
   });
   if (overflow) {
     const n = Number(/\/(\d+)$/.exec(path)?.[1] ?? 1) + 1;

@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.3.0.0",
+  "Version": "0.3.1.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -267,7 +267,7 @@
       "Name": "View: Save Image",
       "UUID": "com.rezabehjat.capture.cmd.view.save-image",
       "Icon": "imgs/icons/image",
-      "Tooltip": "Fires View › Save Image… in Capture.",
+      "Tooltip": "Fires View › Save Image... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -287,7 +287,7 @@
       "Name": "View: Render Image",
       "UUID": "com.rezabehjat.capture.cmd.view.render-image",
       "Icon": "imgs/icons/render",
-      "Tooltip": "Fires View › Render Image… in Capture.",
+      "Tooltip": "Fires View › Render Image... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1186,7 +1186,7 @@
       "Name": "Edit: Duplicate",
       "UUID": "com.rezabehjat.capture.cmd.edit.duplicate",
       "Icon": "imgs/icons/duplicate",
-      "Tooltip": "Fires Edit › Duplicate… in Capture.",
+      "Tooltip": "Fires Edit › Duplicate... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1326,7 +1326,7 @@
       "Name": "Edit: Transform",
       "UUID": "com.rezabehjat.capture.cmd.edit.transform",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Transform… in Capture.",
+      "Tooltip": "Fires Edit › Transform... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1346,7 +1346,7 @@
       "Name": "Edit: Align",
       "UUID": "com.rezabehjat.capture.cmd.edit.align",
       "Icon": "imgs/icons/align",
-      "Tooltip": "Fires Edit › Align… in Capture.",
+      "Tooltip": "Fires Edit › Align... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1366,7 +1366,7 @@
       "Name": "Edit: Spread Even",
       "UUID": "com.rezabehjat.capture.cmd.edit.spread-even",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Spread Even… in Capture.",
+      "Tooltip": "Fires Edit › Spread Even... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1386,7 +1386,7 @@
       "Name": "Edit: Mirror",
       "UUID": "com.rezabehjat.capture.cmd.edit.mirror",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Mirror… in Capture.",
+      "Tooltip": "Fires Edit › Mirror... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1406,7 +1406,7 @@
       "Name": "Edit: Position Rotation Anchor",
       "UUID": "com.rezabehjat.capture.cmd.edit.position-rotation-anchor",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Position Rotation Anchor… in Capture.",
+      "Tooltip": "Fires Edit › Position Rotation Anchor... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1466,7 +1466,7 @@
       "Name": "Edit: Map Material",
       "UUID": "com.rezabehjat.capture.cmd.edit.map-material",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Map Material… in Capture.",
+      "Tooltip": "Fires Edit › Map Material... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1486,7 +1486,87 @@
       "Name": "Edit: Measure",
       "UUID": "com.rezabehjat.capture.cmd.edit.measure",
       "Icon": "imgs/icons/cat-edit",
-      "Tooltip": "Fires Edit › Measure… in Capture.",
+      "Tooltip": "Fires Edit › Measure... in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Hide Distracting Edges",
+      "UUID": "com.rezabehjat.capture.cmd.edit.hide-distracting-edges",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Model › Hide Distracting Edges in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Convert Lines to Pipes",
+      "UUID": "com.rezabehjat.capture.cmd.edit.convert-lines-to-pipes",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Model › Convert Lines to Pipes in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Model Edit...",
+      "UUID": "com.rezabehjat.capture.cmd.edit.model-edit",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Model › Edit... in Capture.",
+      "PropertyInspectorPath": "ui/inspector.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/cat-edit",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Edit: Scale Drawing Unit...",
+      "UUID": "com.rezabehjat.capture.cmd.edit.scale-drawing-unit",
+      "Icon": "imgs/icons/cat-edit",
+      "Tooltip": "Fires Edit › Model › Scale Drawing Unit... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1506,7 +1586,7 @@
       "Name": "Patch & Focus: Sequential Unit",
       "UUID": "com.rezabehjat.capture.cmd.patch.sequential-unit",
       "Icon": "imgs/icons/sequential",
-      "Tooltip": "Fires Edit › Sequential › Unit… in Capture.",
+      "Tooltip": "Fires Edit › Sequential › Unit... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1526,7 +1606,7 @@
       "Name": "Patch & Focus: Sequential Circuit",
       "UUID": "com.rezabehjat.capture.cmd.patch.sequential-circuit",
       "Icon": "imgs/icons/sequential",
-      "Tooltip": "Fires Edit › Sequential › Circuit… in Capture.",
+      "Tooltip": "Fires Edit › Sequential › Circuit... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1546,7 +1626,7 @@
       "Name": "Patch & Focus: Sequential Patch",
       "UUID": "com.rezabehjat.capture.cmd.patch.sequential-patch",
       "Icon": "imgs/icons/patch",
-      "Tooltip": "Fires Edit › Sequential › Patch… in Capture.",
+      "Tooltip": "Fires Edit › Sequential › Patch... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1566,7 +1646,7 @@
       "Name": "Patch & Focus: Sequential Channel",
       "UUID": "com.rezabehjat.capture.cmd.patch.sequential-channel",
       "Icon": "imgs/icons/sequential",
-      "Tooltip": "Fires Edit › Sequential › Channel… in Capture.",
+      "Tooltip": "Fires Edit › Sequential › Channel... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1586,7 +1666,7 @@
       "Name": "Patch & Focus: Sequential P3 Number",
       "UUID": "com.rezabehjat.capture.cmd.patch.sequential-p3-number",
       "Icon": "imgs/icons/sequential",
-      "Tooltip": "Fires Edit › Sequential › P3 Fixture Number… in Capture.",
+      "Tooltip": "Fires Edit › Sequential › P3 Fixture Number... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1606,7 +1686,7 @@
       "Name": "Patch & Focus: Fixture Details",
       "UUID": "com.rezabehjat.capture.cmd.patch.fixture-details",
       "Icon": "imgs/icons/fixture-details",
-      "Tooltip": "Fires Edit › Fixture Details… in Capture.",
+      "Tooltip": "Fires Edit › Fixture Details... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -1626,7 +1706,7 @@
       "Name": "Patch & Focus: Focus",
       "UUID": "com.rezabehjat.capture.cmd.patch.focus",
       "Icon": "imgs/icons/focus",
-      "Tooltip": "Fires Edit › Focus… in Capture.",
+      "Tooltip": "Fires Edit › Focus... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2026,7 +2106,7 @@
       "Name": "Window: Selected Items Window",
       "UUID": "com.rezabehjat.capture.cmd.window.selected-items",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Selected Items… in Capture.",
+      "Tooltip": "Fires Window › Selected Items... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2046,7 +2126,7 @@
       "Name": "Window: Layers Window",
       "UUID": "com.rezabehjat.capture.cmd.window.layers",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Layers… in Capture.",
+      "Tooltip": "Fires Window › Layers... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2066,7 +2146,7 @@
       "Name": "Window: Filters Window",
       "UUID": "com.rezabehjat.capture.cmd.window.filters",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Filters… in Capture.",
+      "Tooltip": "Fires Window › Filters... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2086,7 +2166,7 @@
       "Name": "Window: Fixture Groups Window",
       "UUID": "com.rezabehjat.capture.cmd.window.fixture-groups",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Fixture Groups… in Capture.",
+      "Tooltip": "Fires Window › Fixture Groups... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2106,7 +2186,7 @@
       "Name": "Window: Camera Positions Window",
       "UUID": "com.rezabehjat.capture.cmd.window.camera-positions",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Camera Positions… in Capture.",
+      "Tooltip": "Fires Window › Camera Positions... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2126,7 +2206,7 @@
       "Name": "Window: Materials Window",
       "UUID": "com.rezabehjat.capture.cmd.window.materials",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Materials… in Capture.",
+      "Tooltip": "Fires Window › Materials... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2146,7 +2226,7 @@
       "Name": "Window: Fixtures Window",
       "UUID": "com.rezabehjat.capture.cmd.window.fixtures",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Fixtures… in Capture.",
+      "Tooltip": "Fires Window › Fixtures... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2166,7 +2246,7 @@
       "Name": "Window: Universes Window",
       "UUID": "com.rezabehjat.capture.cmd.window.universes",
       "Icon": "imgs/icons/cat-window",
-      "Tooltip": "Fires Window › Universes… in Capture.",
+      "Tooltip": "Fires Window › Universes... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2206,7 +2286,7 @@
       "Name": "File: Save As",
       "UUID": "com.rezabehjat.capture.cmd.file.save-as",
       "Icon": "imgs/icons/save-as",
-      "Tooltip": "Fires File › Save As… in Capture.",
+      "Tooltip": "Fires File › Save As... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2226,7 +2306,7 @@
       "Name": "File: Send to Production Assist",
       "UUID": "com.rezabehjat.capture.cmd.file.send-to-production-assist",
       "Icon": "imgs/icons/cat-file",
-      "Tooltip": "Fires File › Send to Production Assist… in Capture.",
+      "Tooltip": "Fires File › Send to Production Assist... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2243,10 +2323,10 @@
       ]
     },
     {
-      "Name": "File: Import Project",
+      "Name": "File: Import Project Content",
       "UUID": "com.rezabehjat.capture.cmd.file.import-project",
       "Icon": "imgs/icons/import",
-      "Tooltip": "Fires File › Import › Project… in Capture. Hold the key for 1 s to fire.",
+      "Tooltip": "Fires File › Import Project Content... in Capture. Hold the key for 1 s to fire.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2266,7 +2346,7 @@
       "Name": "File: Import Model",
       "UUID": "com.rezabehjat.capture.cmd.file.import-model",
       "Icon": "imgs/icons/import",
-      "Tooltip": "Fires File › Import › Model… in Capture. Hold the key for 1 s to fire.",
+      "Tooltip": "Fires File › Import › Model... in Capture. Hold the key for 1 s to fire.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2286,7 +2366,7 @@
       "Name": "File: Import Fixture Data",
       "UUID": "com.rezabehjat.capture.cmd.file.import-fixture-data",
       "Icon": "imgs/icons/import",
-      "Tooltip": "Fires File › Import › Fixture Data… in Capture. Hold the key for 1 s to fire.",
+      "Tooltip": "Fires File › Import › Fixture Data... in Capture. Hold the key for 1 s to fire.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2306,7 +2386,7 @@
       "Name": "File: Export Project",
       "UUID": "com.rezabehjat.capture.cmd.file.export-project",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Project… in Capture.",
+      "Tooltip": "Fires File › Export › Project... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2326,7 +2406,7 @@
       "Name": "File: Export Model",
       "UUID": "com.rezabehjat.capture.cmd.file.export-model",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Model… in Capture.",
+      "Tooltip": "Fires File › Export › Model... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2346,7 +2426,7 @@
       "Name": "File: Export Fixture Data",
       "UUID": "com.rezabehjat.capture.cmd.file.export-fixture-data",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Fixture Data… in Capture.",
+      "Tooltip": "Fires File › Export › Fixture Data... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2366,7 +2446,7 @@
       "Name": "File: Export Focus Sheets",
       "UUID": "com.rezabehjat.capture.cmd.file.export-focus-sheets",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Focus Sheets… in Capture.",
+      "Tooltip": "Fires File › Export › Focus Sheets... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2386,7 +2466,7 @@
       "Name": "File: Export Documentation",
       "UUID": "com.rezabehjat.capture.cmd.file.export-documentation",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Documentation… in Capture.",
+      "Tooltip": "Fires File › Export › Documentation... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2406,7 +2486,7 @@
       "Name": "File: Export Presentation",
       "UUID": "com.rezabehjat.capture.cmd.file.export-presentation",
       "Icon": "imgs/icons/export",
-      "Tooltip": "Fires File › Export › Presentation… in Capture.",
+      "Tooltip": "Fires File › Export › Presentation... in Capture.",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"

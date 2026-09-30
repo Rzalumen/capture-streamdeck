@@ -18,7 +18,7 @@ const N = (category: string, id: string) => `${U}.cmd.${category}.${id}`;
 const deck = new FakeDeck();
 const capture = new StubCapture();
 
-const DUMP = ["0|1|Apple|1", "0|1|Capture|1", "0|1|File|1", "1|1|Save|0", "0|1|Edit|1", "1|1|Undo Live|0", "1|1|Zap Thing|0", "0|1|View|1", "1|1|Plot|0", "1|1|Grid|0", ""].join("\t");
+const DUMP = ["0|1|Apple|1", "0|1|Capture|1", "0|1|File|1", "1|1|Save|0", "0|1|Edit|1", "1|1|Undo Live|0", "1|1|Copy|0", "1|1|Cut|0", "1|1|Zap Thing|0", "0|1|View|1", "1|1|Plot|0", "1|1|Grid|0", "1|1|Wireframe|0", ""].join("\t");
 
 const reqs = () =>
   deck.axCalls().flatMap((c: any) => (c.worker ? [c.req] : []));
@@ -44,7 +44,7 @@ test("startup: one worker, read-only requests only (status check + menu tree), s
   assert.equal(o.filter((x) => x === "dumpTop").length, 5, "one request per top-level menu");
   assert.deepEqual([...new Set(capture.msgs.map((m) => m.address))], ["/ping"]);
   assert.match(deck.logText(), /AX worker started \(#1\)/);
-  assert.match(deck.logText(), /Menu tree cached for Capture pid 4242: 5 commands/);
+  assert.match(deck.logText(), /Menu tree cached for Capture pid 4242: 8 commands/);
   assert.match(deck.logText(), /Catalog entries not found in this Capture's menus/);
   assert.match(deck.logText(), /Capture commands with no catalog entry \(\d+\): [^\n]*Edit > Zap Thing/);
 });

@@ -146,7 +146,7 @@ const lastSettings = () => toPlugin.filter((m) => m.event === "setSettings").at(
   assert.equal(lastSettings().holdToFire, false);
 }
 {
-  const { page } = await open(`${U}.cmd.file.import-project`, {});
+  const { page } = await open(`${U}.cmd.file.import-model`, {});
   assert.equal(await page.locator("#ncmd-warn").isVisible(), true, "guessed File paths carry a warning");
 }
 {

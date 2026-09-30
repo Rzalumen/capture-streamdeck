@@ -1,7 +1,8 @@
 import type { AxBridge } from "./axBridge.js";
 import { nullLogger, type Logger } from "./log.js";
 import type { MenuTarget } from "./applescript.js";
-import { diffCatalog, flattenMenu, normName, resolveMissing, type CatalogLike, type FlatCommand } from "./menu.js";
+import { flattenMenu, type FlatCommand, type MenuNode } from "./menu.js";
+import { diffCatalog, resolveEntry, type EntryLike } from "./resolve.js";
 
 const TTL_WITHOUT_PID_MS = 10 * 60_000;
 
@@ -12,7 +13,7 @@ const join = (xs: string[], max = 700): string => {
 
 export interface MenuCacheOptions {
   logger?: Logger;
-  entries?: CatalogLike[];
+  entries?: EntryLike[];
   now?: () => number;
 }
 
@@ -33,7 +34,8 @@ export class MenuCache {
   builds = 0;
   /** Called after every successful build (the plugin redraws keys: healed paths may have changed). */
   onBuilt?: () => void;
-  private liveKeys = new Set<string>();
+  /** The raw live tree (exact titles as Capture reports them). Every path sent to Capture is resolved against it. */
+  tree: MenuNode[] = [];
 
   constructor(
     private ax: AxBridge,
@@ -54,13 +56,15 @@ export class MenuCache {
   }
 
   /**
-   * Where to click for a catalog entry: its own path, or — when the live tree (once read) doesn't contain that path —
-   * the fallback path / unique same-named command found there. Never guesses when the tree hasn't been read.
+   * THE path resolver for clicks, polling and the startup report (see resolve.ts). Resolves against the live tree:
+   *   ok      → `target` holds Capture's exact titles; send it;
+   *   missing → nothing in this Capture matches (`suggestions` = closest live titles); do not click, show "?";
+   *   pending → the tree hasn't been read (yet, or at all): `target` is the catalog path with "…" as "...", unverified.
    */
-  effective(entry: CatalogLike & { menuPath: string[] }): MenuTarget {
-    const primary: MenuTarget = { path: entry.menuPath, match: entry.match };
-    if (!this.ready || this.liveKeys.has(JSON.stringify(entry.menuPath.map(normName)))) return primary;
-    return resolveMissing(entry, this.commands) ?? primary;
+  resolve(entry: EntryLike): CacheResolution {
+    if (this.tree.length === 0) return { state: "pending", target: { path: entry.menuPath.map((p) => p.replace(/…/g, "...")), match: entry.match } };
+    const r = resolveEntry(this.tree, entry);
+    return r.ok ? { state: "ok", target: r.target, via: r.via } : { state: "missing", target: r.target, suggestions: r.suggestions };
   }
 
   /** Called when Capture's process ID becomes known or changes (a new Capture launch has a new tree). */
@@ -91,8 +95,8 @@ export class MenuCache {
     try {
       // READ-ONLY: walks the menu bar, one top-level menu per request at the lowest priority; never clicks anything.
       const tree = await this.ax.dumpMenus();
+      this.tree = tree;
       this.commands = flattenMenu(tree);
-      this.liveKeys = new Set(this.commands.map((c) => JSON.stringify(c.path.map(normName))));
       this.pid = this.ax.pid;
       this.builtAt = this.now();
       this.error = undefined;
@@ -106,14 +110,25 @@ export class MenuCache {
     }
   }
 
+  /** Startup comparison. Uses the very same resolver as a key press: "found" here means "clickable". */
   private reportDiff(): void {
     if (!this.opts.entries) return;
-    const { missing, extra } = diffCatalog(this.commands, this.opts.entries);
-    if (missing.length) this.log.warn(`Catalog entries not found in this Capture's menus (${missing.length}): ${join(missing.map((m) => m.menuPath.join(" > ")))}`);
-    else this.log.info("Every catalog menu entry exists in this Capture's menus");
-    if (extra.length) this.log.info(`Capture commands with no catalog entry (${extra.length}): ${join(extra.map((c) => c.path.join(" > ")), 1500)}`);
+    const { missing, moved, extra } = diffCatalog(this.tree, this.opts.entries);
+    const path = (p: string[]): string => p.join(" > ");
+    if (missing.length) {
+      this.log.warn(
+        `Catalog entries not found in this Capture's menus (${missing.length}): ${join(missing.map((m) => `${path(m.entry.menuPath)}${m.suggestions.length ? ` (closest: ${m.suggestions.join(" | ")})` : ""}`), 1500)}`,
+      );
+    } else this.log.info("Every catalog menu entry is clickable in this Capture's menus");
+    if (moved.length) this.log.info(`Catalog entries found at a different path (${moved.length}): ${join(moved.map((m) => `${path(m.entry.menuPath)} -> ${path(m.to)} (${m.via})`), 1500)}`);
+    if (extra.length) this.log.info(`Capture commands with no catalog entry (${extra.length}): ${join(extra.map(path), 1500)}`);
   }
 }
+
+export type CacheResolution =
+  | { state: "ok"; target: MenuTarget; via: "path" | "fallback" | "name" }
+  | { state: "missing"; target: MenuTarget; suggestions: string[] }
+  | { state: "pending"; target: MenuTarget };
 
 export function describeMenuError(e: unknown): string {
   const k = (e as { kind?: string })?.kind;

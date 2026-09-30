@@ -6,6 +6,7 @@ import { axKeyOptions } from "../lib/axKeys.js";
 import { defaultHoldToFire, HoldToFire } from "../lib/holdToFire.js";
 import { iconForCommand } from "../lib/icons.js";
 import { targetTitle } from "../lib/menu.js";
+import type { EntryLike } from "../lib/resolve.js";
 import { rt } from "../runtime.js";
 import { draw, Flasher, logEvent, logSettingsChange, openSettingsIfBlocked, reportAxFailure } from "./util.js";
 
@@ -26,12 +27,22 @@ interface Ctx {
 
 /** What a key does, resolved from its settings (generic key) or from the catalog (named key). */
 export interface Resolved {
+  /** What to send: Capture's exact live titles once the menu tree is known (see lib/resolve.ts), else the catalog path. */
   target: MenuTarget;
   label: string;
   icon: string;
   hold: boolean;
-  /** For catalog keys: the entry, so a path that doesn't exist in this Capture can be re-resolved from the live menus. */
-  entry?: CatalogEntry;
+  /** The catalog path (or the generic key's own path): re-resolved against the live tree at press time. */
+  entry: EntryLike;
+  /** ok: found in this Capture; pending: menu tree not read yet; missing: no such command in this Capture (key shows "?"). */
+  state: "ok" | "pending" | "missing";
+  suggestions?: string[];
+}
+
+/** Resolve a path through the one shared resolver (the cached live menu tree). */
+export function resolveEntryNow(entry: EntryLike): Pick<Resolved, "target" | "state" | "suggestions"> {
+  const r = rt.menus.resolve(entry);
+  return { target: r.target, state: r.state, suggestions: r.state === "missing" ? r.suggestions : undefined };
 }
 
 async function loadMenus(force: boolean): Promise<{ commands: unknown[]; error?: string }> {
@@ -54,7 +65,7 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
   /** Menu commands whose enabled state this key shows (default: the one it fires). */
   protected polled(s: CommandSettings): MenuTarget[] {
     const r = this.resolve(s);
-    return r ? [r.target] : [];
+    return r && r.state !== "missing" ? [r.target] : [];
   }
 
   protected redrawAll(): void {
@@ -68,7 +79,7 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
       draw(c.action, { icon: "unset", label: "Choose command", dim: false, big: f?.text, tone: f?.tone });
       return;
     }
-    const enabled = rt.axKeys.isEnabled(r.target);
+    const enabled = r.state === "missing" ? null : rt.axKeys.isEnabled(r.target); // null → "?" badge
     const o = axKeyOptions({
       label: c.settings.label?.trim() || r.label,
       icon: r.icon,
@@ -147,23 +158,30 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
 
   /** Only ever reached from a user's key press (directly, or after a completed 1 s hold). */
   private async fire(c: Ctx): Promise<void> {
-    const r = this.resolve(c.settings);
-    if (!r) return;
+    const first = this.resolve(c.settings);
+    if (!first) return;
     const t0 = Date.now();
     try {
-      let t = r.target;
+      // Resolve against the live menu tree first (read the tree now if there is none yet), then send Capture's exact titles.
+      if (first.state === "pending") await rt.menus.ensure();
+      else void rt.menus.ensure().catch(() => undefined); // refreshes in the background when Capture's pid changed; never delays the press
+      let r = { ...first, ...resolveEntryNow(first.entry) };
+      if (r.state === "missing") return this.notFound(c, r, t0);
       let res;
       try {
-        res = await rt.ax.clickMenu(t);
+        res = await rt.ax.clickMenu(r.target);
       } catch (e) {
-        // The catalog path doesn't exist in this Capture: click the command where the live menus have it.
-        const healed = r.entry && isNotFound(e) ? rt.menus.effective(r.entry) : undefined;
-        if (!healed || healed.path.join("\u0001") === t.path.join("\u0001")) throw e;
-        rt.log.warn(`${r.entry?.menuPath.join(" > ")} not found; using ${healed.path.join(" > ")} from Capture's live menus`);
-        t = healed;
-        res = await rt.ax.clickMenu(t);
+        if (!isNotFound(e)) throw e;
+        // The tree we resolved against was out of date (nothing was clicked): read it again and retry once.
+        await rt.menus.ensure(true);
+        const again = { ...first, ...resolveEntryNow(first.entry) };
+        if (again.state === "missing") return this.notFound(c, again, t0);
+        if (again.target.path.join("\u0001") === r.target.path.join("\u0001")) throw e;
+        rt.log.warn(`${r.target.path.join(" > ")} not found; using ${again.target.path.join(" > ")} from Capture's live menus`);
+        r = again;
+        res = await rt.ax.clickMenu(r.target);
       }
-      logEvent("Key result", this.manifestId, c.settings, `${res} ${t.path.join(" > ")} in ${Date.now() - t0} ms`);
+      logEvent("Key result", this.manifestId, c.settings, `${res} ${r.target.path.join(" > ")} in ${Date.now() - t0} ms`);
       if (res === "DISABLED") c.action.showAlert().catch(() => undefined);
       else c.action.showOk().catch(() => undefined);
     } catch (e) {
@@ -172,6 +190,17 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
     } finally {
       rt.axKeys.pressed();
     }
+  }
+
+  /** No such command in this Capture: nothing is clicked. Log the path and the closest live titles. */
+  private notFound(c: Ctx, r: Resolved, t0: number): void {
+    const want = r.entry.menuPath.join(" > ");
+    const close = r.suggestions?.length ? `; closest live titles: ${r.suggestions.join(" | ")}` : "";
+    rt.log.warn(`${want} not found in Capture's menus${close}`);
+    logEvent("Key result", this.manifestId, c.settings, `NOT FOUND ${want}${close} in ${Date.now() - t0} ms`);
+    c.flasher.show({ text: "?", tone: "red" }, 1800);
+    c.action.showAlert().catch(() => undefined);
+    this.redrawAll();
   }
 
   // ---- Property Inspector: menu list from the cache (read-only)
@@ -190,7 +219,8 @@ export class CaptureCommand extends CommandKeys {
   protected resolve(s: CommandSettings): Resolved | undefined {
     const t = targetFromSettings(s);
     if (!t) return undefined;
-    return { target: t, label: targetTitle(t), icon: iconForCommand(t.path), hold: defaultHoldToFire(t.path) };
+    const entry: EntryLike = { menuPath: t.path, match: t.match };
+    return { ...resolveEntryNow(entry), entry, label: targetTitle(t), icon: iconForCommand(t.path), hold: defaultHoldToFire(t.path) };
   }
 }
 
@@ -224,10 +254,13 @@ export class NamedCommand extends CommandKeys {
     const base = targetOf(e);
     if (!base) return undefined;
     const held = e !== this.entry;
-    return { target: rt.menus.effective(e), label: held ? `Store ${this.entry.title.replace(/^Position /, "")}` : e.title, icon: held ? "store" : e.icon, hold: e.holdToFire, entry: e };
+    return { ...resolveEntryNow(e), entry: e, label: held ? `Store ${this.entry.title.replace(/^Position /, "")}` : e.title, icon: held ? "store" : e.icon, hold: e.holdToFire };
   }
 
   protected override polled(): MenuTarget[] {
-    return [this.entry, this.store].flatMap((e) => (e ? [rt.menus.effective(e)] : []));
+    return [this.entry, this.store].flatMap((e) => {
+      const r = e ? resolveEntryNow(e) : undefined;
+      return r && r.state !== "missing" ? [r.target] : [];
+    });
   }
 }

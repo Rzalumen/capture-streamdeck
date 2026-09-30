@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { ENTRIES, type CatalogEntry } from "../src/catalog/index.ts";
 import { AxBridge, type ExecResult, type Runner } from "../src/lib/axBridge.ts";
 import { MenuCache } from "../src/lib/menuCache.ts";
-import { diffCatalog, flattenMenu, normName, parseMenuDump, resolveMissing } from "../src/lib/menu.ts";
+import { parseMenuDump } from "../src/lib/menu.ts";
 
 const ok = (stdout: string): ExecResult => ({ stdout, stderr: "", code: 0 });
 const rec = (rows: [number, string][]) => rows.map(([d, n]) => `${d}|1|${n}|0`).join("\t") + "\t";
 const DUMP = rec([
   [0, "Apple"], [0, "Capture"],
-  [0, "File"], [1, "New"], [1, "Open…"], [1, "Save"], [1, "Save As…"],
-  [0, "Edit"], [1, "Undo Live"], [1, "Copy"], [1, "Focus…"], [1, "Zap Thing…"],
+  [0, "File"], [1, "New"], [1, "Open..."], [1, "Save"], [1, "Save As..."],
+  [0, "Edit"], [1, "Undo Live"], [1, "Copy"], [1, "Focus..."], [1, "Zap Thing..."],
   [0, "View"], [1, "Plot"], [1, "Camera"], [2, "Swing to Front"], [1, "Enter Full Screen"],
 ]);
 
@@ -72,7 +72,7 @@ test("MenuCache: errors are kept as a readable message and the previous commands
   assert.match((await notRunning.ensure()).error ?? "", /not running/i);
 });
 
-test("MenuCache: onBuilt fires; the catalog diff is logged (missing entries and Capture commands nobody catalogued)", async () => {
+test("MenuCache: onBuilt fires; the startup report lists missing entries (with the closest live titles) and Capture commands nobody catalogued", async () => {
   logs.length = 0;
   const cache = new MenuCache(new AxBridge({ runner: async () => ok(DUMP) }), { logger, entries: ENTRIES });
   let built = 0;
@@ -81,49 +81,27 @@ test("MenuCache: onBuilt fires; the catalog diff is logged (missing entries and 
   assert.equal(built, 1);
   const missing = logs.find((l) => l.startsWith("W Catalog entries not found"));
   assert.ok(missing && missing.includes("View > Wireframe"), "entries absent from this fake Capture are reported");
+  assert.match(missing, /View > Wireframe \(closest: View > /, "...with the closest live titles");
   const extra = logs.find((l) => l.includes("no catalog entry"));
-  assert.ok(extra && extra.includes("Edit > Zap Thing…"), "a Capture command with no entry is listed");
-  assert.ok(!extra.includes("Edit > Focus…"), "Focus… is in the catalog (Patch & Focus)");
+  assert.ok(extra && extra.includes("Edit > Zap Thing..."), "a Capture command with no entry is listed");
+  assert.ok(!extra.includes("Edit > Focus..."), "Focus... is in the catalog (Patch & Focus)");
 });
 
-const live = flattenMenu(parseMenuDump(DUMP));
-
-test("diffCatalog: missing vs extra; New / Open… are deliberately not catalogued; names compare ignoring case and …", () => {
-  const entries = [
-    { menuPath: ["View", "Plot"], match: "exact" as const },
-    { menuPath: ["View", "Wireframe"], match: "exact" as const },
-    { menuPath: ["Edit", "Undo"], match: "prefix" as const },
-    { menuPath: ["Edit", "focus..."], match: "exact" as const },
-    { menuPath: ["View", "Enter Full Screen|Exit Full Screen"], match: "alternates" as const },
-  ];
-  const d = diffCatalog(live, entries);
-  assert.deepEqual(d.missing.map((e) => e.menuPath.join(" > ")), ["View > Wireframe"]);
-  const extra = d.extra.map((c) => c.path.join(" > "));
-  assert.ok(extra.includes("File > Save") && extra.includes("Edit > Copy") && extra.includes("View > Camera > Swing to Front"));
-  assert.ok(!extra.some((p) => /File > New|File > Open/.test(p)), "New and Open… excluded");
-  assert.ok(!extra.includes("View > Plot") && !extra.includes("Edit > Undo"), "covered ones are not extra");
-  assert.equal(normName("Focus…"), normName("FOCUS..."));
-});
-
-test("resolveMissing: fallback path first, else the one same-named command in the same top menu; ambiguity → undefined", () => {
-  const entry = { menuPath: ["File", "Import", "Project…"], match: "exact" as const, fallbackPaths: [["File", "Import Project…"]] };
-  const l2 = flattenMenu(parseMenuDump(rec([[0, "File"], [1, "Import Project…"], [1, "Save"]])));
-  assert.deepEqual(resolveMissing(entry, l2)?.path, ["File", "Import Project…"]);
-  const moved = { menuPath: ["Edit", "Save"], match: "exact" as const };
-  assert.deepEqual(resolveMissing({ menuPath: ["File", "Nope", "Save"], match: "exact" }, l2)?.path, ["File", "Save"], "found by name in the same menu");
-  assert.equal(resolveMissing(moved, l2), undefined, "different top menu: not guessed");
-  const dup = flattenMenu(parseMenuDump(rec([[0, "File"], [1, "Save"], [1, "Sub"], [2, "Save"]])).slice());
-  assert.equal(resolveMissing({ menuPath: ["File", "X", "Save"], match: "exact" }, dup), undefined, "two candidates: never guess");
-});
-
-test("MenuCache.effective: the catalog path while it exists (or the tree is unread), otherwise the healed path", async () => {
-  const cache = new MenuCache(new AxBridge({ runner: async () => ok(rec([[0, "File"], [1, "Import Project…"], [1, "Save"], [0, "View"], [1, "Plot"]])) }), { logger });
-  const imp = ENTRIES.find((e) => e.id === "import-project") as CatalogEntry;
+test("MenuCache.resolve: pending until the tree is read; then Capture's exact titles (Patch… ↔ Patch...), or missing with suggestions", async () => {
+  const cache = new MenuCache(new AxBridge({ runner: async () => ok(DUMP) }), { logger });
+  const focus = ENTRIES.find((e) => e.id === "focus" && e.category === "patch") as CatalogEntry;
   const plot = ENTRIES.find((e) => e.id === "plot" && e.category === "view") as CatalogEntry;
-  assert.deepEqual(cache.effective(imp).path, imp.menuPath, "tree not read yet: never guess");
-  await cache.ensure();
-  assert.deepEqual(cache.effective(imp).path, ["File", "Import Project…"], "fallback path used");
-  assert.deepEqual(cache.effective(plot).path, ["View", "Plot"]);
   const wire = ENTRIES.find((e) => e.id === "wireframe") as CatalogEntry;
-  assert.deepEqual(cache.effective(wire).path, wire.menuPath, "nothing better known: keep the catalog path");
+  const p0 = cache.resolve(focus);
+  assert.equal(p0.state, "pending", "tree not read yet: nothing is verified");
+  assert.deepEqual(p0.target.path, ["Edit", "Focus..."], "...the catalog path, in ASCII");
+  await cache.ensure();
+  assert.deepEqual(cache.resolve(focus), { state: "ok", target: { path: ["Edit", "Focus..."], match: "exact" }, via: "path" });
+  assert.deepEqual(cache.resolve(plot).target.path, ["View", "Plot"]);
+  const w = cache.resolve(wire);
+  assert.equal(w.state, "missing");
+  assert.ok(w.state === "missing" && w.suggestions.length > 0 && w.suggestions.every((x) => x.startsWith("View > ")));
+  // the same catalog entry in the other spelling still resolves to the live title
+  const unicode = cache.resolve({ menuPath: ["Edit", "Focus…"], match: "exact" });
+  assert.deepEqual(unicode.target.path, ["Edit", "Focus..."]);
 });

@@ -93,7 +93,7 @@ test("more than 7 commands: slot 3,1 becomes 'More ▸' to the next page (which 
     }
     for (const k of p.keys.values()) if (k.type === "folder" && k.title === "More ▸") assert.equal(k, last, "More ▸ only ever sits in 3,1");
   }
-  // a folder with exactly 7 commands needs no More (Look has 3, Positions 2nd page has 7)
+  // a folder with exactly 7 commands needs no More (Look has 3, the Camera Positions page has 7)
   assert.equal(folder("Look").keys.size, 4);
 });
 
@@ -107,7 +107,7 @@ test("View / Select / Edit / Patch & Focus / File hold their catalog category, i
   expect("Edit", "edit");
   expect("Patch & Focus", "patch");
   expect("File", "file");
-  assert.equal(chain(folder("Edit")).pages.length, 4, "Edit chains several pages (21 commands: 6 + 6 + 6 + 3)");
+  assert.equal(chain(folder("Edit")).pages.length, 4, "Edit chains four pages (25 commands: 6 + 6 + 6 + 7)");
 });
 
 test("Windows: Tabs (6) first, then the Navigate and Window categories", () => {
@@ -117,19 +117,30 @@ test("Windows: Tabs (6) first, then the Navigate and Window categories", () => {
   assert.equal(want.slice(0, 6).every((u) => u.includes(".cmd.tabs.")), true);
 });
 
-test("Camera: Swing/Focus, Camera Position 1–5, Store Modifier, then 'Positions ▸' holding Show Position 1–8 and Store Camera 1–5", () => {
-  const { keys } = chain(folder("Camera"));
+test("Camera: Swing/Focus on the first pages; Positions 1–5 + Store Modifier together on ONE page of their own (v0.3.1)", () => {
+  const first = folder("Camera");
+  const { keys, pages } = chain(first);
   const cam = ENTRIES.filter((e) => e.category === "camera");
   const swing = cam.filter((e) => !/^(position|store)-\d$/.test(e.id)).map(uuidOf);
   const pos = cam.filter((e) => /^position-\d$/.test(e.id)).map(uuidOf);
   const stores = cam.filter((e) => /^store-\d$/.test(e.id)).map(uuidOf);
   assert.equal(swing.length, 7);
-  assert.deepEqual(keys.slice(0, 13).map((k) => (k.type === "action" ? k.uuid : "?")), [...swing, ...pos, STORE_MODIFIER_UUID]);
-  const last = keys[13];
-  assert.equal(keys.length, 14);
-  assert.equal(last.type, "folder");
-  assert.equal(titleOf(last), "Positions ▸");
-  const inner = chain((last as Extract<Key, { type: "folder" }>).child);
+  // Camera pages hold only Swing/Focus commands plus the folder that leads to the Positions page
+  assert.deepEqual(keys.filter((k) => k.type === "action").map((k) => (k as { uuid: string }).uuid), swing, "all seven Swing/Focus commands, in order, on the Camera pages");
+  assert.equal(pages.length, 2);
+  const posKey = first.keys.get("2,1");
+  assert.equal(posKey?.type, "folder");
+  assert.equal(titleOf(posKey), "Positions ▸", "the Positions page is one press away from the first Camera page");
+  // The Positions page: Position 1–5 + Store Modifier on the SAME page, plus the Show ▸ folder; no More, no second page.
+  const posPage = (posKey as Extract<Key, { type: "folder" }>).child;
+  const onPage = COMMAND_SLOTS.map((sl) => posPage.keys.get(sl)).filter((k): k is Key => !!k);
+  assert.deepEqual(onPage.slice(0, 6).map((k) => (k.type === "action" ? k.uuid : "?")), [...pos, STORE_MODIFIER_UUID]);
+  assert.equal(onPage.length, 7);
+  assert.equal(titleOf(onPage[6]), "Show ▸");
+  assert.ok(!onPage.some((k) => k.type === "folder" && k.title === "More ▸"), "Positions 1–5 and Store Modifier are not split by a More ▸");
+  assert.equal(posPage.keys.get("0,0")?.type, "back");
+  // Show ▸: Show Position 1–8 and Store Camera 1–5 (13 keys → 2 pages)
+  const inner = chain((onPage[6] as Extract<Key, { type: "folder" }>).child);
   assert.deepEqual(
     inner.keys.map((k) => (k.type === "action" ? k.uuid : "?")),
     [...Array.from({ length: 8 }, (_, i) => showPositionUuid(i + 1)), ...stores],
@@ -269,7 +280,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.3.0.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.3.1.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }

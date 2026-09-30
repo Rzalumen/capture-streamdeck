@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.3.0.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.3.1.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.3.0.0");
+  assert.equal(built.Version, "0.3.1.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -122,7 +122,7 @@ test("the action list contains no configurable actions: the six generic ones are
   // what remains visible is a named action: catalog command, Show Position k, Look toggle, Store Modifier, Connection, dial
   for (const a of visible) assert.match(a.UUID, /^com\.rezabehjat\.capture\.(cmd\.[a-z]+\.[a-z0-9-]+|showpos\.[1-8]|toggle\.[a-z-]+|dial\.[a-z-]+|store|connection)$/, a.UUID);
   assert.equal(visible.length, built.Actions.length - GENERIC.length);
-  assert.equal(built.Actions.length, 150);
+  assert.equal(built.Actions.length, 154);
 });
 
 test("the handoff's named actions exist, visible, with the handoff's names", () => {
