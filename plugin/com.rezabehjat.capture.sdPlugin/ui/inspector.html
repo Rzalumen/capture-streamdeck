@@ -39,19 +39,12 @@
     <div class="cbx"><input id="ndim" type="checkbox" /><label for="ndim">Dim when the command is disabled in Capture</label></div>
   </section>
 
-  <!-- Named dial (Dial: Bloom …) -->
+  <!-- Named dial (Dial: Bloom …): step and reset value only; always the live view -->
   <section id="s-ndial" class="hidden">
-    <div class="row"><label for="ndview">View</label><div class="ctl"><select id="ndview"></select></div></div>
     <div class="row"><label for="ndstep">Step</label><div class="ctl"><input id="ndstep" type="number" step="any" /></div></div>
     <div class="row"><label for="ndreset">Reset value</label><div class="ctl"><input id="ndreset" type="number" step="any" /></div></div>
     <div class="hint" id="ndial-hint"></div>
     <div class="hint full">Turn to adjust. Push or touch: fine mode (step ÷ 10). Long touch: reset. Capture cannot report a value, so the strip shows the last value this plugin sent (greyed with “~” until it has sent one this session).</div>
-  </section>
-
-  <!-- Named toggle -->
-  <section id="s-ntoggle" class="hidden">
-    <div class="row"><label for="ntview">View</label><div class="ctl"><select id="ntview"></select></div></div>
-    <div class="hint full">A press flips the remembered state and sends <code>T</code>/<code>F</code>. Capture cannot report the current state, so the first press after install may need a second press.</div>
   </section>
 
   <!-- Capture Tab -->

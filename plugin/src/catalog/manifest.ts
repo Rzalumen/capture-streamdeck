@@ -1,13 +1,15 @@
 /**
- * Builds manifest.json: the generic actions from manifest.base.json plus one action per catalog entry, one per view
- * dial and one per view toggle. Used by scripts/gen-manifest.mjs (writes the file) and by the tests (compare with it).
+ * Builds manifest.json: one action per catalog entry, the eight "Camera: Show Position k" keys, one per view dial and
+ * one per view toggle ("Look: …"), plus Store Modifier / Connection and the six generic (configurable) actions from
+ * manifest.base.json, which are hidden from the action list (VisibleInActionsList: false). Used by scripts/gen-manifest.mjs (writes the file) and by the tests (compare with it).
  *
  * Grouping: the Stream Deck manifest has NO per-action group/category field (only the plugin-level "Category"),
  * so actions are grouped by manifest order (category order) AND by the "<Category>: " name prefix.
  */
 import { NUMBER_PROPERTIES, BOOL_PROPERTIES } from "../lib/properties.js";
 import { dialUuid, PROPERTY_ICON, toggleUuid } from "../lib/named.js";
-import { actionName, isTab, orderedEntries, uuidOf, type CatalogEntry } from "./index.js";
+import { CATEGORIES, actionName, isTab, orderedEntries, uuidOf, type CatalogEntry } from "./index.js";
+import { CONNECTION_UUID, HIDDEN_GENERIC_UUIDS, SHOW_POSITION_COUNT, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "./extras.js";
 
 export interface ManifestAction {
   Name: string;
@@ -15,6 +17,8 @@ export interface ManifestAction {
   Icon: string;
   Tooltip: string;
   PropertyInspectorPath?: string;
+  /** false: registered but not offered in the Stream Deck action list (only usable from a profile or keys placed earlier). */
+  VisibleInActionsList?: boolean;
   Controllers: string[];
   States: { Image: string; ShowTitle: boolean }[];
   Encoder?: Record<string, unknown>;
@@ -47,16 +51,40 @@ function commandAction(e: CatalogEntry): ManifestAction {
   };
 }
 
+function showPositionAction(k: number): ManifestAction {
+  return {
+    Name: showPositionName(k),
+    UUID: showPositionUuid(k),
+    Icon: iconPath("position"),
+    Tooltip: `Recalls camera position ${k} of catalog 1 in the open show over OSC. The key is titled with its name in Capture.`,
+    Controllers: ["Keypad"],
+    States: [{ Image: keyPath("position"), ShowTitle: false }],
+  };
+}
+
 export function buildManifest(base: Manifest, packageVersion: string): Manifest {
   const [maj, min, pat] = packageVersion.split(".");
-  const commands = orderedEntries().map(commandAction);
+  const baseByUuid = new Map(base.Actions.map((a) => [a.UUID, a]));
+  const pick = (uuid: string): ManifestAction => {
+    const a = baseByUuid.get(uuid);
+    if (!a) throw new Error(`manifest.base.json has no action ${uuid}`);
+    return a;
+  };
+  // Action-list order: the catalog's categories; the Camera group also holds the Show Position keys and the Store Modifier.
+  const entries = orderedEntries();
+  const commands: ManifestAction[] = CATEGORIES.flatMap((c) => {
+    const own = entries.filter((e) => e.category === c.slug).map(commandAction);
+    if (c.slug !== "camera") return own;
+    const shows = Array.from({ length: SHOW_POSITION_COUNT }, (_, i) => showPositionAction(i + 1));
+    return [...own, ...shows, pick(STORE_MODIFIER_UUID)];
+  });
 
   const dials: ManifestAction[] = NUMBER_PROPERTIES.map((p) => ({
     Name: `Dial: ${p.label}`,
     UUID: dialUuid(p),
     Icon: iconPath(PROPERTY_ICON[p.id]),
     Tooltip: `Turn to adjust ${p.label} over OSC (${p.min} … ${p.max}). Push or touch: fine mode. Long touch: reset.`,
-    PropertyInspectorPath: PI,
+    PropertyInspectorPath: PI, // named dials: Step and Reset value only (no view / property pickers)
     Controllers: ["Encoder"],
     States: [{ Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: false }],
     Encoder: {
@@ -67,11 +95,10 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
   }));
 
   const toggles: ManifestAction[] = BOOL_PROPERTIES.map((p) => ({
-    Name: `Toggle: ${p.label}`,
+    Name: toggleActionName(p.label),
     UUID: toggleUuid(p),
     Icon: iconPath(PROPERTY_ICON[p.id]),
-    Tooltip: `Toggles ${p.label} over OSC.`,
-    PropertyInspectorPath: PI,
+    Tooltip: `Toggles ${p.label} in Capture's live view over OSC.`,
     Controllers: ["Keypad"],
     States: [
       { Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: false },
@@ -79,6 +106,8 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     ],
   }));
 
-  // Generated (named) actions first, in category order; the generic actions keep their names and UUIDs, after them.
-  return { ...base, Version: `${maj}.${min}.${pat}.0`, Actions: [...commands, ...dials, ...toggles, ...base.Actions] };
+  // Named actions first (commands, Look toggles, Status, dials), then the hidden generic ones (VisibleInActionsList: false).
+  const hidden = HIDDEN_GENERIC_UUIDS.map(pick);
+  for (const h of hidden) if (h.VisibleInActionsList !== false) throw new Error(`${h.UUID} must be hidden (VisibleInActionsList: false)`);
+  return { ...base, Version: `${maj}.${min}.${pat}.0`, Actions: [...commands, ...toggles, pick(CONNECTION_UUID), ...dials, ...hidden] };
 }

@@ -39,13 +39,12 @@
     ws.send(JSON.stringify({ event: "sendToPlugin", action: actionUUID, context: uuid, payload }));
   }
 
-  const ALL = ["command", "tab", "slot", "position", "dial", "toggle", "ncmd", "ndial", "ntoggle"];
+  const ALL = ["command", "tab", "slot", "position", "dial", "toggle", "ncmd", "ndial"];
   // Generic actions end in their kind (…capture.dial). Generated ones: …capture.cmd.<category>.<id>, …capture.dial.<property>, …capture.toggle.<property>.
   const kind = () => {
     const p = actionUUID.split(".");
     if (p.length === 6 && p[3] === "cmd") return p[4] === "tabs" ? "ntab" : "ncmd";
     if (p.length === 5 && p[3] === "dial") return "ndial";
-    if (p.length === 5 && p[3] === "toggle") return "ntoggle";
     return p[p.length - 1];
   };
   const namedProp = () => C.properties.find((p) => p.slug === actionUUID.split(".")[4]);
@@ -81,14 +80,8 @@
       $("ndim").onchange = () => save({ dimWhenDisabled: $("ndim").checked });
     }
     if (k === "ndial") {
-      fillSelect($("ndview"), Object.entries(C.views));
-      $("ndview").onchange = () => save({ view: $("ndview").value });
       $("ndstep").onchange = () => save({ step: num($("ndstep").value) });
       $("ndreset").onchange = () => save({ reset: num($("ndreset").value) });
-    }
-    if (k === "ntoggle") {
-      fillSelect($("ntview"), Object.entries(C.views));
-      $("ntview").onchange = () => save({ view: $("ntview").value });
     }
     if (k === "tab") {
       fillSelect($("tab"), C.tabs.map((t) => [t, t]));
@@ -149,7 +142,8 @@
     }
     if (k === "ncmd") {
       const c = C.commands[actionUUID] || { path: [], hold: false };
-      $("ncmd-what").textContent = "Fires " + c.path.join(" › ").replace("|", " / ") + " in Capture. Nothing to configure.";
+      $("ncmd-what").textContent = "Fires " + c.path.join(" › ").replace("|", " / ") + " in Capture. Nothing to configure."
+        + (/^com\.rezabehjat\.capture\.cmd\.camera\.position-\d$/.test(actionUUID) ? " While the Camera: Store Modifier key is held, it stores the camera in this slot instead." : "");
       const w = $("ncmd-warn");
       w.classList.toggle("hidden", !c.unverified);
       w.textContent = c.unverified ? "This menu path is a best guess from the description of Capture's File menu. If the key shows “?”, use Capture Command to pick it from the live menus." : "";
@@ -158,7 +152,6 @@
     }
     if (k === "ndial") {
       const p = namedProp() || C.properties[0];
-      $("ndview").value = settings.view || "live";
       $("ndstep").value = settings.step ?? "";
       $("ndstep").placeholder = String(p.step);
       $("ndreset").value = settings.reset ?? "";
@@ -166,7 +159,6 @@
       const unit = { percent: "1.0 = 100 %", ev: "EV", kelvin: "K", degrees: "degrees", count: "whole number" }[p.unit];
       $("ndial-hint").textContent = p.label + ": range " + p.min + " … " + p.max + " (" + unit + "). Step and reset are in these units.";
     }
-    if (k === "ntoggle") $("ntview").value = settings.view || "live";
     if (k === "tab") $("tab").value = settings.tab || "Design";
     if (k === "slot") $("slot").value = String(settings.slot || 1);
     if (k === "position") {

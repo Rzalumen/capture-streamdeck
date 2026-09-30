@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.2.0.0",
+  "Version": "0.3.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -639,6 +639,145 @@
         },
         {
           "Image": "imgs/keys/store",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 1",
+      "UUID": "com.rezabehjat.capture.showpos.1",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 1 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 2",
+      "UUID": "com.rezabehjat.capture.showpos.2",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 2 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 3",
+      "UUID": "com.rezabehjat.capture.showpos.3",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 3 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 4",
+      "UUID": "com.rezabehjat.capture.showpos.4",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 4 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 5",
+      "UUID": "com.rezabehjat.capture.showpos.5",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 5 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 6",
+      "UUID": "com.rezabehjat.capture.showpos.6",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 6 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 7",
+      "UUID": "com.rezabehjat.capture.showpos.7",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 7 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Show Position 8",
+      "UUID": "com.rezabehjat.capture.showpos.8",
+      "Icon": "imgs/icons/position",
+      "Tooltip": "Recalls camera position 8 of catalog 1 in the open show over OSC. The key is titled with its name in Capture.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/position",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Camera: Store Modifier",
+      "UUID": "com.rezabehjat.capture.store",
+      "Icon": "imgs/actions/store/icon",
+      "Tooltip": "Hold this key, then press Camera: Position 1–5 to store the camera in that slot instead of recalling it.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/store/key",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/actions/store/key",
           "ShowTitle": false
         }
       ]
@@ -2404,6 +2543,59 @@
       ]
     },
     {
+      "Name": "Look: Auto Exposure",
+      "UUID": "com.rezabehjat.capture.toggle.automatic-exposure",
+      "Icon": "imgs/icons/autoexposure",
+      "Tooltip": "Toggles Auto Exposure in Capture's live view over OSC.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/autoexposure",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/autoexposure",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Look: Laser Flicker",
+      "UUID": "com.rezabehjat.capture.toggle.laser-flicker-effect",
+      "Icon": "imgs/icons/laser",
+      "Tooltip": "Toggles Laser Flicker in Capture's live view over OSC.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/laser",
+          "ShowTitle": false
+        },
+        {
+          "Image": "imgs/keys/laser",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Status: Connection",
+      "UUID": "com.rezabehjat.capture.connection",
+      "Icon": "imgs/actions/connection/icon",
+      "Tooltip": "Shows whether Capture answers over OSC, its version, and whether Accessibility access is OK. Press to re-check.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/connection/key",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
       "Name": "Dial: Exposure",
       "UUID": "com.rezabehjat.capture.dial.exposure-adjustment",
       "Icon": "imgs/icons/exposure",
@@ -2716,50 +2908,10 @@
       }
     },
     {
-      "Name": "Toggle: Auto Exposure",
-      "UUID": "com.rezabehjat.capture.toggle.automatic-exposure",
-      "Icon": "imgs/icons/autoexposure",
-      "Tooltip": "Toggles Auto Exposure over OSC.",
-      "PropertyInspectorPath": "ui/inspector.html",
-      "Controllers": [
-        "Keypad"
-      ],
-      "States": [
-        {
-          "Image": "imgs/keys/autoexposure",
-          "ShowTitle": false
-        },
-        {
-          "Image": "imgs/keys/autoexposure",
-          "ShowTitle": false
-        }
-      ]
-    },
-    {
-      "Name": "Toggle: Laser Flicker",
-      "UUID": "com.rezabehjat.capture.toggle.laser-flicker-effect",
-      "Icon": "imgs/icons/laser",
-      "Tooltip": "Toggles Laser Flicker over OSC.",
-      "PropertyInspectorPath": "ui/inspector.html",
-      "Controllers": [
-        "Keypad"
-      ],
-      "States": [
-        {
-          "Image": "imgs/keys/laser",
-          "ShowTitle": false
-        },
-        {
-          "Image": "imgs/keys/laser",
-          "ShowTitle": false
-        }
-      ]
-    },
-    {
       "Name": "Capture Command",
       "UUID": "com.rezabehjat.capture.command",
       "Icon": "imgs/actions/command/icon",
-      "Tooltip": "Fires any Capture menu command (View, Edit, File…). Dims when the command is disabled.",
+      "Tooltip": "Fires any Capture menu command (View, Edit, File…). Dims when the command is disabled. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2773,13 +2925,14 @@
           "Image": "imgs/actions/command/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "Capture Tab",
       "UUID": "com.rezabehjat.capture.tab",
       "Icon": "imgs/actions/tab/icon",
-      "Tooltip": "Switches Capture to Design, Fixtures, Universes, Media, Snapshots or Library.",
+      "Tooltip": "Switches Capture to Design, Fixtures, Universes, Media, Snapshots or Library. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2789,13 +2942,14 @@
           "Image": "imgs/actions/tab/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "Camera Slot",
       "UUID": "com.rezabehjat.capture.slot",
       "Icon": "imgs/actions/slot/icon",
-      "Tooltip": "Recalls Camera Position 1–5. While a Store Modifier key is held, stores it instead.",
+      "Tooltip": "Recalls Camera Position 1–5. While a Store Modifier key is held, stores it instead. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2805,32 +2959,14 @@
           "Image": "imgs/actions/slot/key",
           "ShowTitle": false
         }
-      ]
-    },
-    {
-      "Name": "Store Modifier",
-      "UUID": "com.rezabehjat.capture.store",
-      "Icon": "imgs/actions/store/icon",
-      "Tooltip": "Hold this key, then press a Camera Slot to store the camera there.",
-      "Controllers": [
-        "Keypad"
       ],
-      "States": [
-        {
-          "Image": "imgs/actions/store/key",
-          "ShowTitle": false
-        },
-        {
-          "Image": "imgs/actions/store/key",
-          "ShowTitle": false
-        }
-      ]
+      "VisibleInActionsList": false
     },
     {
       "Name": "Show Position",
       "UUID": "com.rezabehjat.capture.position",
       "Icon": "imgs/actions/position/icon",
-      "Tooltip": "Recalls a camera position from the open show over OSC, titled with its name in Capture.",
+      "Tooltip": "Recalls a camera position from the open show over OSC, titled with its name in Capture. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2840,13 +2976,14 @@
           "Image": "imgs/actions/position/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "View Dial",
       "UUID": "com.rezabehjat.capture.dial",
       "Icon": "imgs/actions/dial/icon",
-      "Tooltip": "Turn to adjust a Capture view setting over OSC. Push or touch: fine mode. Long touch: reset.",
+      "Tooltip": "Turn to adjust a Capture view setting over OSC. Push or touch: fine mode. Long touch: reset. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Encoder"
@@ -2866,13 +3003,14 @@
           "LongTouch": "Reset"
         },
         "background": "imgs/actions/dial/strip-background"
-      }
+      },
+      "VisibleInActionsList": false
     },
     {
       "Name": "View Toggle",
       "UUID": "com.rezabehjat.capture.toggle",
       "Icon": "imgs/actions/toggle/icon",
-      "Tooltip": "Toggles Auto Exposure or Laser Flicker Effect over OSC.",
+      "Tooltip": "Toggles Auto Exposure or Laser Flicker Effect over OSC. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -2886,28 +3024,14 @@
           "Image": "imgs/actions/toggle/key",
           "ShowTitle": false
         }
-      ]
-    },
-    {
-      "Name": "Connection",
-      "UUID": "com.rezabehjat.capture.connection",
-      "Icon": "imgs/actions/connection/icon",
-      "Tooltip": "Shows whether Capture answers over OSC, its version, and whether Accessibility access is OK. Press to re-check.",
-      "Controllers": [
-        "Keypad"
       ],
-      "States": [
-        {
-          "Image": "imgs/actions/connection/key",
-          "ShowTitle": false
-        }
-      ]
+      "VisibleInActionsList": false
     }
   ],
   "Category": "Capture",
   "CategoryIcon": "imgs/plugin/category-icon",
   "CodePath": "bin/plugin.js",
-  "Description": "An interface to Capture: keys fire Capture's own menu commands and tabs and recall camera positions; dials adjust view settings over OSC.",
+  "Description": "An interface to Capture: keys fire Capture's own menu commands and tabs and recall camera positions; dials adjust view settings over OSC. Every action is a straight command, and a ready-made Stream Deck+ profile organises them in folders.",
   "Icon": "imgs/plugin/marketplace",
   "SDKVersion": 2,
   "Software": {
@@ -2923,5 +3047,13 @@
     "Version": "20"
   },
   "UUID": "com.rezabehjat.capture",
-  "URL": "https://github.com/Rzalumen/capture-streamdeck"
+  "URL": "https://github.com/Rzalumen/capture-streamdeck",
+  "Profiles": [
+    {
+      "Name": "profiles/Capture",
+      "DeviceType": 7,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": false
+    }
+  ]
 }

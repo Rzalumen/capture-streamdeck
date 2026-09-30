@@ -1,4 +1,5 @@
-import streamDeck, { action, type DidReceiveSettingsEvent, type KeyAction, type KeyDownEvent, type SendToPluginEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
+import streamDeck, { type DidReceiveSettingsEvent, type KeyAction, type KeyDownEvent, type SendToPluginEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
+import { showPositionSettings } from "../catalog/extras.js";
 import { nthPosition, type CatalogInfo } from "../lib/discovery.js";
 import { normaliseView, positionArgs, viewAddress, type ViewId } from "../lib/properties.js";
 import { rt } from "../runtime.js";
@@ -36,8 +37,13 @@ function resolve(s: Settings, cat: CatalogInfo | undefined): { nr: number; name:
   return { nr, name: p?.name ?? "" };
 }
 
-@action({ UUID: "com.rezabehjat.capture.position" })
-export class ShowPosition extends SingletonAction<Settings> {
+/**
+ * OSC camera recall. The generic "Show Position" (hidden in v0.3) takes its catalog / position from the Property
+ * Inspector; the named "Camera: Show Position k" keys have catalog 1, auto mode, index k baked in.
+ */
+abstract class ShowPositionKeys extends SingletonAction<Settings> {
+  /** Settings this key uses: the stored ones (generic) or the preset (named). */
+  protected abstract settingsFor(stored: Settings): Settings;
   private ctxs = new Map<string, Ctx>();
   private timer: NodeJS.Timeout | undefined;
 
@@ -68,7 +74,8 @@ export class ShowPosition extends SingletonAction<Settings> {
     });
   }
 
-  private attach(a: KeyAction<Settings>, s: Settings): void {
+  private attach(a: KeyAction<Settings>, stored: Settings): void {
+    const s = this.settingsFor(stored);
     const c: Ctx = { action: a, s, flasher: new Flasher(() => this.view(c)) };
     this.ctxs.set(a.id, c);
     this.view(c);
@@ -116,15 +123,15 @@ export class ShowPosition extends SingletonAction<Settings> {
       if (c.s.mode === "auto" && !cat) cat = await rt.catalogs.get(nr, REFRESH_MS);
       const r = resolve(c.s, cat);
       if (!r) {
-        logEvent("Key press", this.manifestId, ev.payload.settings, "no position to recall (catalog not read or index out of range)");
+        logEvent("Key press", this.manifestId, c.s, "no position to recall (catalog not read or index out of range)");
         ev.action.showAlert().catch(() => undefined);
         return;
       }
       const view: ViewId = normaliseView(c.s.view);
       await rt.osc.send(viewAddress(view, "position"), positionArgs(nr, r.nr, { time: optNum(c.s.time), damp: optNum(c.s.damp), curve: optNum(c.s.curve) }));
-      logEvent("Key press", this.manifestId, ev.payload.settings, `OSC ${viewAddress(view, "position")} catalog ${nr} position ${r.nr}`);
+      logEvent("Key press", this.manifestId, c.s, `OSC ${viewAddress(view, "position")} catalog ${nr} position ${r.nr}`);
     } catch (e) {
-      logEvent("Key press", this.manifestId, ev.payload.settings, `ERROR ${(e as Error).message}`);
+      logEvent("Key press", this.manifestId, c.s, `ERROR ${(e as Error).message}`);
       rt.log.warn("Show Position failed", e);
       ev.action.showAlert().catch(() => undefined);
     }
@@ -144,5 +151,27 @@ export class ShowPosition extends SingletonAction<Settings> {
       error = "Capture did not answer over OSC (is it open with OSC on 127.0.0.1:4004?).";
     }
     await streamDeck.ui.sendToPropertyInspector({ event: "catalogs", catalogs: catalogs as unknown as never, error });
+  }
+}
+
+/** "Show Position": catalog and position chosen in the Property Inspector (hidden from the action list in v0.3). */
+export class ShowPosition extends ShowPositionKeys {
+  override readonly manifestId = "com.rezabehjat.capture.position";
+  protected settingsFor(stored: Settings): Settings {
+    return stored;
+  }
+}
+
+/** "Camera: Show Position k": OSC auto mode, catalog 1, k-th position. Titled with the position's name in the open show. */
+export class NamedShowPosition extends ShowPositionKeys {
+  override readonly manifestId: string;
+  private preset: Settings;
+  constructor(uuid: string, k: number) {
+    super();
+    this.manifestId = uuid;
+    this.preset = showPositionSettings(k);
+  }
+  protected settingsFor(): Settings {
+    return this.preset;
   }
 }

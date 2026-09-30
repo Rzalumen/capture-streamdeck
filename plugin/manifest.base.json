@@ -7,7 +7,7 @@
       "Name": "Capture Command",
       "UUID": "com.rezabehjat.capture.command",
       "Icon": "imgs/actions/command/icon",
-      "Tooltip": "Fires any Capture menu command (View, Edit, File…). Dims when the command is disabled.",
+      "Tooltip": "Fires any Capture menu command (View, Edit, File…). Dims when the command is disabled. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -21,13 +21,14 @@
           "Image": "imgs/actions/command/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "Capture Tab",
       "UUID": "com.rezabehjat.capture.tab",
       "Icon": "imgs/actions/tab/icon",
-      "Tooltip": "Switches Capture to Design, Fixtures, Universes, Media, Snapshots or Library.",
+      "Tooltip": "Switches Capture to Design, Fixtures, Universes, Media, Snapshots or Library. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -37,13 +38,14 @@
           "Image": "imgs/actions/tab/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "Camera Slot",
       "UUID": "com.rezabehjat.capture.slot",
       "Icon": "imgs/actions/slot/icon",
-      "Tooltip": "Recalls Camera Position 1–5. While a Store Modifier key is held, stores it instead.",
+      "Tooltip": "Recalls Camera Position 1–5. While a Store Modifier key is held, stores it instead. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -53,13 +55,14 @@
           "Image": "imgs/actions/slot/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
-      "Name": "Store Modifier",
+      "Name": "Camera: Store Modifier",
       "UUID": "com.rezabehjat.capture.store",
       "Icon": "imgs/actions/store/icon",
-      "Tooltip": "Hold this key, then press a Camera Slot to store the camera there.",
+      "Tooltip": "Hold this key, then press Camera: Position 1–5 to store the camera in that slot instead of recalling it.",
       "Controllers": [
         "Keypad"
       ],
@@ -78,7 +81,7 @@
       "Name": "Show Position",
       "UUID": "com.rezabehjat.capture.position",
       "Icon": "imgs/actions/position/icon",
-      "Tooltip": "Recalls a camera position from the open show over OSC, titled with its name in Capture.",
+      "Tooltip": "Recalls a camera position from the open show over OSC, titled with its name in Capture. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -88,13 +91,14 @@
           "Image": "imgs/actions/position/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
       "Name": "View Dial",
       "UUID": "com.rezabehjat.capture.dial",
       "Icon": "imgs/actions/dial/icon",
-      "Tooltip": "Turn to adjust a Capture view setting over OSC. Push or touch: fine mode. Long touch: reset.",
+      "Tooltip": "Turn to adjust a Capture view setting over OSC. Push or touch: fine mode. Long touch: reset. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Encoder"
@@ -114,13 +118,14 @@
           "LongTouch": "Reset"
         },
         "background": "imgs/actions/dial/strip-background"
-      }
+      },
+      "VisibleInActionsList": false
     },
     {
       "Name": "View Toggle",
       "UUID": "com.rezabehjat.capture.toggle",
       "Icon": "imgs/actions/toggle/icon",
-      "Tooltip": "Toggles Auto Exposure or Laser Flicker Effect over OSC.",
+      "Tooltip": "Toggles Auto Exposure or Laser Flicker Effect over OSC. (Hidden in v0.3: only kept so keys placed earlier still work.)",
       "PropertyInspectorPath": "ui/inspector.html",
       "Controllers": [
         "Keypad"
@@ -134,10 +139,11 @@
           "Image": "imgs/actions/toggle/key",
           "ShowTitle": false
         }
-      ]
+      ],
+      "VisibleInActionsList": false
     },
     {
-      "Name": "Connection",
+      "Name": "Status: Connection",
       "UUID": "com.rezabehjat.capture.connection",
       "Icon": "imgs/actions/connection/icon",
       "Tooltip": "Shows whether Capture answers over OSC, its version, and whether Accessibility access is OK. Press to re-check.",
@@ -155,7 +161,7 @@
   "Category": "Capture",
   "CategoryIcon": "imgs/plugin/category-icon",
   "CodePath": "bin/plugin.js",
-  "Description": "An interface to Capture: keys fire Capture's own menu commands and tabs and recall camera positions; dials adjust view settings over OSC.",
+  "Description": "An interface to Capture: keys fire Capture's own menu commands and tabs and recall camera positions; dials adjust view settings over OSC. Every action is a straight command, and a ready-made Stream Deck+ profile organises them in folders.",
   "Icon": "imgs/plugin/marketplace",
   "SDKVersion": 2,
   "Software": {
@@ -171,5 +177,13 @@
     "Version": "20"
   },
   "UUID": "com.rezabehjat.capture",
-  "URL": "https://github.com/Rzalumen/capture-streamdeck"
+  "URL": "https://github.com/Rzalumen/capture-streamdeck",
+  "Profiles": [
+    {
+      "Name": "profiles/Capture",
+      "DeviceType": 7,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": false
+    }
+  ]
 }

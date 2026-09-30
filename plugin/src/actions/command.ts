@@ -1,5 +1,5 @@
 import streamDeck, { type KeyAction, type KeyDownEvent, type KeyUpEvent, type SendToPluginEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent, type DidReceiveSettingsEvent } from "@elgato/streamdeck";
-import { type CatalogEntry, targetOf } from "../catalog/index.js";
+import { ENTRIES, type CatalogEntry, targetOf } from "../catalog/index.js";
 import type { MatchMode, MenuTarget } from "../lib/applescript.js";
 import { AxError, isNotFound } from "../lib/axBridge.js";
 import { axKeyOptions } from "../lib/axKeys.js";
@@ -51,7 +51,17 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
 
   protected abstract resolve(s: CommandSettings): Resolved | undefined;
 
-  private view(c: Ctx): void {
+  /** Menu commands whose enabled state this key shows (default: the one it fires). */
+  protected polled(s: CommandSettings): MenuTarget[] {
+    const r = this.resolve(s);
+    return r ? [r.target] : [];
+  }
+
+  protected redrawAll(): void {
+    for (const c of this.ctxs.values()) this.view(c);
+  }
+
+  protected view(c: Ctx): void {
     const r = this.resolve(c.settings);
     if (!r) {
       const f = c.flasher.flash;
@@ -83,10 +93,7 @@ abstract class CommandKeys extends SingletonAction<CommandSettings> {
     rt.axKeys.unregister(id);
     rt.axKeys.register({
       id,
-      targets: () => {
-        const r = this.resolve(ctx.settings);
-        return r ? [r.target] : [];
-      },
+      targets: () => this.polled(ctx.settings),
       redraw: () => this.view(ctx),
     });
     this.view(ctx);
@@ -187,9 +194,20 @@ export class CaptureCommand extends CommandKeys {
   }
 }
 
-/** One named key per catalog entry ("Camera: Swing to Front"): nothing to configure. */
+/** "Camera: Position 3" → the catalog entry "Camera: Store Position 3" (what the key fires while Camera: Store Modifier is held). */
+export function storeEntryFor(e: CatalogEntry): CatalogEntry | undefined {
+  const m = e.category === "camera" ? /^position-([1-5])$/.exec(e.id) : null;
+  return m ? ENTRIES.find((x) => x.category === "camera" && x.id === `store-${m[1]}`) : undefined;
+}
+
+/**
+ * One named key per catalog entry ("Camera: Swing to Front"): nothing to configure.
+ * "Camera: Position 1–5" also follow the "Camera: Store Modifier" key: while it is held they store the camera
+ * (View > Store Camera > Position n) instead of recalling it, exactly as the v0.2 Camera Slot key did.
+ */
 export class NamedCommand extends CommandKeys {
   override readonly manifestId: string;
+  private store: CatalogEntry | undefined;
 
   constructor(
     uuid: string,
@@ -197,11 +215,19 @@ export class NamedCommand extends CommandKeys {
   ) {
     super();
     this.manifestId = uuid;
+    this.store = storeEntryFor(entry);
+    if (this.store) rt.storeModifier.listen(() => this.redrawAll());
   }
 
   protected resolve(): Resolved | undefined {
-    const base = targetOf(this.entry);
+    const e = this.store && rt.storeModifier.isHeld ? this.store : this.entry;
+    const base = targetOf(e);
     if (!base) return undefined;
-    return { target: rt.menus.effective(this.entry), label: this.entry.title, icon: this.entry.icon, hold: this.entry.holdToFire, entry: this.entry };
+    const held = e !== this.entry;
+    return { target: rt.menus.effective(e), label: held ? `Store ${this.entry.title.replace(/^Position /, "")}` : e.title, icon: held ? "store" : e.icon, hold: e.holdToFire, entry: e };
+  }
+
+  protected override polled(): MenuTarget[] {
+    return [this.entry, this.store].flatMap((e) => (e ? [rt.menus.effective(e)] : []));
   }
 }

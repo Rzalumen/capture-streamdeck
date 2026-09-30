@@ -3,7 +3,7 @@
 A Stream Deck+ plugin for Capture (macOS lighting visualizer).
 
 **Status:** `research/` holds the read-only probe tools (fixture library, network, CITP). `plugin/` is the
-Stream Deck+ plugin, beta v0.1 — see [plugin/README.md](plugin/README.md).
+Stream Deck+ plugin, beta v0.3 — see [plugin/README.md](plugin/README.md).
 
 **No Capture library data or report output is ever committed.** The `reports/`
 folder holds extracts of a licensed Capture library and is gitignored, as are

@@ -1,39 +1,61 @@
-# Capture for Stream Deck+ — plugin v0.2 (beta)
+# Capture for Stream Deck+ — plugin v0.3 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
 Stream Deck SDK v2 manifest, Node 20 runtime, Stream Deck 6.6+, macOS 13+.
 
-## Named actions (v0.2): drag, don't configure
+## Straight commands only (v0.3)
 
-Every Capture menu command is its own action, named `<Category>: <Title>` — *View: Plot*, *Camera: Swing to Front*,
-*Select: By Fixture Type*, *Edit: Undo*, *Patch & Focus: Unpatch*, *File: Save As*, *Tabs: Fixtures* — 120 in all
-(`src/catalog/commands.json`, categories View, Camera, Select, Edit, Patch & Focus, Navigate, Window, File, Tabs).
-Drop one on a key: it works, titled and iconed, with nothing to choose. The inspector only offers *Hold to fire* and
-*Dim when disabled*. There are also 12 dial actions (*Dial: Exposure*, *Dial: Ambient*, *Dial: Bloom*, *Dial: White
-Balance*, *Dial: Fill*, *Dial: Hue Clamp*, *Dial: Contrast*, *Dial: Saturation*, *Dial: Flare*, *Dial: Flare Size*,
-*Dial: Flare Angle*, *Dial: Flare Streaks*) and 2 toggles (*Toggle: Auto Exposure*, *Toggle: Laser Flicker*).
-**Dial actions only appear in the Stream Deck action list when a dial slot (not a key) is selected.**
+There are **no dropdown or configurable actions** in the Stream Deck action list. Every action is one named command
+(`<Group>: <Title>`), 150 in all, and the plugin offers a ready-made Stream Deck+ profile that organises them in
+folders (below).
 
-`manifest.json` is generated from the catalog (`npm run gen`). The manifest format has no per-action group field
-(only the plugin-level `Category`), so grouping is by manifest order plus the `Category:` name prefix. The generic
-actions below stay for anything the catalog doesn't cover.
-
-## Generic actions
-
-| Action | What it does |
+| Group | Actions |
 |---|---|
-| **Capture Command** (key) | Fires any Capture menu command (picked from a live list read off the menu bar, or typed). Match `exact`, `prefix` (Undo…/Redo…) or `alternates` (`Enter Full Screen|Exit Full Screen`). Dims when the command is disabled in Capture (checked in one batched call when the key appears, 300 ms after any press, and otherwise at most every 5 s). Hold-to-fire (1 s; short press flashes “Hold”) is on by default for Delete, Unpatch, Remove Filters, Remove Gobos, Cut, Paste, Break Group, Plot Adjustments › Clear and every Import…. The inspector's *Refresh* re-reads Capture's menus (cached per Capture launch). |
-| **Capture Tab** (key) | Clicks the Design / Fixtures / Universes / Media / Snapshots / Library tab (the only thing ever clicked in Capture's window). |
-| **Camera Slot** (key) | `View › Camera › Position N`; while a **Store Modifier** key is held, `View › Store Camera › Position N` and flashes “Stored”. |
-| **Store Modifier** (key) | Held state (auto-releases after 30 s or when it leaves the screen). |
-| **Show Position** (key) | OSC camera recall, fixed (catalog + position) or auto (k-th position of a catalog), titled from Capture's names (refreshed on appear and every 15 s). Optional time/damp/curve. |
-| **View Dial** (dial) | Adjusts a view setting over OSC. Turn: value += ticks × step (clamped). Push or touch: fine mode (÷10). Long touch: reset. ≤ 30 msg/s, latest value wins. |
-| **View Toggle** (key) | Auto Exposure / Laser Flicker Effect, sends `T`/`F`. |
-| **Connection** (key) | Connected/Offline (a `/pong` within 10 s of a `/ping` every 5 s), Capture version, Accessibility status, median osascript latency. Press to re-check. |
+| `View:`, `Camera:`, `Select:`, `Edit:`, `Patch & Focus:`, `Navigate:`, `Window:`, `File:`, `Tabs:` | 120 Capture menu commands and tabs from the catalog (`src/catalog/commands.json`), e.g. *View: Plot*, *Camera: Swing to Front*, *Edit: Undo*, *Tabs: Fixtures*. Includes *Camera: Position 1–5* and *Camera: Store Position 1–5*. |
+| `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
+| `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
+| `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
+| `Status: Connection` | Connected/Offline, Capture version, Accessibility status, median latency. Press to re-check. |
+| `Dial: …` (12) | *Exposure, Ambient, Bloom, White Balance, Fill, Hue Clamp, Contrast, Saturation, Flare, Flare Size, Flare Angle, Flare Streaks*. Turn: value += ticks × step (clamped, ≤ 30 msg/s, latest wins). Push or touch: fine mode (÷10). Long touch: reset. **Dial actions only appear in the action list when a dial slot (not a key) is selected.** |
+
+Named keys keep only *Hold to fire* and *Dim when disabled* (catalog keys); named dials keep *Step* and *Reset value*;
+the toggles, Show Position keys, Store Modifier and Connection have no settings. Hold-to-fire (1 s; a short press
+flashes “Hold”) is on by default for Delete, Unpatch, Remove Filters, Remove Gobos, Cut, Paste, Break Group,
+Plot Adjustments › Clear and every Import….
+
+`manifest.json` is generated (`npm run gen`) from `manifest.base.json`, the catalog and the property table. The manifest
+has no per-action group field (only the plugin-level `Category`), so grouping is by manifest order plus the name prefix.
+
+### The six generic actions are hidden, not gone
+
+*Capture Command, Capture Tab, Camera Slot, Show Position, View Dial, View Toggle* (the ones whose inspector asks
+*what* to do) are still in the manifest and still registered, but with `VisibleInActionsList: false` (Elgato's documented
+way to keep an action usable by profiles and keys placed earlier without offering it in the action list). Keys you placed
+from v0.1/v0.2 keep working; new keys can't be made from them. Their handlers are unchanged. *Store Modifier* and
+*Connection* keep their v0.1 UUIDs and are renamed into the `Camera:` / `Status:` groups.
 
 **Keys show** `Allow Access` (Accessibility/Automation not granted — press opens System Settings), `Capture?`
 (not running), or `Error` (anything else; the raw text is in the plugin log).
+
+## Default profile (v0.3)
+
+`com.rezabehjat.capture.sdPlugin/profiles/Capture.streamDeckProfile` is generated by `npm run gen-profile` and declared in
+the manifest (`Profiles`: Stream Deck+, `DeviceType` 7, editable). When the plugin is installed Stream Deck offers to add
+it; it switches to it automatically whenever **Capture 2026** is the active app (`AppIdentifier`
+`/Applications/Capture 2026.app`; for another version build with `CAPTURE_APP_PATH="/Applications/Capture 2025.app" npm run gen-profile`).
+
+**HOME** — row 0: View · Camera · Select · Edit; row 1: Patch & Focus · Windows · File · Look (all folders).
+Every folder page has **Back** at the top-left key; commands fill the other seven keys in catalog order, and a folder
+with more than seven commands ends its page with **More ▸**, a folder to the next page (which has its own Back).
+See [DEFAULT-LAYOUT.md](DEFAULT-LAYOUT.md) for the full table. **Dials** on every page: Exposure · Ambient · Bloom ·
+White Balance; on the View pages Contrast · Saturation · Fill · Hue Clamp; in the Look folder Flare · Flare Streaks ·
+Flare Angle · Flare Size.
+
+`npm run gen-profile -- --out ~/Desktop/Capture.streamDeckProfile` writes a standalone copy (import it with a double
+click). The profile art is `profile-art/` (144×144 PNGs drawn from the plugin's own icons, `npm run images -- --profile`).
+To ship a profile you built yourself instead: `npm run add-profile -- Capture.streamDeckProfile` (leaves a
+`profiles/CUSTOM` marker; `npm run gen-profile -- --force` goes back to the generated one).
 
 ## OSC properties
 
@@ -56,7 +78,7 @@ used: Capture cannot report a value, the dial remembers the last value it sent (
 and shows it greyed with “~” until it has sent one this session. **Reset values are this plugin's own neutral
 defaults, not Capture's** (editable per dial).
 
-## Speed and logging (v0.2)
+## Speed and logging
 
 Accessibility goes through **one long-running worker** (`ax/worker.js`, run as `osascript -l JavaScript`) instead of
 one `osascript` process per call. A press jumps ahead of everything and drops any poll still waiting; there is never
@@ -78,15 +100,10 @@ frontmost, when a key is pressed). Never sends mouse or keyboard events. Nothing
 ```
 cd plugin
 npm install
-npm test            # build + unit, OSC/AX stub and end-to-end tests (fake Stream Deck, Capture, osascript)
+npm test            # generate, build, then unit / profile / OSC / AX stub and end-to-end tests (fake Stream Deck, Capture, osascript)
 npm run pack        # → dist/com.rezabehjat.capture.streamDeckPlugin (validated with @elgato/cli)
 ```
 
 Tests never touch a real Capture or a real osascript. `test/integration.test.ts` runs the built plugin
 under Node against a fake Stream Deck (WebSocket), a fake Capture (UDP) and a fake `osascript` (records each
 script). `node scripts/check-inspector.mjs` (needs Playwright) exercises the inspector page in Chromium.
-
-## Default profile
-
-Not shipped (still yours to build in the Stream Deck app): see [DEFAULT-LAYOUT.md](DEFAULT-LAYOUT.md). Build the layout in Stream Deck, export it, then
-`npm run add-profile -- Capture.streamDeckProfile && npm run pack`.

@@ -3,11 +3,12 @@ import { CameraSlot } from "./actions/slot.js";
 import { CaptureCommand, NamedCommand } from "./actions/command.js";
 import { CaptureTab, NamedTab } from "./actions/tab.js";
 import { Connection } from "./actions/connection.js";
-import { ShowPosition } from "./actions/position.js";
+import { NamedShowPosition, ShowPosition } from "./actions/position.js";
 import { StoreModifierKey } from "./actions/store.js";
 import { NamedDial, ViewDial } from "./actions/dial.js";
 import { NamedToggle, ViewToggle } from "./actions/toggle.js";
 import { ENTRIES, isTab, uuidOf } from "./catalog/index.js";
+import { SHOW_POSITION_COUNT, showPositionUuid } from "./catalog/extras.js";
 import type { TabName } from "./lib/applescript.js";
 import { dialUuid, toggleUuid } from "./lib/named.js";
 import { BOOL_PROPERTIES, NUMBER_PROPERTIES } from "./lib/properties.js";
@@ -16,7 +17,8 @@ import { VERSION } from "./version.js";
 
 streamDeck.logger.setLevel("info");
 
-// Generic actions (configured in the Property Inspector).
+// Generic actions (configured in the Property Inspector). Hidden from the action list since v0.3 (VisibleInActionsList: false);
+// still registered so keys placed earlier keep working.
 streamDeck.actions.registerAction(new CaptureCommand());
 streamDeck.actions.registerAction(new CaptureTab());
 streamDeck.actions.registerAction(new CameraSlot());
@@ -31,10 +33,11 @@ streamDeck.actions.registerAction(new Connection());
 for (const e of ENTRIES) {
   streamDeck.actions.registerAction(isTab(e) ? new NamedTab(uuidOf(e), e.tab as TabName) : new NamedCommand(uuidOf(e), e));
 }
+for (let k = 1; k <= SHOW_POSITION_COUNT; k++) streamDeck.actions.registerAction(new NamedShowPosition(showPositionUuid(k), k));
 for (const p of NUMBER_PROPERTIES) streamDeck.actions.registerAction(new NamedDial(dialUuid(p), p));
 for (const p of BOOL_PROPERTIES) streamDeck.actions.registerAction(new NamedToggle(toggleUuid(p), p));
 
-rt.log.info(`Capture plugin v${VERSION} starting: ${ENTRIES.length} named commands, ${NUMBER_PROPERTIES.length} named dials, ${BOOL_PROPERTIES.length} named toggles`);
+rt.log.info(`Capture plugin v${VERSION} starting: ${ENTRIES.length} named commands, ${NUMBER_PROPERTIES.length} named dials, ${BOOL_PROPERTIES.length} named toggles, ${SHOW_POSITION_COUNT} named show-position keys`);
 
 await streamDeck.connect();
 await rt.init();

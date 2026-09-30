@@ -54,10 +54,13 @@ test("named dials for every number property and toggles for both booleans; gener
     assert.equal((a.Encoder as { layout: string }).layout, "layouts/dial.json");
     assert.ok(PROPERTY_ICON[p.id]);
   }
-  for (const p of BOOL_PROPERTIES) assert.equal(built.Actions.find((x) => x.UUID === toggleUuid(p))?.Name, `Toggle: ${p.label}`);
+  for (const p of BOOL_PROPERTIES) assert.equal(built.Actions.find((x) => x.UUID === toggleUuid(p))?.Name, `Look: ${p.label}`);
   const names = built.Actions.map((a) => a.Name);
   for (const n of ["Dial: Exposure", "Dial: Ambient", "Dial: Bloom", "Dial: White Balance", "Dial: Flare Streaks"]) assert.ok(names.includes(n), n);
-  for (const g of ["Capture Command", "Capture Tab", "Camera Slot", "Store Modifier", "Show Position", "View Dial", "View Toggle", "Connection"]) assert.ok(names.includes(g), g);
+  // the generic actions keep their UUIDs (keys placed in v0.1/v0.2 keep working); Store Modifier and Connection are renamed into their groups
+  for (const g of ["Capture Command", "Capture Tab", "Camera Slot", "Show Position", "View Dial", "View Toggle", "Camera: Store Modifier", "Status: Connection"]) assert.ok(names.includes(g), g);
+  assert.equal(built.Actions.find((a) => a.Name === "Camera: Store Modifier")?.UUID, "com.rezabehjat.capture.store");
+  assert.equal(built.Actions.find((a) => a.Name === "Status: Connection")?.UUID, "com.rezabehjat.capture.connection");
   assert.equal(built.Actions.find((a) => a.Name === "View Dial")?.UUID, "com.rezabehjat.capture.dial");
   for (const u of built.Actions.map((a) => a.UUID)) assert.match(u, /^[a-z0-9.-]+$/, "Stream Deck UUIDs: lowercase, digits, '.' and '-' only");
 });
@@ -85,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.2.0.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.3.0.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.2.0.0");
+  assert.equal(built.Version, "0.3.0.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -103,4 +106,56 @@ test("the built plugin finds its worker: bin/plugin.js points at ../ax/worker.js
   const worker = fs.readFileSync(path.join(sd, "ax/worker.js"), "utf8").replace(/\/\*[\s\S]*?\*\//g, ""); // code only, not the header comment
   for (const banned of ["keystroke", "key code", "CGEvent", "mouseDown", "mouseUp", "postEvent", "moveTo", "launch", "quit"]) assert.ok(!worker.includes(banned), `worker must not contain ${banned}`);
   assert.equal((worker.match(/\.click\(\)/g) ?? []).length, 2, "exactly two click sites: a menu item and a tab radio button");
+});
+
+// ---- Handoff 09: only straight commands in the action list
+const GENERIC = ["command", "tab", "slot", "position", "dial", "toggle"].map((k) => `com.rezabehjat.capture.${k}`);
+const visible = built.Actions.filter((a) => a.VisibleInActionsList !== false);
+
+test("the action list contains no configurable actions: the six generic ones are hidden (VisibleInActionsList: false), not removed", () => {
+  for (const u of GENERIC) {
+    const a = built.Actions.find((x) => x.UUID === u);
+    assert.ok(a, `${u} stays in the manifest so keys placed earlier keep working`);
+    assert.equal(a.VisibleInActionsList, false, `${u} hidden`);
+  }
+  assert.deepEqual(visible.filter((a) => GENERIC.includes(a.UUID)).map((a) => a.UUID), []);
+  // what remains visible is a named action: catalog command, Show Position k, Look toggle, Store Modifier, Connection, dial
+  for (const a of visible) assert.match(a.UUID, /^com\.rezabehjat\.capture\.(cmd\.[a-z]+\.[a-z0-9-]+|showpos\.[1-8]|toggle\.[a-z-]+|dial\.[a-z-]+|store|connection)$/, a.UUID);
+  assert.equal(visible.length, built.Actions.length - GENERIC.length);
+  assert.equal(built.Actions.length, 150);
+});
+
+test("the handoff's named actions exist, visible, with the handoff's names", () => {
+  const names = new Set(visible.map((a) => a.Name));
+  for (let k = 1; k <= 8; k++) assert.ok(names.has(`Camera: Show Position ${k}`), `Show Position ${k}`);
+  for (let k = 1; k <= 5; k++) for (const n of [`Camera: Position ${k}`, `Camera: Store Position ${k}`]) assert.ok(names.has(n), n);
+  for (const n of ["Camera: Store Modifier", "Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection"]) assert.ok(names.has(n), n);
+  for (const a of visible) assert.ok(!/^(Capture Command|Capture Tab|Camera Slot|Show Position|View Dial|View Toggle)$/.test(a.Name), a.Name);
+});
+
+test("named keys ask for nothing except Hold to fire / Dim when disabled (catalog keys) and step / reset (dials); toggles, Show Position, Store Modifier and Connection have no inspector at all", () => {
+  for (const a of visible) {
+    const u = a.UUID;
+    const hasPi = a.PropertyInspectorPath !== undefined;
+    if (u.includes(".cmd.") || u.includes(".dial.")) assert.equal(hasPi, true, u);
+    else assert.equal(hasPi, false, `${u} must have no Property Inspector`);
+  }
+});
+
+test("Show Position keys are Keypad actions with one state, no title drawn by Stream Deck (the plugin draws the label)", () => {
+  for (let k = 1; k <= 8; k++) {
+    const a = built.Actions.find((x) => x.UUID === `com.rezabehjat.capture.showpos.${k}`)!;
+    assert.deepEqual(a.Controllers, ["Keypad"]);
+    assert.equal(a.States.length, 1);
+    assert.equal(a.States[0].ShowTitle, false);
+  }
+});
+
+test("the manifest declares the bundled profile for Stream Deck+ (DeviceType 7), editable, and the file exists", () => {
+  const profiles = built.Profiles as { Name: string; DeviceType: number; Readonly: boolean }[];
+  assert.equal(profiles.length, 1);
+  assert.equal(profiles[0].Name, "profiles/Capture");
+  assert.equal(profiles[0].DeviceType, 7);
+  assert.equal(profiles[0].Readonly, false);
+  assert.ok(fs.existsSync(path.join(sd, `${profiles[0].Name}.streamDeckProfile`)));
 });

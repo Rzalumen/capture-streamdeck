@@ -301,7 +301,7 @@ const clickScripts = (from: number) => deck.axCalls().slice(from).map((c) => c.l
 
 test("every action in the manifest is handled by the plugin (named commands, dials, toggles and generic ones)", async () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
-  assert.equal(manifest.Actions.length, 142);
+  assert.equal(manifest.Actions.length, 150);
   let i = 0;
   const ctxs: [string, string, boolean][] = [];
   for (const a of manifest.Actions) {
@@ -454,11 +454,13 @@ test("every named dial sends exactly its own manual address, with the manual's t
       assert.equal(m.types, type, `${prop} wire type`);
       assert.ok(m.args[0] >= lo && m.args[0] <= hi, `${prop} within manual range`);
     }
-    assert.ok(capture.msgs.every((m) => m.address === `/view/live/${prop}`), `only ${prop} was sent`);
+    // (/ping is the connection monitor's own 5 s heartbeat, unrelated to the dial)
+    const sent = capture.msgs.filter((m) => m.address !== "/ping");
+    assert.ok(sent.every((m) => m.address === `/view/live/${prop}`), `only ${prop} was sent; got ${JSON.stringify(sent.map((m) => [m.address, m.args[0]]))}`);
   }
 });
 
-test("named toggles: 'Toggle: Laser Flicker' sends T then F on /view/live/laserFlickerEffect", async () => {
+test("named toggles: 'Look: Laser Flicker' sends T then F on /view/live/laserFlickerEffect", async () => {
   const uuid = `${U}.toggle.laser-flicker-effect`;
   deck.willAppear(uuid, "t-laser", {});
   await sleep(200);
@@ -469,6 +471,51 @@ test("named toggles: 'Toggle: Laser Flicker' sends T then F on /view/live/laserF
   deck.keyDown(uuid, "t-laser", {});
   await deck.waitFor(() => capture.msgs.filter((m) => m.address === "/view/live/laserFlickerEffect").length === 2, 3000, "F");
   assert.deepEqual([capture.msgs.at(-1)!.types, capture.msgs.at(-1)!.args], ["F", [false]]);
+});
+
+test("named 'Camera: Show Position k': OSC auto mode on catalog 1, titled from the open show, nothing to configure", async () => {
+  const uuid = (k: number) => `${U}.showpos.${k}`;
+  deck.willAppear(uuid(2), "sp2", {});
+  await deck.waitFor(() => deck.lastImage("sp2").includes(">Back<"), 4000, "title of position 2 (from Capture)");
+  deck.willAppear(uuid(1), "sp1", {});
+  await deck.waitFor(() => deck.lastImage("sp1").includes(">Front<"), 4000, "title of position 1");
+  capture.msgs.length = 0;
+  deck.keyDown(uuid(2), "sp2", {});
+  const m = await deck.waitFor(() => capture.msgs.find((x) => x.address === "/view/live/position"), 3000, "recall");
+  assert.deepEqual([m.types, m.args], ["ii", [1, 2]]);
+  // the log line shows the preset the key actually used (catalog 1, auto, index 2), not the empty stored settings
+  assert.ok(deck.logText().includes("Key press [com.rezabehjat.capture.showpos.2]") && deck.logText().includes('"index":2'));
+  // a show with fewer than 8 positions: the key says so and a press sends nothing
+  deck.willAppear(uuid(8), "sp8", {});
+  await deck.waitFor(() => deck.lastImage("sp8").includes("— 8"), 4000, "missing position shown");
+  capture.msgs.length = 0;
+  deck.keyDown(uuid(8), "sp8", {});
+  await sleep(300);
+  assert.equal(capture.msgs.filter((x) => x.address.endsWith("/position")).length, 0);
+});
+
+test("named 'Camera: Position 1' follows 'Camera: Store Modifier' (store while held, recall otherwise); 'Camera: Store Position 2' stores directly", async () => {
+  const pos1 = N("camera", "position-1");
+  deck.willAppear(A.store, "store2");
+  deck.willAppear(pos1, "np1", {});
+  await sleep(300);
+  const pick = (needle: string, from: number) => deck.axCalls().slice(from).find((c) => c.lines.join("\n").includes(needle));
+  let n = deck.axCalls().length;
+  deck.keyDown(pos1, "np1", {});
+  await deck.waitFor(() => pick('return my act("Capture", "View", {"Camera"}, "exact", {"Position 1"}, "click")', n), 3000, "recall");
+  deck.keyDown(A.store, "store2");
+  await deck.waitFor(() => deck.lastImage("np1").includes("Store 1"), 2000, "relabelled while held");
+  n = deck.axCalls().length;
+  deck.keyDown(pos1, "np1", {});
+  await deck.waitFor(() => pick('return my act("Capture", "View", {"Store Camera"}, "exact", {"Position 1"}, "click")', n), 3000, "store");
+  deck.keyUp(A.store, "store2");
+  await deck.waitFor(() => deck.lastImage("np1").includes("Position 1"), 2000, "back to Position 1");
+  const st2 = N("camera", "store-2");
+  deck.willAppear(st2, "ns2", {});
+  await sleep(200);
+  n = deck.axCalls().length;
+  deck.keyDown(st2, "ns2", {});
+  await deck.waitFor(() => pick('return my act("Capture", "View", {"Store Camera"}, "exact", {"Position 2"}, "click")', n), 3000, "direct store");
 });
 
 test("generic Capture Command pressed with nothing configured: alert + 'Not set' flash, logged as 'no command configured', no click", async () => {

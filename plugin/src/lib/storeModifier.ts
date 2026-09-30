@@ -8,6 +8,16 @@ import { realTimers, type TimerApi } from "./limiter.js";
 export class StoreModifier {
   private held = new Map<string, unknown>();
   onChange?: (held: boolean) => void;
+  private listeners: ((held: boolean) => void)[] = [];
+
+  /** Any number of keys can follow the modifier (Camera: Position 1–5 show "Store n" while it is held). */
+  listen(fn: (held: boolean) => void): void {
+    this.listeners.push(fn);
+  }
+  private emit(held: boolean): void {
+    this.onChange?.(held);
+    for (const fn of this.listeners) fn(held);
+  }
 
   constructor(
     private maxHoldMs = 30000,
@@ -26,7 +36,7 @@ export class StoreModifier {
       context,
       this.timers.setTimeout(() => this.up(context), this.maxHoldMs),
     );
-    if (!was) this.onChange?.(true);
+    if (!was) this.emit(true);
   }
 
   up(context: string): void {
@@ -34,7 +44,7 @@ export class StoreModifier {
     if (t === undefined && !this.held.has(context)) return;
     if (t !== undefined) this.timers.clearTimeout(t);
     this.held.delete(context);
-    if (!this.isHeld) this.onChange?.(false);
+    if (!this.isHeld) this.emit(false);
   }
 
   releaseAll(): void {

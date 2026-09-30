@@ -12,6 +12,7 @@ export const ICONS: Record<string, string> = {
   command: `<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 10l3 2.2-3 2.2M13 14.6h3"/>`,
   unset: `<rect x="4" y="4" width="16" height="16" rx="3.5" stroke-dasharray="3 3"/><path d="M12 8.5v7M8.5 12h7"/>`,
   back: `<path d="M14.5 6l-6 6 6 6"/><path d="M9 12h10"/>`,
+  more: `<path d="M6 6l6 6-6 6"/><path d="M13 6l6 6-6 6"/>`,
   // --- view modes
   wireframe: `${CUBE}`,
   plot: `<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/>`,
@@ -102,6 +103,7 @@ export const ICONS: Record<string, string> = {
   "cat-navigate": `<circle cx="12" cy="12" r="8.500"/><path d="M15.500 8.500l-2 5-5 2 2-5z"/>`,
   "cat-window": `<rect x="3.500" y="4.500" width="17" height="15" rx="2"/><path d="M3.500 9h17M6.500 6.800h.01M9 6.800h.01"/>`,
   "cat-file": `<path d="M6 3.500h8l4 4V20.500H6z"/><path d="M14 3.500V8h4"/>`,
+  "cat-look": `<path d="M3.500 17.500h17"/><path d="M7.500 17.500a4.500 4.500 0 0 1 9 0"/><path d="M12 5.500v3M4.800 9.300l2.100 2.100M19.200 9.300l-2.100 2.100"/>`,
   "cat-tabs": `<path d="M3.500 9.500h17V19a1.500 1.500 0 0 1-1.500 1.500H5A1.500 1.500 0 0 1 3.500 19z"/><path d="M3.500 9.500V6A1.500 1.500 0 0 1 5 4.500h4.500L11 7h8A1.500 1.500 0 0 1 20.500 8.500v1"/>`,
   copy: `<path d="M9 7.500h9a1.500 1.500 0 0 1 1.500 1.500v10A1.500 1.500 0 0 1 18 20.500H9A1.500 1.500 0 0 1 7.500 19V9A1.500 1.500 0 0 1 9 7.500z"/><path d="M15.500 7.500V5A1.500 1.500 0 0 0 14 3.500H6A1.500 1.500 0 0 0 4.500 5v10A1.500 1.500 0 0 0 6 16.500h1.500M10.500 12.500h6M10.500 16h6"/>`,
   import: `<path d="M12 3.500V15M7.500 10.500L12 15l4.500-4.500"/><path d="M5 13.500V19a1.500 1.500 0 0 0 1.500 1.500h11A1.500 1.500 0 0 0 19 19v-5.500"/>`,

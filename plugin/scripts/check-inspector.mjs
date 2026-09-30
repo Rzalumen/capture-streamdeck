@@ -154,15 +154,14 @@ const lastSettings = () => toPlugin.filter((m) => m.event === "setSettings").at(
   assert.equal(await page.locator("#none").isVisible(), true);
   assert.equal(await page.locator("#s-ncmd").isVisible(), false);
 }
-// --- Named dial / toggle
+// --- Named dial (step / reset only) / toggle / show position
 {
   const { page, errors } = await open(`${U}.dial.flare-streaks`, {});
   assert.equal(await page.locator("#s-ndial").isVisible(), true);
   assert.equal(await page.locator("#s-dial").isVisible(), false);
   assert.match(await page.locator("#ndial-hint").textContent(), /Flare Streaks: range 1 … 7 \(whole number\)/);
   assert.equal(await page.locator("#ndstep").getAttribute("placeholder"), "1");
-  await page.selectOption("#ndview", "2");
-  assert.equal(lastSettings().view, "2");
+  assert.equal(await page.locator("#ndview").count(), 0, "named dials have no view picker (always the live view)");
   await page.fill("#ndreset", "3");
   await page.locator("#ndreset").dispatchEvent("change");
   assert.equal(lastSettings().reset, 3);
@@ -170,10 +169,15 @@ const lastSettings = () => toPlugin.filter((m) => m.event === "setSettings").at(
   assert.deepEqual(errors, []);
 }
 {
+  // Named toggles and Show Position keys have no Property Inspector at all (manifest has no PropertyInspectorPath); if opened anyway: nothing to configure.
   const { page } = await open(`${U}.toggle.laser-flicker-effect`, {});
-  assert.equal(await page.locator("#s-ntoggle").isVisible(), true);
-  await page.selectOption("#ntview", "1");
-  assert.equal(lastSettings().view, "1");
+  assert.equal(await page.locator("#none").isVisible(), true);
+  const { page: p2 } = await open(`${U}.showpos.3`, {});
+  assert.equal(await p2.locator("#none").isVisible(), true);
+}
+{
+  const { page } = await open(`${U}.cmd.camera.position-2`, {});
+  assert.match(await page.locator("#ncmd-what").textContent(), /Camera: Store Modifier/);
 }
 // --- Actions without settings
 {
