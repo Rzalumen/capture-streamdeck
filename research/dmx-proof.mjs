@@ -28,7 +28,7 @@ import { isMain } from './lib/main.mjs';
 import { libPathFromArgs, openLibrary } from './lib/c2z.mjs';
 import { textTable } from './lib/citp.mjs';
 import { describeFixtures, readPatch, localIPv4 } from './lib/citp-sync.mjs';
-import { ROLE_NAMES, loadChannels, mapAttributes } from './lib/modes.mjs';
+import { ROLE_NAMES, ambiguityNote, loadChannels, mapAttributes } from './lib/modes.mjs';
 import { OPT_TERMINATED, DEFAULT_PRIORITY, SACN_PORT, buildDataPacket, multicastAddress } from './lib/sacn.mjs';
 import { buildTimeline, frameSlots, stateAt } from './lib/dmx-seq.mjs';
 
@@ -151,7 +151,12 @@ async function main(opts, say) {
     return 2;
   }
   const chans = loaded.channels;
-  say(`  mode block found by its ${loaded.block.encoding} GUID at byte ${loaded.block.blockAt}: mode name ${JSON.stringify(loaded.block.name)}; ${chans.length} channels = block channelCount = Capture's ChannelCount`);
+  say(`  mode block found by its ${loaded.block.encoding} GUID at byte ${loaded.block.blockAt ?? loaded.block.at}: mode name ${JSON.stringify(loaded.block.name)}; ${chans.length} channels = block channelCount = Capture's ChannelCount`);
+  if (loaded.ambiguity) {
+    const amb = loaded.ambiguity;
+    say(`  NOTE: ${ambiguityNote(amb.candidates, amb.differOffsets)}`);
+    say(`  The table below is the first candidate (earliest in the file); slots at offsets [${amb.differOffsets.join(', ')}] are never driven, and the channels that are driven (offsets [${amb.drivenOffsets.join(', ')}]) are identical in every candidate.`);
+  }
   say('');
   say('Channel table (offset is 0-based within the fixture; DMX address = fixture address + offset):');
   textTable(['offset', 'DMX addr', 'name', 'role', 'pair'],

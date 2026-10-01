@@ -7,6 +7,7 @@ import path from 'node:path';
 import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { isAllowedOutgoing } from '../lib/citp.mjs';
+import { lpEncode } from '../lib/c2z.mjs';
 import { parseDataPacket } from '../lib/sacn.mjs';
 import { buildTimeline } from '../lib/dmx-seq.mjs';
 import { buildLibraryFile, buildModeBlock, buildObject, decoyTail, startPatchStub } from './synth-modes.mjs';
@@ -311,5 +312,60 @@ test('dmx-proof: manual address checks: both options required, range, fit in 512
     assert.equal(forced.code, 0, forced.stdout);
     await new Promise((s) => setTimeout(s, 200));
     assert.ok(decode(udp.got).length > 60);
+  } finally { cleanup(dir, udp, stub); }
+});
+
+// ---- Handoff 13: ambiguity that does not touch the driven channels ----
+const asRec = (name) => Buffer.concat([lpEncode(name), Buffer.from([0, 0xff, 0xff])]);
+const FIX_D = 'd0d0d0d0-1111-4222-8333-444444444444', MODE_D = 'd1d1d1d1-2222-4333-8444-555555555555';
+const FIX_E = 'e0e0e0e0-1111-4222-8333-444444444444', MODE_E = 'e1e1e1e1-2222-4333-8444-555555555555';
+const D_CH = [
+  { name: 'Pan', role: 1, pair: 1 }, { name: 'Pan Fine', role: 2, pair: 0 }, { name: 'Tilt', role: 1, pair: 3 }, { name: 'Tilt Fine', role: 2, pair: 2 },
+  { name: 'Pan/Tilt Speed' }, { name: 'Dimmer' }, { name: 'Dimmer Fine' }, { name: 'Shutter' }, { name: 'Red 1' }, { name: 'Zoom' },
+].map((c) => ({ ...c, tail: decoyTail })).concat([{ name: 'Control', tail: Buffer.concat([Buffer.from([9, 9]), asRec('Pan/Tilt Speed'), Buffer.alloc(6, 0xcc)]) }]);
+const E_CH = [{ name: 'Tilt', tail: decoyTail }, { name: 'Dimmer', tail: decoyTail }, { name: 'Shutter', tail: decoyTail },
+  { name: 'Control', tail: Buffer.concat([Buffer.from([5]), asRec('Pan'), Buffer.alloc(4, 0xcc)]) }]; // "Pan" or nothing: the driven pan differs
+
+test('dmx-proof: two candidate channel lists that differ only at an undriven offset -> proceeds, prints the NOTE, never drives the differing slot', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dmx-proof-'));
+  const lib = path.join(dir, 'Synth.c2z');
+  fs.writeFileSync(lib, buildLibraryFile({
+    [FIX_D]: buildObject(buildModeBlock({ guid: MODE_D, channels: D_CH })),
+    [FIX_E]: buildObject(buildModeBlock({ guid: MODE_E, channels: E_CH })),
+  }));
+  const fixD = { mfr: 'Acme', name: 'Rogue-like', mode: '11 Channel', channels: 11, universe: 0, address: 0, patched: false, fixtureGuid: FIX_D, modeGuid: MODE_D };
+  const fixE = { mfr: 'Acme', name: 'Pan-unsure', mode: '4 Channel', channels: 4, universe: 0, address: 0, patched: false, fixtureGuid: FIX_E, modeGuid: MODE_E };
+  const stub = await startPatchStub([fixD, fixE]);
+  const udp = await listener();
+  try {
+    const r = await run(['--fixture', '0', '--universe', '1', '--address', '285', '--seconds', '0.6', '--no-multicast', '--shutter-value', '200'], { stub, lib, dir, udp });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /NOTE: 2 candidate channel lists differ only at offsets \[10\] \(not used by this test\): 10: "Control" vs "Pan\/Tilt Speed"/);
+    assert.match(r.stdout, /10\s+\|\s+295\s+\|\s+Control\s+\|\s+8-bit/); // the table is the first candidate (file order)
+    assert.match(r.stdout, /pan\s+offset 0 "Pan" \+ fine offset 1 "Pan Fine" \(16-bit\)/);
+    assert.match(r.stdout, /intensity\s+offset 5 "Dimmer"/);
+    assert.match(r.stdout, /shutter\s+offset 7 "Shutter"/);
+    await new Promise((s) => setTimeout(s, 200));
+    const pk = decode(udp.got);
+    assert.ok(pk.length > 20, 'DMX was sent');
+    const base = 284; // address 285, 0-based slot
+    const first = pk.find((p) => !p.terminated).slots;
+    assert.equal(first[base + 5], 255, 'dimmer 100%'); assert.equal(first[base + 7], 200, 'shutter raw');
+    assert.equal(first[base + 0], 0x80); assert.equal(first[base + 2], 0x80);
+    // only the driven slots (offsets 0-3, 5, 7) are ever non-zero; the differing offset 10 and every other slot stay 0
+    const driven = new Set([0, 1, 2, 3, 5, 7].map((o) => base + o));
+    for (const p of pk) for (let s = 0; s < 512; s++) if (!driven.has(s)) assert.equal(p.slots[s], 0, `slot ${s + 1} must stay 0`);
+    stub.received.forEach((m) => assert.ok(isAllowedOutgoing(m)));
+
+    // candidates that differ on the pan channel -> refuse, no DMX
+    const udp2 = await listener();
+    try {
+      const bad = await run(['--fixture', '1', '--universe', '1', '--address', '1', '--seconds', '0.5', '--no-multicast'], { stub, lib, dir, udp: udp2 });
+      assert.notEqual(bad.code, 0);
+      assert.match(bad.stdout + bad.stderr, /could not establish this fixture's channels safely/);
+      assert.match(bad.stdout + bad.stderr, /disagree on a channel that would be driven: pan: not found vs offset 3 "Pan"/);
+      await new Promise((s) => setTimeout(s, 150));
+      assert.equal(udp2.got.length, 0, 'no DMX when the candidates disagree on pan');
+    } finally { udp2.sock.close(); }
   } finally { cleanup(dir, udp, stub); }
 });

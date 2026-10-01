@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { lpEncode } from '../lib/c2z.mjs';
-import { loadChannels, mapAttributes, parseModeBlock, tokens } from '../lib/modes.mjs';
+import { ambiguityNote, loadChannels, mapAttributes, parseModeBlock, tokens } from '../lib/modes.mjs';
 import { buildModeBlock, buildObject, decoyTail, prng, sampleChannels } from './synth-modes.mjs';
 
 const MODE = '9d6629e3-872b-4a74-a935-6675826f4313';
@@ -156,4 +156,124 @@ test('attribute mapping: first match wins and others are listed; speed/mode chan
   assert.deepEqual(none.missing.sort(), ['pan', 'shutter', 'tilt']);
   assert.match(none.warnings.join('\n'), /pan: only channel/);
   assert.deepEqual(tokens('PanFine'), ['pan', 'fine']);
+});
+
+// ---- Handoff 13: ambiguity that does not touch the driven channels ----
+// Reza's Rogue R2X Wash ("56 Channel Rev.1"): two consistent sequences, identical in 0..54, differing only at the last offset
+// ("Control" vs "Pan/Tilt Speed"). Reproduced small: the final record's tail holds a second, valid-looking record string.
+const asRecord = (name, role = 0, pair = 0xffff) => Buffer.concat([lpEncode(name), Buffer.from([role]), Buffer.from([pair & 255, pair >> 8])]);
+const rogueLike = (lastTail) => [
+  { name: 'Pan', role: 1, pair: 1, tail: decoyTail }, { name: 'Pan Fine', role: 2, pair: 0, tail: decoyTail },
+  { name: 'Tilt', role: 1, pair: 3, tail: decoyTail }, { name: 'Tilt Fine', role: 2, pair: 2, tail: decoyTail },
+  { name: 'Pan/Tilt Speed', tail: decoyTail }, { name: 'Dimmer', tail: decoyTail }, { name: 'Dimmer Fine', role: 0, tail: decoyTail },
+  { name: 'Shutter', tail: decoyTail }, { name: 'Red 1', tail: decoyTail }, { name: 'Zoom', tail: decoyTail },
+  { name: 'Control', tail: lastTail },
+];
+
+test('ambiguity: a valid-looking record string inside the final record\'s tail -> candidates agree on every driven channel -> proceeds with the first (file-order) candidate', () => {
+  const obj = buildObject(buildModeBlock({ guid: MODE, channels: rogueLike(Buffer.concat([Buffer.from([9, 9]), asRecord('Pan/Tilt Speed'), Buffer.alloc(6, 0xcc)])) }));
+  // the parser itself still reports the ambiguity (ok:false) and lists both candidates
+  const raw = parseModeBlock(obj, MODE);
+  assert.equal(raw.ok, false);
+  assert.equal(raw.ambiguous, true);
+  assert.equal(raw.candidates.length, 2);
+  assert.match(raw.error, /more than one consistent .*differ at offsets \[10\] \(10: "Control" vs "Pan\/Tilt Speed"\)/);
+  // the gate proceeds
+  const r = loadChannels(obj, MODE, 11);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.channels.length, 11);
+  assert.equal(r.channels[10].name, 'Control', 'first candidate = earliest in the file');
+  assert.deepEqual(r.ambiguity.differOffsets, [10]);
+  assert.equal(r.ambiguity.candidates.length, 2);
+  assert.match(ambiguityNote(r.ambiguity.candidates, r.ambiguity.differOffsets), /^2 candidate channel lists differ only at offsets \[10\] \(not used by this test\): 10: "Control" vs "Pan\/Tilt Speed"$/);
+  // right mapping: pan/tilt 16-bit, "Pan/Tilt Speed" is not pan, dimmer and shutter found
+  const m = mapAttributes(r.channels).map;
+  assert.deepEqual([m.pan.coarse.offset, m.pan.fine.offset, m.tilt.coarse.offset, m.tilt.fine.offset, m.intensity.coarse.offset, m.shutter.coarse.offset], [0, 1, 2, 3, 5, 7]);
+  // driven offsets never include a differing one
+  assert.deepEqual(r.ambiguity.drivenOffsets, [0, 1, 2, 3, 5, 7]);
+  // the final-record-only comparison is disclosed
+  assert.match(r.block.warnings.join('\n'), /compared for the final channel record only/);
+  // the channel-count checks still apply to the resolved list
+  assert.equal(loadChannels(obj, MODE, 12).ok, false);
+  assert.match(loadChannels(obj, MODE, 12).error, /ChannelCount=12/);
+});
+
+test('ambiguity: three candidates (two decoys) agreeing on the driven channels proceed; the same name in its own tail is not an ambiguity; 40 decoys still proceed', () => {
+  const tail = Buffer.concat([asRecord('Reset'), Buffer.from([1]), asRecord('Lamp Off'), Buffer.alloc(4, 0xcc)]);
+  const r = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: rogueLike(tail) })), MODE, 11);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.ambiguity.candidates.length, 3);
+  assert.deepEqual(r.ambiguity.differOffsets, [10]);
+  assert.equal(r.channels[10].name, 'Control');
+  const same = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: rogueLike(Buffer.concat([asRecord('Control'), Buffer.alloc(3)])) })), MODE, 11);
+  assert.equal(same.ok, true, same.error);
+  assert.equal(same.ambiguity, null, 'identical channel lists found at two byte positions are one candidate');
+  const many = Buffer.concat([Buffer.from([7]), ...Array.from({ length: 40 }, (_, i) => asRecord(`Decoy ${i}`)), Buffer.alloc(4, 0xcc)]);
+  const m = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: rogueLike(many) })), MODE, 11);
+  assert.equal(m.ok, true, m.error);
+  assert.equal(m.ambiguity.candidates.length, 41);
+  assert.deepEqual(m.ambiguity.differOffsets, [10]);
+});
+
+test('ambiguity: candidates that DIFFER on a driven channel still refuse (pan missing in one, same offset but another name, pan at another offset)', () => {
+  // real last record "Control", decoy "Pan" in its tail; the real list has NO pan at all, the decoy list has one -> disagree on pan
+  const noPan = [
+    { name: 'Tilt', tail: decoyTail }, { name: 'Dimmer', tail: decoyTail }, { name: 'Shutter', tail: decoyTail },
+    { name: 'Control', tail: Buffer.concat([Buffer.from([5]), asRecord('Pan'), Buffer.alloc(4, 0xcc)]) },
+  ];
+  const obj = buildObject(buildModeBlock({ guid: MODE, channels: noPan }));
+  assert.equal(parseModeBlock(obj, MODE).ambiguous, true);
+  const r = loadChannels(obj, MODE, 4);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /disagree on a channel that would be driven: pan: not found vs offset 3 "Pan"/);
+  assert.deepEqual(r.ambiguity.disagree, ['pan']);
+  // pan at the same (last) offset but under another name -> still a disagreement (names must match too)
+  const sameOffset = [
+    { name: 'Dimmer', tail: decoyTail }, { name: 'Pan Speed', tail: decoyTail }, { name: 'Tilt', tail: decoyTail },
+    { name: 'Pan', tail: Buffer.concat([Buffer.from([5]), asRecord('Pan 2'), Buffer.alloc(4, 0xcc)]) },
+  ];
+  const so = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: sameOffset })), MODE, 4);
+  assert.equal(so.ok, false);
+  assert.match(so.error, /pan: offset 3 "Pan" vs offset 3 "Pan 2"/);
+  // a decoy "Pan" inside the tail of record 1 (not the final record): the readings disagree on what is driven
+  const differ = [
+    { name: 'Dimmer', tail: decoyTail },
+    { name: 'Aux 1', tail: Buffer.concat([Buffer.from([5]), asRecord('Pan'), Buffer.alloc(4, 0xcc)]) },
+    { name: 'Tilt', tail: decoyTail }, { name: 'Shutter', tail: decoyTail },
+  ];
+  const d = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: differ })), MODE, 4);
+  assert.equal(d.ok, false, 'driven channels differ between candidates');
+  assert.match(d.error, /disagree on a channel that would be driven/);
+  // pan at a different offset in the two readings of the final record: real "Pan" is last, the decoy list has a "Pan" earlier? -> an earlier real Pan wins in both: agrees
+  const agree = loadChannels(buildObject(buildModeBlock({ guid: MODE, channels: [{ name: 'Dimmer', tail: decoyTail }, { name: 'Pan', tail: decoyTail }, { name: 'Tilt', tail: decoyTail }, { name: 'Control', tail: Buffer.concat([asRecord('Pan'), Buffer.alloc(4)]) }] })), MODE, 4);
+  assert.equal(agree.ok, true, agree.error);
+});
+
+test('ambiguity: the other reading of the final record is the first record of the NEXT mode block -> outside this block -> ignored, unique result', () => {
+  const b1 = buildModeBlock({ guid: MODE, channels: rogueLike(Buffer.alloc(0)) });
+  const b2 = buildModeBlock({ guid: OTHER, name: 'Other', channels: [{ name: 'Pan/Tilt Speed' }, { name: 'Pan', role: 1, pair: 3 }, { name: 'Dimmer' }, { name: 'Pan Fine', role: 2, pair: 1 }] });
+  const obj = buildObject(b1, b2);
+  const r = parseModeBlock(obj, MODE);
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.channels.length, 11);
+  assert.equal(r.channels[10].name, 'Control');
+  assert.match(r.warnings.join('\n'), /other reading\(s\) of the final channel record lie at or beyond byte \d+, where the next mode block starts/);
+  assert.equal(loadChannels(obj, MODE, 11).ok, true);
+  assert.equal(loadChannels(obj, MODE, 11).ambiguity, null);
+  // and the second block still parses on its own
+  assert.equal(parseModeBlock(obj, OTHER).ok, true);
+  // without a next block header the same bytes are an in-block ambiguity (compared, and here they agree)
+  const alone = loadChannels(buildObject(Buffer.concat([b1, asRecord('Pan/Tilt Speed')])), MODE, 11);
+  assert.equal(alone.ok, true, alone.error);
+  assert.equal(alone.ambiguity.candidates.length, 2);
+});
+
+test('ambiguity: more than 500 readings of the final record cannot all be compared -> refuse', () => {
+  const tail = Buffer.concat([Buffer.from([7]), ...Array.from({ length: 520 }, (_, i) => asRecord(`Decoy ${i}`)), Buffer.alloc(4, 0xcc)]);
+  const obj = buildObject(buildModeBlock({ guid: MODE, channels: rogueLike(tail) }));
+  const raw = parseModeBlock(obj, MODE);
+  assert.equal(raw.ambiguous, true); assert.equal(raw.candidatesTruncated, true);
+  const r = loadChannels(obj, MODE, 11);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /more than 500 candidate channel lists/);
 });
