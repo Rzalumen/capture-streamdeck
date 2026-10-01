@@ -272,7 +272,7 @@ export function tokens(name) {
   return name.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 /** Channels that are about a different thing even if the word matches ("Pan/Tilt Speed", "Dimmer Curve", "Shutter Mode"). */
-const NOT_THE_VALUE = new Set(['speed', 'time', 'macro', 'reset', 'mode', 'control', 'ctrl', 'rate', 'curve', 'function', 'func', 'response', 'duration', 'invert', 'reverse', 'inverse']);
+export const NOT_THE_VALUE = new Set(['speed', 'time', 'macro', 'reset', 'mode', 'control', 'ctrl', 'rate', 'curve', 'function', 'func', 'response', 'duration', 'invert', 'reverse', 'inverse']);
 
 const MATCHERS = {
   pan: (t) => t === 'pan',

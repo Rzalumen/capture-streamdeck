@@ -369,3 +369,74 @@ test('dmx-proof: two candidate channel lists that differ only at an undriven off
     } finally { udp2.sock.close(); }
   } finally { cleanup(dir, udp, stub); }
 });
+
+// ---- Handoff 14: --set and --color-full ----
+const FIX_F = 'f0f0f0f0-1111-4222-8333-444444444444', MODE_F = 'f1f1f1f1-2222-4333-8444-555555555555';
+const F_CH = [
+  { name: 'Pan', role: 1, pair: 1 }, { name: 'Pan Fine', role: 2, pair: 0 }, { name: 'Tilt', role: 1, pair: 3 }, { name: 'Tilt Fine', role: 2, pair: 2 },
+  { name: 'Dimmer' }, { name: 'Shutter' }, { name: 'Red 1', role: 1, pair: 7 }, { name: 'Red 1 Fine', role: 2, pair: 6 }, { name: 'Green 1' }, { name: 'Blue 1' },
+  { name: 'White 1' }, { name: 'Cyan' }, { name: 'Magenta' }, { name: 'CTO' },
+].map((c) => ({ ...c, tail: decoyTail }));
+
+test('dmx-proof --color-full / --set: plan lists them, the right slots (1-based channels, fine partners) are held, cyan/magenta/CTO and everything else stay 0, bad uses are refused with no DMX', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dmx-proof-'));
+  const lib = path.join(dir, 'Synth.c2z');
+  fs.writeFileSync(lib, buildLibraryFile({ [FIX_F]: buildObject(buildModeBlock({ guid: MODE_F, channels: F_CH })) }));
+  const fixF = { mfr: 'Acme', name: 'RGBW wash', mode: '14 Channel', channels: 14, universe: 0, address: 0, patched: false, fixtureGuid: FIX_F, modeGuid: MODE_F };
+  const stub = await startPatchStub([fixF]);
+  const base = 9; // --address 10
+  const manual = ['--fixture', '0', '--universe', '1', '--address', '10', '--seconds', '0.5', '--no-multicast'];
+  const driven = [0, 1, 2, 3, 4, 5].map((o) => base + o);
+  const slotsOf = async (extraArgs) => {
+    const udp = await listener();
+    try {
+      const r = await run([...manual, ...extraArgs], { stub, lib, dir, udp });
+      await new Promise((s) => setTimeout(s, 200));
+      return { r, pk: decode(udp.got) };
+    } finally { udp.sock.close(); }
+  };
+  try {
+    // --color-full
+    const a = await slotsOf(['--color-full']);
+    assert.equal(a.r.code, 0, a.r.stdout + a.r.stderr);
+    assert.match(a.r.stdout, /Extra channels held at a fixed value for the whole run \(5\):/);
+    for (const [name, ch, off, v] of [['Red 1', 7, 6, 255], ['Red 1 Fine', 8, 7, 255], ['Green 1', 9, 8, 255], ['Blue 1', 10, 9, 255], ['White 1', 11, 10, 255]]) {
+      assert.match(a.r.stdout, new RegExp(`${ch}\\s+\\|\\s+${off}\\s+\\|\\s+${base + off + 1}\\s+\\|\\s+${name}\\s+\\|\\s+${v}\\s+\\|\\s+--color-full`), name);
+    }
+    assert.doesNotMatch(a.r.stdout.split('Extra channels')[1].split('sACN E1.31')[0], /Cyan|Magenta|CTO/);
+    assert.match(a.r.stdout, /except the extra channels listed above/);
+    assert.ok(a.pk.length > 20);
+    for (const p of a.pk) {
+      for (const o of [6, 7, 8, 9, 10]) assert.equal(p.slots[base + o], 255, `offset ${o}`);
+      for (let s = 0; s < 512; s++) if (!driven.includes(s) && ![6, 7, 8, 9, 10].some((o) => base + o === s)) assert.equal(p.slots[s], 0, `slot ${s + 1} must stay 0`);
+    }
+    assert.equal(a.pk.find((p) => !p.terminated).slots[base + 4], 255, 'dimmer is still driven');
+
+    // --set: 1-based channel numbers; coarse brings its fine partner
+    const b = await slotsOf(['--set', '11=128', '--set', '7=64', '--set', '12=0']);
+    assert.equal(b.r.code, 0, b.r.stdout + b.r.stderr);
+    assert.match(b.r.stdout, /Extra channels held at a fixed value for the whole run \(4\):/);
+    assert.match(b.r.stdout, /7\s+\|\s+6\s+\|\s+16\s+\|\s+Red 1\s+\|\s+64\s+\|\s+--set/);
+    assert.match(b.r.stdout, /8\s+\|\s+7\s+\|\s+17\s+\|\s+Red 1 Fine\s+\|\s+64\s+\|\s+--set 7 \(fine partner\)/);
+    assert.match(b.r.stdout, /11\s+\|\s+10\s+\|\s+20\s+\|\s+White 1\s+\|\s+128\s+\|\s+--set/);
+    for (const p of b.pk) {
+      assert.deepEqual([p.slots[base + 6], p.slots[base + 7], p.slots[base + 10]], [64, 64, 128]);
+      for (let s = 0; s < 512; s++) if (!driven.includes(s) && ![6, 7, 10].some((o) => base + o === s)) assert.equal(p.slots[s], 0);
+    }
+
+    // without either option nothing extra is printed or sent
+    const c = await slotsOf([]);
+    assert.doesNotMatch(c.r.stdout, /Extra channels/);
+    assert.equal(c.pk[0].slots[base + 6], 0);
+
+    // refusals: no DMX
+    for (const [args, re] of [[['--set', '1=5'], /driven by the test itself as pan/], [['--set', '15=1'], /channels 1\.\.14/], [['--set', '5=1'], /intensity/]]) {
+      const x = await slotsOf(args);
+      assert.notEqual(x.r.code, 0); assert.match(x.r.stdout, re); assert.match(x.r.stdout, /No DMX sent/); assert.equal(x.pk.length, 0);
+    }
+    const bad = await slotsOf(['--set', '5']);
+    assert.equal(bad.r.code, 2); assert.match(bad.r.stdout + bad.r.stderr, /--set needs <channel>=<value>/);
+    assert.match((await slotsOf(['--set', '5=300'])).r.stderr, /--set value must be from 0 to 255/);
+    stub.received.forEach((m) => assert.ok(isAllowedOutgoing(m)));
+  } finally { cleanup(dir, stub); }
+});

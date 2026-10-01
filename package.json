@@ -12,7 +12,7 @@
     "probe:network": "node research/network-probe.mjs",
     "probe": "npm run probe:library && npm run probe:network",
     "probe:citp": "node research/citp-connect.mjs",
-    "test": "node --test research/test/c2z.test.mjs research/test/citp.test.mjs research/test/mode-probe.test.mjs research/test/sacn.test.mjs research/test/modes.test.mjs research/test/dmx-proof.test.mjs research/test/export-objects.test.mjs research/test/citp-link.test.mjs",
+    "test": "node --test research/test/c2z.test.mjs research/test/citp.test.mjs research/test/mode-probe.test.mjs research/test/sacn.test.mjs research/test/modes.test.mjs research/test/extras.test.mjs research/test/dmx-proof.test.mjs research/test/export-objects.test.mjs research/test/citp-link.test.mjs",
     "probe:modes": "node research/mode-probe.mjs",
     "probe:dmx": "node research/dmx-proof.mjs",
     "export:objects": "node research/export-objects.mjs"

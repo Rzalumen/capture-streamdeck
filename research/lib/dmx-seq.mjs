@@ -45,9 +45,10 @@ export function stateAt(timeline, t) {
   return st;
 }
 
-/** All 512 slots for one frame: everything 0 except this fixture's mapped attributes. */
-export function frameSlots({ map, base, shutterRaw, pan, tilt, intensity = 1 }) {
+/** All 512 slots for one frame: everything 0 except this fixture's mapped attributes and the extras (fixed values). */
+export function frameSlots({ map, base, shutterRaw, pan, tilt, intensity = 1, extras = [] }) {
   const slots = new Uint8Array(512);
+  for (const e of extras) slots[base + e.offset] = e.value & 0xff; // fixed values (--set / --color-full); the driven attributes below win
   if (map.intensity) setAttr(slots, base, map.intensity, intensity);
   if (map.shutter) setAttr(slots, base, map.shutter, 1, { raw8: shutterRaw });
   setAttr(slots, base, map.pan, pan);

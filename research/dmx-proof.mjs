@@ -11,6 +11,11 @@
 // Options: --universe <n>, --address <n>  manual patch (both required together); the universe is also the sACN universe number
 //          --seconds <n>        length of each pan/tilt sweep (default 6)
 //          --shutter-value <n>  raw 0-255 value for the shutter/strobe channel (default 255; a GUESS until channel defaults are decoded)
+//          --set <ch>=<v>       hold channel <ch> (1-based within the fixture, as Capture's patch view numbers it) at <v> 0-255 for the whole run; repeatable.
+//                               A coarse channel's fine partner gets the same value. Channels the test drives itself (pan, tilt, dimmer, shutter) are refused.
+//          --color-full         hold every coarse/8-bit ADDITIVE colour channel (red, green, blue, white, amber, lime, uv; by name) at 255, fine partners too.
+//                               Never cyan, magenta, yellow, CTO, CTB or correction channels. (Without these every undriven channel is 0, so an RGBW-only
+//                               fixture has no colour output.)
 //          --force              proceed although other patched fixtures share the universe (they are driven to 0 while this runs)
 //          --sacn-universe <n>  sACN universe to send on (default: the 1-based universe, i.e. Capture's 0-based universe + 1; an assumption, see output)
 //          --lib <path>         Library.c2z (default: Capture 2026 in Application Support)
@@ -29,6 +34,7 @@ import { libPathFromArgs, openLibrary } from './lib/c2z.mjs';
 import { textTable } from './lib/citp.mjs';
 import { describeFixtures, readPatch, localIPv4 } from './lib/citp-sync.mjs';
 import { ROLE_NAMES, ambiguityNote, loadChannels, mapAttributes } from './lib/modes.mjs';
+import { planExtras } from './lib/extras.mjs';
 import { OPT_TERMINATED, DEFAULT_PRIORITY, SACN_PORT, buildDataPacket, multicastAddress } from './lib/sacn.mjs';
 import { buildTimeline, frameSlots, stateAt } from './lib/dmx-seq.mjs';
 
@@ -39,7 +45,7 @@ const CID = Buffer.from('cd5a0d6c-6d78-4d5f-9d0e-2b1a4c3d5e6f'.replace(/-/g, '')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function parseArgs(argv) {
-  const o = { fixture: null, seconds: 6, shutter: 255, shutterGiven: false, force: false, universe: null, address: null, sacnUniverse: null, lib: null, host: null, port: null, reportDir: path.join(ROOT, 'reports'), sacnPort: SACN_PORT, multicast: true, fps: 40 };
+  const o = { fixture: null, seconds: 6, shutter: 255, shutterGiven: false, force: false, universe: null, address: null, sacnUniverse: null, sets: [], colorFull: false, lib: null, host: null, port: null, reportDir: path.join(ROOT, 'reports'), sacnPort: SACN_PORT, multicast: true, fps: 40 };
   const need = (i, n) => { if (argv[i + 1] === undefined) throw new Error(`${n} needs a value`); return argv[i + 1]; };
   const num = (v, n, lo, hi) => { const x = Number(v); if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${n} must be a number from ${lo} to ${hi}, got ${JSON.stringify(v)}`); return x; };
   for (let i = 0; i < argv.length; i++) {
@@ -48,6 +54,19 @@ export function parseArgs(argv) {
       case '--fixture': o.fixture = num(need(i, a), a, 0, 65535); if (!Number.isInteger(o.fixture)) throw new Error('--fixture must be a whole number'); i++; break;
       case '--seconds': o.seconds = num(need(i, a), a, 0.5, 120); i++; break;
       case '--shutter-value': o.shutter = num(need(i, a), a, 0, 255); if (!Number.isInteger(o.shutter)) throw new Error('--shutter-value must be a whole number'); o.shutterGiven = true; i++; break;
+      case '--set': {
+        const v = need(i, a); i++;
+        const m = /^(\d+)=(\d+)$/.exec(v);
+        if (!m) throw new Error(`--set needs <channel>=<value> (whole numbers), got ${JSON.stringify(v)}`);
+        const channel = Number(m[1]), value = Number(m[2]);
+        if (channel < 1 || channel > 512) throw new Error(`--set channel must be from 1 to 512, got ${channel}`);
+        if (value > 255) throw new Error(`--set value must be from 0 to 255, got ${value}`);
+        const prev = o.sets.find((s) => s.channel === channel);
+        if (prev && prev.value !== value) throw new Error(`--set ${channel} is given twice with different values (${prev.value} and ${value})`);
+        if (!prev) o.sets.push({ channel, value });
+        break;
+      }
+      case '--color-full': o.colorFull = true; break;
       case '--force': o.force = true; break;
       case '--no-multicast': o.multicast = false; break;
       case '--sacn-universe': o.sacnUniverse = num(need(i, a), a, 1, 63999); i++; break;
@@ -178,6 +197,18 @@ async function main(opts, say) {
   if (missing.includes('intensity')) say('  note: no dimmer/intensity channel found; the light may stay dark (fixtures with a virtual dimmer, or a dimmer named something else)');
   if (missing.includes('shutter')) say('  note: no shutter/strobe channel found; none will be driven');
 
+  // ---- 3b. extra channels (--set, --color-full) ------------------------------------------------------------------------
+  const extra = planExtras(chans, map, { sets: opts.sets, colorFull: opts.colorFull, ambiguousOffsets: loaded.ambiguity?.differOffsets ?? [] });
+  if (!extra.ok) { say(`ERROR: ${extra.error}. No DMX sent.`); return 2; }
+  if (opts.sets.length || opts.colorFull) {
+    say('');
+    say(`Extra channels held at a fixed value for the whole run (${extra.extras.length}):`);
+    if (extra.extras.length) {
+      textTable(['channel', 'offset', 'DMX addr', 'name', 'value', 'from'], extra.extras.map((e) => [e.channel, e.offset, loc.address1 + e.offset, e.name, e.value, e.source]), '  ').forEach(say);
+    }
+    extra.notes.forEach((n) => say(`  note: ${n}`));
+  }
+
   // ---- 4. safety checks ----------------------------------------------------------------------------------------------
   const base = loc.address1 - 1; // 0-based slot index of offset 0
   if (base + chans.length > 512) { say(`ERROR: the fixture's channels (${loc.address1}..${loc.address1 + chans.length - 1}) do not fit in 512 slots. No DMX sent.`); return 2; }
@@ -203,7 +234,7 @@ async function main(opts, say) {
   const timeline = buildTimeline({ holdSeconds: 1, sweepSeconds: opts.seconds });
   say('');
   say(`sACN E1.31, universe ${universe}${opts.sacnUniverse ? ' (from --sacn-universe)' : ` = the ${loc.source === 'manual' ? '--universe you gave' : `CAEX universe (0-based ${fx.universe}) + 1`} (an ASSUMPTION: Capture's sACN input must be set to the same universe number)`}, priority ${DEFAULT_PRIORITY}, source "${SOURCE_NAME}", ${opts.fps} fps.`);
-  say(`Slots sent: ${loc.address1}..${loc.address1 + chans.length - 1} carry this fixture; all other slots are 0, including this fixture's channels that are not listed above (their defaults are not decoded yet).`);
+  say(`Slots sent: ${loc.address1}..${loc.address1 + chans.length - 1} carry this fixture; all other slots are 0${extra.extras.length ? ', except the extra channels listed above' : ''}, including this fixture's channels that are not listed above (their defaults are not decoded yet).`);
   say(`Shutter/strobe raw value ${opts.shutter}${!opts.shutterGiven ? ' (default; a GUESS - 255 is often "open" but on some fixtures it is full strobe. Use --shutter-value to change)' : ''}.`);
   say('Timeline:');
   timeline.phases.forEach((p) => say(`  ${p.start.toFixed(1).padStart(5)} s - ${p.end.toFixed(1).padStart(5)} s  ${p.name}${p.axis ? '' : ' (intensity 100%, pan/tilt 50%)'}`));
@@ -218,7 +249,7 @@ async function main(opts, say) {
     for (const d of dests) d.sock.send(pkt, d.port, d.addr, (e) => { if (e) { d.errors++; d.firstError ||= `${e.code || ''} ${e.message}`; } else d.sent++; });
     frames++;
   };
-  const slotsFor = (st) => frameSlots({ map, base, shutterRaw: opts.shutter, pan: st.pan, tilt: st.tilt });
+  const slotsFor = (st) => frameSlots({ map, base, shutterRaw: opts.shutter, pan: st.pan, tilt: st.tilt, extras: extra.extras });
   say('sending ...');
   const period = 1000 / opts.fps;
   const t0 = process.hrtime.bigint();
