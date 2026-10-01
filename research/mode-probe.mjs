@@ -3,6 +3,7 @@
 //   node research/mode-probe.mjs                       runs the three built-in test rows (MAC Aura XB, Artiste Picasso x2)
 //   node research/mode-probe.mjs --fixture <rawGuid> --mode <rawGuid> [--name <text>] [--expect <n>] [--mode ...] [--fixture ...]
 //   --lib <path>   override Library.c2z
+//   --out <dir>    write the reports here instead of <repo>/reports
 //
 // GUIDs are RAW order: the 16 bytes as Capture sends them in FixtureList, formatted 8-4-4-4-12. That is also how
 // the library names fixture objects ("<rawGuid>.c2o"). --name / --expect apply to the most recent --mode.
@@ -13,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openLibrary, libPathFromArgs, isPrintable } from './lib/c2z.mjs';
+import { isMain } from './lib/main.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPORTS = path.join(ROOT, 'reports');
@@ -34,7 +36,7 @@ export function parseArgs(argv) {
   const fixtures = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = argv[i + 1];
-    if (a === '--lib') { i++; continue; }
+    if (a === '--lib' || a === '--out') { i++; continue; }
     if (a === '--fixture') { fixtures.push({ guid: String(v).toLowerCase(), label: '', modes: [] }); i++; }
     else if (a === '--mode') {
       if (!fixtures.length) throw new Error('--mode must come after a --fixture');
@@ -228,17 +230,19 @@ export function probeFixture(lib, fx) {
 }
 
 // ---------- main ----------
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   let fixtures;
   try { fixtures = parseArgs(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exit(2); }
   const libPath = libPathFromArgs(process.argv.slice(2));
   let lib;
   try { lib = openLibrary(libPath); } catch (e) { console.error(`Cannot open library ${libPath}: ${e.message}`); process.exit(1); }
-  fs.mkdirSync(REPORTS, { recursive: true });
+  const oi = process.argv.indexOf('--out');
+  const outDir = oi >= 0 && process.argv[oi + 1] ? path.resolve(process.argv[oi + 1]) : REPORTS;
+  fs.mkdirSync(outDir, { recursive: true });
   for (const fx of fixtures) {
     let out;
     try { out = probeFixture(lib, fx); } catch (e) { out = { text: `mode-probe crashed for ${fx.guid}: ${e.stack}\n`, summary: { guid: fx.guid, note: e.message } }; }
-    const file = path.join(REPORTS, `modes-${fx.guid.slice(0, 8)}.txt`);
+    const file = path.join(outDir, `modes-${fx.guid.slice(0, 8)}.txt`);
     fs.writeFileSync(file, out.text);
     console.log(`${fx.guid}: size check ${out.summary.ok ? 'PASS' : 'FAIL'}${out.summary.note ? ' — ' + out.summary.note : ''}`);
     (out.summary.modes || []).forEach((m) => console.log(`  mode ${m.guid}: guid hits ${m.guidHits}${m.nameHits ? `, name hits lp+1=${m.nameHits.lp1} lp=${m.nameHits.lp0} raw=${m.nameHits.raw} utf16=${m.nameHits.utf16}` : ''}`));

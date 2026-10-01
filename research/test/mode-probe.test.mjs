@@ -38,16 +38,19 @@ test('mode-probe: argument parsing and default rows', () => {
   assert.ok(pats[1].buf.equals(mixedEndian(MODE_B)));
 });
 
-test('mode-probe end to end on a synthetic object with two modes', () => {
+test('mode-probe end to end on a synthetic object with two modes', (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'modes-run-'));
   const lib = path.join(dir, 'Synth.c2z');
   fs.writeFileSync(lib, buildModeLibrary().file);
-  const work = path.join(dir, 'repo');
-  fs.mkdirSync(path.join(work, 'research', 'lib'), { recursive: true });
-  for (const f of ['mode-probe.mjs', 'lib/c2z.mjs']) fs.copyFileSync(path.join(ROOT, 'research', f), path.join(work, 'research', f));
-  execFileSync(process.execPath, [path.join(work, 'research', 'mode-probe.mjs'), '--lib', lib,
-    '--fixture', MODE_FIXTURE, '--mode', MODE_A, '--name', 'Standard', '--expect', '3', '--mode', MODE_B, '--name', 'Extended', '--expect', '6'], { stdio: 'pipe' });
-  const rep = fs.readFileSync(path.join(work, 'reports', 'modes-2f7c6351.txt'), 'utf8');
+  const out = path.join(dir, 'reports');
+  // Run the real script in place and tell it where to write. (v0.1 copied the script into the temp dir; the temp dir is
+  // reached through a symlink on macOS, which exposed the main-module check bug fixed by lib/main.mjs.)
+  const run = execFileSync(process.execPath, [path.join(ROOT, 'research', 'mode-probe.mjs'), '--lib', lib, '--out', out,
+    '--fixture', MODE_FIXTURE, '--mode', MODE_A, '--name', 'Standard', '--expect', '3', '--mode', MODE_B, '--name', 'Extended', '--expect', '6'], { stdio: 'pipe', encoding: 'utf8' });
+  const reportFile = path.join(out, 'modes-2f7c6351.txt');
+  t.diagnostic(`temp dir ${dir} (realpath ${fs.realpathSync(dir)}); report expected at ${reportFile}; script said: ${run.trim().split('\n').pop()}`);
+  assert.ok(fs.existsSync(reportFile), `mode-probe did not write ${reportFile}; it printed:\n${run}; dir listing: ${JSON.stringify(fs.readdirSync(dir))}`);
+  const rep = fs.readFileSync(reportFile, 'utf8');
   assert.match(rep, /inflated length \d+ \(PASS\)/);
   assert.match(rep, /first u32 = \d+\s+\(== size\? PASS\)/);
   // GUID A is stored in raw order, GUID B in mixed-endian order: each matches only its own encoding
@@ -74,4 +77,17 @@ test('mode-probe end to end on a synthetic object with two modes', () => {
   assert.equal(attr[3][6], '6');
   assert.match(rep, /"Pan Fine"/);
   assert.ok(rep.indexOf('segment 2') < rep.indexOf('"Tilt Fine"'));
+});
+
+test('isMain: true for the script Node started, also when the path goes through a symlink; false for an import', () => {
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), 'ismain-'));
+  const link = real + '-link';
+  fs.symlinkSync(real, link);
+  try {
+    const lib = path.join(ROOT, 'research', 'lib', 'main.mjs');
+    fs.writeFileSync(path.join(real, 'x.mjs'), `import { isMain } from ${JSON.stringify(lib)};\nconsole.log(isMain(import.meta.url));\n`);
+    for (const p of [path.join(real, 'x.mjs'), path.join(link, 'x.mjs')]) assert.equal(execFileSync(process.execPath, [p], { encoding: 'utf8' }).trim(), 'true', p);
+    fs.writeFileSync(path.join(real, 'y.mjs'), `import './x.mjs';\n`);
+    assert.equal(execFileSync(process.execPath, [path.join(link, 'y.mjs')], { encoding: 'utf8' }).trim(), 'false');
+  } finally { fs.rmSync(link, { force: true }); fs.rmSync(real, { recursive: true, force: true }); }
 });

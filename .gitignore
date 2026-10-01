@@ -7,3 +7,4 @@ dist/
 *.streamDeckPlugin
 *.sdPlugin/bin
 *.sdPlugin/logs
+*.bin
