@@ -52,18 +52,20 @@ function run(args, { stub, lib, dir, udp }) {
 const cleanup = (dir, ...things) => { things.forEach((t) => { try { t.sock?.close(); t.server?.close(); } catch { /* ignore */ } }); fs.rmSync(dir, { recursive: true, force: true }); };
 const decode = (got) => got.map((g) => ({ ...parseDataPacket(g.m), t: g.t }));
 
-test('dmx-proof: with no --fixture it lists the patched fixtures and sends no DMX, and CITP stays on the allowlist', async () => {
+test('dmx-proof: with no --fixture it lists ALL fixtures with the CAEX patch fields, sends no DMX, and CITP stays on the allowlist', async () => {
   const { dir, lib } = setup();
   const stub = await startPatchStub([fixA(), fixB(), fixA({ name: 'Spinner A', universe: 3, address: 100 }), fixB({ patched: false, name: 'Unpatched C', universe: 5 })]);
   const udp = await listener();
   try {
     const r = await run([], { stub, lib, dir, udp });
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /Patched fixtures in show "STUB SHOW"/);
-    assert.match(r.stdout, /Acme\s+\|\s+Spinner A\s+\|\s+Full\s+\|\s+8\s+\|\s+2\/10\s+\|\s+0/);
-    assert.match(r.stdout, /Other Co\s+\|\s+Wash B\s+\|\s+Basic\s+\|\s+5\s+\|\s+4\/1\s+\|\s+1/); // shares universe 4 with the other Spinner A
-    assert.match(r.stdout, /Spinner A\s+\|\s+Full\s+\|\s+8\s+\|\s+4\/101\s+\|\s+1/);
-    assert.doesNotMatch(r.stdout, /Unpatched C/);
+    assert.match(r.stdout, /All fixtures in show "STUB SHOW" \(4\)/);
+    assert.match(r.stdout, /from CAEX: patched/);
+    const row = (name) => r.stdout.split('\n').find((l) => l.includes(name));
+    // # | manufacturer | model | mode | ch | Channel | patched | universe/address | others
+    assert.match(row('Spinner A  ') ?? '', /^\s*0\s+\| Acme\s+\| Spinner A\s+\| Full\s+\| 8\s+\| 1\s+\| yes\s+\| 2\/10\s+\| 0\s*$/);
+    assert.match(row('Wash B') ?? '', /^\s*1\s+\| Other Co\s+\| Wash B\s+\| Basic\s+\| 5\s+\| 2\s+\| yes\s+\| 4\/1\s+\| 1\s*$/); // shares universe 4 with the other Spinner A
+    assert.match(row('Unpatched C') ?? '', /^\s*3\s+\| Other Co\s+\| Unpatched C\s+\| Basic\s+\| 5\s+\| 4\s+\| no\s+\| - \(raw u5 a0\)\s+\| -\s*$/);
     assert.match(r.stdout, /probe:dmx -- --fixture/);
     await new Promise((s) => setTimeout(s, 150));
     assert.equal(udp.got.length, 0, 'no DMX in list mode');
@@ -87,7 +89,7 @@ test('dmx-proof: end to end on fixture type A - table, packets at 40 fps, values
     assert.match(r.stdout, /pan\s+offset 0 "Pan Coarse" \+ fine offset 1 "Pan Fine" \(16-bit\)/);
     assert.match(r.stdout, /intensity\s+offset 4 "Beam Dimmer" \(8-bit\)/);
     assert.match(r.stdout, /shutter\s+offset 5 "Strobe" \(8-bit\)/);
-    assert.match(r.stdout, /sACN E1\.31, universe 2 = Capture's 0-based universe 1 \+ 1 \(an ASSUMPTION/);
+    assert.match(r.stdout, /sACN E1\.31, universe 2 = the CAEX universe \(0-based 1\) \+ 1 \(an ASSUMPTION/);
     assert.match(r.stdout, /terminated: \d+ data frames/);
 
     await new Promise((s) => setTimeout(s, 200));
@@ -179,12 +181,12 @@ test('dmx-proof: aborts without DMX on a channel-count mismatch, a missing objec
   ]);
   const udp = await listener();
   try {
-    const expect = { 0: /mode block has 8 channel\(s\) but Capture's patch says ChannelCount=9/, 1: /cannot read library object/, 2: /pan and tilt not found/, 3: /did not send both identifiers/, 999: /no patched fixture with # 999/ };
+    const expect = { 0: /mode block has 8 channel\(s\) but Capture's patch says ChannelCount=9/, 1: /cannot read library object/, 2: /pan and tilt not found/, 3: /did not send both identifiers/, 999: /no fixture with # 999/ };
     for (const [n, re] of Object.entries(expect)) {
       const r = await run(['--fixture', n, '--seconds', '0.5', '--no-multicast'], { stub, lib, dir, udp });
       assert.equal(r.code, 2, `#${n}: ${r.stdout}`);
       assert.match(r.stdout, re, `#${n}`);
-      assert.match(r.stdout, /No DMX sent|no patched fixture/, `#${n}`);
+      assert.match(r.stdout, /No DMX sent|no fixture with/, `#${n}`);
     }
     await new Promise((s) => setTimeout(s, 200));
     assert.equal(udp.got.length, 0, 'no packet in any aborted run');
@@ -215,5 +217,99 @@ test('dmx-proof: multicast destinations on every local interface are logged and 
     assert.ok(pk.length >= 25, `got ${pk.length}`);
     assert.deepEqual(pk.slice(-3).map((p) => p.terminated), [true, true, true]);
     assert.equal(pk.filter((p) => p.terminated).length, 3);
+  } finally { cleanup(dir, udp, stub); }
+});
+
+
+// ---- Handoff 12: Capture sends NO patch over CAEX (Patched=0, universe 0, address 0) ----
+const noPatch = (o = {}) => fixA({ patched: false, universe: 0, address: 0, ...o });
+
+test('dmx-proof: a fixture without CAEX patch and without --universe/--address is refused, nothing is sent; the list still shows it', async () => {
+  const { dir, lib } = setup();
+  const stub = await startPatchStub([noPatch(), noPatch({ name: 'Spinner 2' })]);
+  const udp = await listener();
+  try {
+    const list = await run([], { stub, lib, dir, udp });
+    assert.equal(list.code, 0, list.stdout);
+    assert.match(list.stdout, /Acme\s+\| Spinner A\s+\| Full\s+\| 8\s+\| 1\s+\| no\s+\| - \(raw u0 a0\)/);
+    assert.match(list.stdout, /No fixture has a patch in the CAEX data/);
+    assert.match(list.stdout, /--universe <1\.\.> --address <1\.\.512>/);
+    const r = await run(['--fixture', '0', '--no-multicast'], { stub, lib, dir, udp });
+    assert.equal(r.code, 2, r.stdout);
+    assert.match(r.stdout, /Capture sent no patch for this fixture over CAEX \(Patched=0\)/);
+    assert.match(r.stdout, /--fixture 0 --universe <1\.\.> --address <1\.\.512>/);
+    await new Promise((s) => setTimeout(s, 200));
+    assert.equal(udp.got.length, 0, 'nothing sent');
+  } finally { cleanup(dir, udp, stub); }
+});
+
+test('dmx-proof: --universe/--address override the (empty) CAEX patch: sends to that sACN universe and those slots, prints the manual address and the warning', async () => {
+  const { dir, lib } = setup();
+  const stub = await startPatchStub([noPatch(), noPatch({ name: 'Spinner 2' })]);
+  const udp = await listener();
+  try {
+    const r = await run(['--fixture', '0', '--universe', '3', '--address', '285', '--seconds', '0.5', '--no-multicast'], { stub, lib, dir, udp });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /USING A MANUAL ADDRESS: universe 3 address 285 \(from --universe\/--address\); there is no usable CAEX patch for this fixture/);
+    assert.match(r.stdout, /WARNING: manual address\. Capture's CAEX data carries no patch for 1 of the other 1 fixture\(s\)/);
+    assert.match(r.stdout, /holds ONLY this test fixture/);
+    assert.match(r.stdout, /0\s+\| 285\s+\| Pan Coarse/);          // DMX addr column uses the manual address
+    assert.match(r.stdout, /7\s+\| 292\s+\| Gobo Wheel/);
+    assert.match(r.stdout, /sACN E1\.31, universe 3 = the --universe you gave/);
+    await new Promise((s) => setTimeout(s, 200));
+    const pk = decode(udp.got);
+    const live = pk.filter((p) => !p.terminated);
+    assert.ok(live.length > 60);
+    pk.forEach((p) => assert.equal(p.universe, 3, 'sACN universe = --universe'));
+    const base = 284; // address 285, 0-based slot
+    assert.equal(live[0].slots[base + 4], 255, 'dimmer at offset 4 -> slot 289');
+    assert.equal(live[0].slots[base + 0], 0x80); assert.equal(live[0].slots[base + 1], 0x00);
+    for (const p of pk) for (let k = 0; k < 512; k++) if (k < base || k >= base + 6) assert.equal(p.slots[k], 0, `slot ${k + 1} must stay 0`);
+    assert.deepEqual(pk.slice(-3).map((p) => p.terminated), [true, true, true]);
+    stub.received.forEach((m) => assert.ok(isAllowedOutgoing(m)));
+  } finally { cleanup(dir, udp, stub); }
+});
+
+test('dmx-proof: the manual address also overrides a real CAEX patch; --sacn-universe still wins for the sACN number', async () => {
+  const { dir, lib } = setup();
+  const stub = await startPatchStub([fixA()]); // CAEX: universe 2 address 10
+  const udp = await listener();
+  try {
+    const r = await run(['--fixture', '0', '--universe', '5', '--address', '1', '--sacn-universe', '9', '--seconds', '0.5', '--no-multicast'], { stub, lib, dir, udp });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /this overrides the CAEX patch 2\/10/);
+    assert.match(r.stdout, /universe 9 \(from --sacn-universe\)/);
+    await new Promise((s) => setTimeout(s, 200));
+    const live = decode(udp.got).filter((p) => !p.terminated);
+    assert.equal(live[0].universe, 9);
+    assert.equal(live[0].slots[4], 255, 'address 1 + offset 4');
+    assert.equal(live[0].slots[9 + 4], 0, 'the CAEX address was not used');
+  } finally { cleanup(dir, udp, stub); }
+});
+
+test('dmx-proof: manual address checks: both options required, range, fit in 512, CAEX-patched neighbours on that universe', async () => {
+  const { dir, lib } = setup();
+  const stub = await startPatchStub([noPatch(), fixB({ universe: 2, address: 50, name: 'Neighbour' })]); // #1 is CAEX-patched at universe 3 / 51
+  const udp = await listener();
+  try {
+    const only = await run(['--fixture', '0', '--universe', '1'], { stub, lib, dir, udp });
+    assert.equal(only.code, 2);
+    assert.match(only.stderr, /--universe and --address go together/);
+    const bad = await run(['--fixture', '0', '--universe', '1', '--address', '513'], { stub, lib, dir, udp });
+    assert.equal(bad.code, 2); assert.match(bad.stderr, /--address must be a number from 1 to 512/);
+    const noFix = await run(['--universe', '1', '--address', '1'], { stub, lib, dir, udp });
+    assert.equal(noFix.code, 2); assert.match(noFix.stderr, /need --fixture/);
+    const fit = await run(['--fixture', '0', '--universe', '1', '--address', '510', '--no-multicast'], { stub, lib, dir, udp });
+    assert.equal(fit.code, 2, fit.stdout); assert.match(fit.stdout, /do not fit in 512 slots/);
+    const clash = await run(['--fixture', '0', '--universe', '3', '--address', '1', '--no-multicast', '--seconds', '0.5'], { stub, lib, dir, udp });
+    assert.equal(clash.code, 2, clash.stdout);
+    assert.match(clash.stdout, /WARNING: 1 other patched fixture\(s\) share universe 3: #1 Other Co Neighbour @51/);
+    assert.match(clash.stdout, /Refusing to send/);
+    await new Promise((s) => setTimeout(s, 200));
+    assert.equal(udp.got.length, 0, 'nothing sent in any refused run');
+    const forced = await run(['--fixture', '0', '--universe', '3', '--address', '1', '--no-multicast', '--seconds', '0.5', '--force'], { stub, lib, dir, udp });
+    assert.equal(forced.code, 0, forced.stdout);
+    await new Promise((s) => setTimeout(s, 200));
+    assert.ok(decode(udp.got).length > 60);
   } finally { cleanup(dir, udp, stub); }
 });

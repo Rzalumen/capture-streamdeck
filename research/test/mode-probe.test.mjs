@@ -85,9 +85,16 @@ test('isMain: true for the script Node started, also when the path goes through 
   fs.symlinkSync(real, link);
   try {
     const lib = path.join(ROOT, 'research', 'lib', 'main.mjs');
-    fs.writeFileSync(path.join(real, 'x.mjs'), `import { isMain } from ${JSON.stringify(lib)};\nconsole.log(isMain(import.meta.url));\n`);
-    for (const p of [path.join(real, 'x.mjs'), path.join(link, 'x.mjs')]) assert.equal(execFileSync(process.execPath, [p], { encoding: 'utf8' }).trim(), 'true', p);
+    fs.writeFileSync(path.join(real, 'x.mjs'), `import { isMain } from ${JSON.stringify(lib)};\nprocess.stdout.write(String(isMain(import.meta.url)) + '\\n');\n`);
+    // The child must not depend on colour settings: Node's console.log paints booleans when FORCE_COLOR is set (it printed
+    // "\x1b[33mtrue\x1b[39m" on Reza's Mac). The child writes String(x), its env drops colour variables, and ANSI codes are stripped anyway.
+    const env = { ...process.env, NO_COLOR: '1' }; delete env.FORCE_COLOR;
+    const ansi = /\x1b\[[0-9;]*m/g;
+    const runChild = (p, e = env) => execFileSync(process.execPath, [p], { encoding: 'utf8', env: e }).replace(ansi, '').trim();
+    for (const p of [path.join(real, 'x.mjs'), path.join(link, 'x.mjs')]) assert.equal(runChild(p), 'true', p);
+    // and with colour forced in the child's env
+    assert.equal(runChild(path.join(real, 'x.mjs'), { ...process.env, FORCE_COLOR: '1' }), 'true', 'FORCE_COLOR=1');
     fs.writeFileSync(path.join(real, 'y.mjs'), `import './x.mjs';\n`);
-    assert.equal(execFileSync(process.execPath, [path.join(link, 'y.mjs')], { encoding: 'utf8' }).trim(), 'false');
+    assert.equal(runChild(path.join(link, 'y.mjs')), 'false');
   } finally { fs.rmSync(link, { force: true }); fs.rmSync(real, { recursive: true, force: true }); }
 });

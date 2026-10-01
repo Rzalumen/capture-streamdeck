@@ -82,7 +82,7 @@ export function buildPatchMessage(fixtures) {
     if (f.modeGuid) ids.push([0x03, rawGuidBytes(f.modeGuid)]);
     body.push(w32(100 + i), ucs2(f.mfr), ucs2(f.name), ucs2(f.mode), w16(f.channels), Buffer.from([0]), Buffer.from([ids.length]),
       ...ids.flatMap(([t, d]) => [Buffer.from([t]), w16(d.length), d]),
-      Buffer.from([f.patched === false ? 0 : 1, f.universe]), w16(f.address), ucs2(''), w16(i + 1), ucs2(''), ucs2(''),
+      Buffer.from([f.patched === false ? 0 : 1, f.universe]), w16(f.address), ucs2(''), w16(f.channel ?? i + 1), ucs2(''), ucs2(''),
       wf(0), wf(0), wf(0), wf(0), wf(0), wf(0));
   });
   const inner = Buffer.concat([w32(CAEX.FixtureList), ...body]);

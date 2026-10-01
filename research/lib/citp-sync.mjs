@@ -171,3 +171,20 @@ export function patchedFixtures(fixtures) {
     sharing: patched.filter((o) => o !== f && o.universe === f.universe).length,
   }));
 }
+
+/**
+ * EVERY fixture of the FixtureList with the identifiers pulled out. The CAEX patch fields are kept as Capture sent them:
+ * `caexPatched` (Patched=1), `caexUniverse1`/`caexAddress1` (1-based) are only meaningful when caexPatched is true.
+ * `channel` is Capture's own Channel number. `sharing` counts OTHER fixtures that report Patched=1 in the same universe.
+ */
+export function describeFixtures(fixtures) {
+  const patched = fixtures.filter((f) => f.patched);
+  return fixtures.map((f) => ({
+    ...f,
+    fixtureGuid: f.ids.find((d) => d.type === 0x02)?.guidRaw ?? null,
+    modeGuid: f.ids.find((d) => d.type === 0x03)?.guidRaw ?? null,
+    caexPatched: !!f.patched,
+    caexUniverse1: f.universe + 1, caexAddress1: f.universeChannel + 1,
+    sharing: f.patched ? patched.filter((o) => o !== f && o.universe === f.universe).length : 0,
+  }));
+}
