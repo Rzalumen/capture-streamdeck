@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.3.1.0",
+  "Version": "0.4.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2659,6 +2659,341 @@
           "ShowTitle": false
         }
       ]
+    },
+    {
+      "Name": "Fixtures: Setup",
+      "UUID": "com.rezabehjat.capture.fixtures.setup",
+      "Icon": "imgs/icons/fx-setup",
+      "Tooltip": "Reads the show from Capture (read-only) and lets you enter the universe and DMX address of each fixture. Press to read the show again.",
+      "PropertyInspectorPath": "ui/fixtures.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-setup",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Fixtures: Release",
+      "UUID": "com.rezabehjat.capture.fixtures.release",
+      "Icon": "imgs/icons/fx-release",
+      "Tooltip": "Stops all DMX output: Stream_Terminated is sent on every universe in use.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-release",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Fixtures: Home Selected",
+      "UUID": "com.rezabehjat.capture.fixtures.home",
+      "Icon": "imgs/icons/fx-home",
+      "Tooltip": "Pan and tilt 50 %, intensity 100 % on the selected fixture(s).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-home",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Fixtures: Status",
+      "UUID": "com.rezabehjat.capture.fixtures.status",
+      "Icon": "imgs/icons/fx-status",
+      "Tooltip": "Shows the show name, how many fixtures are controllable and whether DMX output is active. Press to read the show again.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-status",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "Name": "Fixture: Select",
+      "UUID": "com.rezabehjat.capture.fixture.select",
+      "Icon": "imgs/icons/fx-select",
+      "Tooltip": "Turn to step through the fixtures that are set up (Fixtures: Setup) and parsed safely. Push or touch: single fixture ↔ all of this type.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-select",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/select.json",
+        "TriggerDescription": {
+          "Rotate": "Select fixture",
+          "Push": "Single / all of type",
+          "Touch": "Single / all of type"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Pan",
+      "UUID": "com.rezabehjat.capture.fixture.pan",
+      "Icon": "imgs/icons/fx-pan",
+      "Tooltip": "Turn to change Pan of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-pan",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Tilt",
+      "UUID": "com.rezabehjat.capture.fixture.tilt",
+      "Icon": "imgs/icons/fx-tilt",
+      "Tooltip": "Turn to change Tilt of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-tilt",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Intensity",
+      "UUID": "com.rezabehjat.capture.fixture.intensity",
+      "Icon": "imgs/icons/fx-intensity",
+      "Tooltip": "Turn to change Intensity of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-intensity",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Zoom",
+      "UUID": "com.rezabehjat.capture.fixture.zoom",
+      "Icon": "imgs/icons/fx-zoom",
+      "Tooltip": "Turn to change Zoom of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-zoom",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Focus",
+      "UUID": "com.rezabehjat.capture.fixture.focus",
+      "Icon": "imgs/icons/fx-focus",
+      "Tooltip": "Turn to change Focus of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-focus",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Iris",
+      "UUID": "com.rezabehjat.capture.fixture.iris",
+      "Icon": "imgs/icons/fx-iris",
+      "Tooltip": "Turn to change Iris of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-iris",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Red|Cyan",
+      "UUID": "com.rezabehjat.capture.fixture.red-cyan",
+      "Icon": "imgs/icons/fx-colour",
+      "Tooltip": "Turn to change Red (additive) or, on a fixture without it, Cyan (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-colour",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Green|Magenta",
+      "UUID": "com.rezabehjat.capture.fixture.green-magenta",
+      "Icon": "imgs/icons/fx-colour",
+      "Tooltip": "Turn to change Green (additive) or, on a fixture without it, Magenta (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-colour",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Blue|Yellow",
+      "UUID": "com.rezabehjat.capture.fixture.blue-yellow",
+      "Icon": "imgs/icons/fx-colour",
+      "Tooltip": "Turn to change Blue (additive) or, on a fixture without it, Yellow (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-colour",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: White",
+      "UUID": "com.rezabehjat.capture.fixture.white",
+      "Icon": "imgs/icons/fx-white",
+      "Tooltip": "Turn to change White of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-white",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Fine mode",
+          "LongTouch": "Home"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
     },
     {
       "Name": "Status: Connection",

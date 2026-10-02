@@ -103,7 +103,9 @@ export function checkProfile(files: Map<string, Buffer | null>, manifest: Manife
     if (Object.keys(enc).length > 4) err(`${at}: more than 4 dials`);
     for (const pos of Object.keys(pad)) if (!(KEY_POSITIONS_ALL as readonly string[]).includes(pos)) err(`${at}: bad key position ${pos}`);
     for (const pos of Object.keys(enc)) if (!(DIAL_POSITIONS as readonly string[]).includes(pos)) err(`${at}: bad dial position ${pos}`);
-    if (Object.keys(enc).length !== 4) err(`${at}: every page must have its own four dials`);
+    // every page has its own four dials; the last Fixtures page only needs Select + White (the other two slots stay empty)
+    const fixtureDials = Object.values(enc).filter((a) => (a.UUID ?? "").startsWith(`${PLUGIN_UUID}.fixture.`)).length;
+    if (fixtureDials ? Object.keys(enc).length < 1 || Object.keys(enc).length !== fixtureDials : Object.keys(enc).length !== 4) err(`${at}: every page must have its own four dials`);
 
     const back = pad["0,0"];
     if (pageUuid === home) {

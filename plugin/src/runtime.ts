@@ -13,6 +13,13 @@ import { boolArgs, numberArgs, viewAddress, type ViewId, findNumberProperty } fr
 import { ConnectionMonitor, OscClient } from "./lib/oscClient.js";
 import { StoreModifier } from "./lib/storeModifier.js";
 import { ValueStore } from "./lib/valueStore.js";
+import { GlobalSettings } from "./lib/globals.js";
+import { DmxEngine, UdpTransport } from "./fixtures/engine.js";
+import { readShow } from "./fixtures/citpSync.js";
+import { SACN_PORT } from "./fixtures/sacn.js";
+import { FixtureService } from "./fixtures/service.js";
+import { SetupStore } from "./fixtures/setup.js";
+import { ShowModel } from "./fixtures/show.js";
 import type { JsonObject } from "@elgato/utils";
 
 const log: Logger = streamDeck.logger;
@@ -32,15 +39,36 @@ class Runtime {
   readonly menus = new MenuCache(this.ax, { logger: log, entries: ENTRIES });
   readonly catalogs = new CatalogCache(this.osc);
   readonly storeModifier = new StoreModifier();
+  /** Stream Deck global settings are one shared object: everything merges its own keys through here (never setGlobalSettings directly). */
+  readonly globals = new GlobalSettings({
+    get: () => streamDeck.settings.getGlobalSettings<JsonObject>() as Promise<Record<string, unknown>>,
+    set: (all) => streamDeck.settings.setGlobalSettings(all as unknown as JsonObject),
+  });
   readonly values = new ValueStore({
     load: async () => {
-      const g = await streamDeck.settings.getGlobalSettings<{ values?: Record<string, number | boolean> }>();
+      const g = (await this.globals.read()) as { values?: Record<string, number | boolean> };
       return g.values ?? {};
     },
     save: async (values) => {
-      await streamDeck.settings.setGlobalSettings({ values } as unknown as JsonObject);
+      await this.globals.update({ values });
     },
   });
+
+  /**
+   * Fixture control (v0.4): read-only CITP show sync, library channel lists, per-show address setup, DMX over sACN. Nothing is sent
+   * until the user touches a fixture. Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
+   * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 skips the automatic show read.
+   */
+  readonly fixtures = new FixtureService(
+    new ShowModel({
+      sync: () => readShow({ host: process.env.CAPTURE_TEST_CITP_PORT ? "127.0.0.1" : undefined, port: Number(process.env.CAPTURE_TEST_CITP_PORT) || undefined, log: (l) => log.info(`CITP: ${l}`) }),
+      libraryPath: process.env.CAPTURE_TEST_LIBRARY || undefined,
+      log: (l) => log.info(`Fixtures: ${l}`),
+    }),
+    new SetupStore(this.globals),
+    new DmxEngine({ transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1") }),
+    (l) => log.info(`Fixtures: ${l}`),
+  );
 
   /** Dial sends: at most 30 msg/s per (view, property), always the newest value. */
   readonly limiter = new LatestValueLimiter<{ view: ViewId; prop: string; v: number }>((_k, s) => {
@@ -76,6 +104,18 @@ class Runtime {
     this.monitor.start();
     // Stored values come from Stream Deck's global settings; never let a slow answer block the connection.
     await Promise.race([this.values.init(), new Promise((r) => setTimeout(r, 4000))]);
+    await Promise.race([this.fixtures.setup.load(), new Promise((r) => setTimeout(r, 4000))]);
+    this.installExitHandlers();
+    // Show read (CITP, read-only): at start, and again whenever Capture becomes reachable and no show has been read yet.
+    if (process.env.CAPTURE_TEST_NO_CITP !== "1") {
+      void this.fixtures.show.sync();
+      let was = this.monitor.state.connected;
+      this.monitor.on("change", () => {
+        const now = this.monitor.state.connected;
+        if (now && !was && this.fixtures.show.status !== "ok") void this.fixtures.show.sync();
+        was = now;
+      });
+    }
 
     // Accessibility side (read-only, background): one summary line per minute, and the menu tree cached per Capture PID.
     this.ax.startSummary();
@@ -92,6 +132,20 @@ class Runtime {
       await this.ax.check("bg");
       if (this.ax.status === "ok") await this.menus.ensure();
     })().catch((e) => log.warn("Background menu read failed", e));
+  }
+
+  /** On exit: stop DMX output with Stream_Terminated on every universe in use (SIGKILL cannot be caught; receivers time out on their own). */
+  private installExitHandlers(): void {
+    let exiting = false;
+    for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+      process.once(sig, () => {
+        if (exiting) return;
+        exiting = true;
+        log.info(`${sig}: releasing DMX output`);
+        void this.fixtures.engine.release().finally(() => process.exit(0));
+        setTimeout(() => process.exit(0), 1500).unref();
+      });
+    }
   }
 
   openSystemSettings(status: AxStatus): void {

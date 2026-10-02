@@ -1,0 +1,78 @@
+{
+  "id": "com.rezabehjat.capture.fixture.select",
+  "controller": "Encoder",
+  "items": [
+    {
+      "key": "name",
+      "type": "text",
+      "rect": [
+        10,
+        6,
+        120,
+        20
+      ],
+      "font": {
+        "size": 14,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "mark",
+      "type": "text",
+      "rect": [
+        132,
+        6,
+        58,
+        20
+      ],
+      "font": {
+        "size": 13,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "right",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "line1",
+      "type": "text",
+      "rect": [
+        10,
+        30,
+        180,
+        30
+      ],
+      "font": {
+        "size": 20,
+        "weight": 700
+      },
+      "color": "#E8E8E8",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "line2",
+      "type": "text",
+      "rect": [
+        10,
+        64,
+        180,
+        28
+      ],
+      "font": {
+        "size": 17,
+        "weight": 600
+      },
+      "color": "#8A8D91",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    }
+  ]
+}

@@ -59,8 +59,16 @@ const folder = (name: string): Page => {
   return folderKey(layout.home, pos).child;
 };
 
-test("HOME: row 0 = View · Camera · Select · Edit, row 1 = Patch & Focus · Windows · File · Look; all folders", () => {
-  const order = ["View", "Camera", "Select", "Edit", "Patch & Focus", "Windows", "File", "Look"];
+/** Look is the last item of the View chain since v0.4 (HOME slot 8 is Fixtures). */
+const lookPage = (): Page => {
+  const last = chain(folder("View")).keys.at(-1)!;
+  assert.equal(titleOf(last), "Look ▸");
+  return (last as Extract<Key, { type: "folder" }>).child;
+};
+const isFixturesPage = (p: Page): boolean => p.path === "fixtures" || p.path.startsWith("fixtures/");
+
+test("HOME: row 0 = View · Camera · Select · Edit, row 1 = Patch & Focus · Windows · File · Fixtures; all folders", () => {
+  const order = ["View", "Camera", "Select", "Edit", "Patch & Focus", "Windows", "File", "Fixtures"];
   assert.deepEqual(KEY_POSITIONS_ALL.map((p) => titleOf(layout.home.keys.get(p))), order);
   for (const p of KEY_POSITIONS_ALL) assert.equal(layout.home.keys.get(p)?.type, "folder");
   assert.equal(layout.home.keys.size, 8);
@@ -74,6 +82,7 @@ test("every child page: Back at 0,0, commands only in 1,0 → 3,0 → 0,1 → 3,
     if (p === layout.home) continue;
     assert.equal(p.keys.get("0,0")?.type, "back", p.path);
     const used = COMMAND_SLOTS.filter((s) => p.keys.has(s));
+    if (isFixturesPage(p)) continue; // the Fixtures pages keep More ▸ in 3,1 with two empty slots before it (see the Fixtures tests)
     assert.deepEqual(used, COMMAND_SLOTS.slice(0, used.length), `${p.path}: slots are filled in order without gaps`);
     assert.equal(p.keys.size, 1 + used.length);
     assert.ok(p.keys.size <= 8);
@@ -86,7 +95,7 @@ test("more than 7 commands: slot 3,1 becomes 'More ▸' to the next page (which 
     const last = p.keys.get(MORE_SLOT);
     const isMore = last?.type === "folder" && last.title === "More ▸";
     if (isMore) {
-      assert.equal(p.keys.size, 8, `${p.path}: a page with More is full`);
+      if (!isFixturesPage(p)) assert.equal(p.keys.size, 8, `${p.path}: a page with More is full`);
       assert.equal(last.child.keys.get("0,0")?.type, "back");
       assert.equal(last.child.parent, p, "Back from the next page returns to this one");
       assert.ok(last.child.keys.size >= 2, "the next page is never empty");
@@ -94,7 +103,7 @@ test("more than 7 commands: slot 3,1 becomes 'More ▸' to the next page (which 
     for (const k of p.keys.values()) if (k.type === "folder" && k.title === "More ▸") assert.equal(k, last, "More ▸ only ever sits in 3,1");
   }
   // a folder with exactly 7 commands needs no More (Look has 3, the Camera Positions page has 7)
-  assert.equal(folder("Look").keys.size, 4);
+  assert.equal(lookPage().keys.size, 4);
 });
 
 test("View / Select / Edit / Patch & Focus / File hold their catalog category, in catalog order", () => {
@@ -102,7 +111,12 @@ test("View / Select / Edit / Patch & Focus / File hold their catalog category, i
     const got = chain(folder(name)).keys.map((k) => (k.type === "action" ? k.uuid : "?"));
     assert.deepEqual(got, ENTRIES.filter((e) => e.category === slug).map(uuidOf), name);
   };
-  expect("View", "view");
+  {
+    // View: its catalog commands, then the Look folder as the last item of the chain
+    const keys = chain(folder("View")).keys;
+    assert.equal(titleOf(keys.at(-1)), "Look ▸");
+    assert.deepEqual(keys.slice(0, -1).map((k) => (k.type === "action" ? k.uuid : "?")), ENTRIES.filter((e) => e.category === "view").map(uuidOf));
+  }
   expect("Select", "select");
   expect("Edit", "edit");
   expect("Patch & Focus", "patch");
@@ -150,7 +164,7 @@ test("Camera: Swing/Focus on the first pages; Positions 1–5 + Store Modifier t
 });
 
 test("Look: Auto Exposure, Laser Flicker, Connection", () => {
-  const { keys } = chain(folder("Look"));
+  const { keys } = chain(lookPage());
   assert.deepEqual(keys.map((k) => (k.type === "action" ? k.uuid : "?")), [...BOOL_PROPERTIES.map(toggleUuid), CONNECTION_UUID]);
   assert.deepEqual(keys.map((k) => (k.type === "action" ? k.name : "?")), ["Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection"]);
 });
@@ -161,15 +175,39 @@ test("dials: every page has its own four; standard set everywhere, View set on V
   assert.deepEqual([...DIAL_SETS.view], ["contrast", "saturation", "fillLighting", "hueClamp"]);
   assert.deepEqual([...DIAL_SETS.look], ["flare", "flareStreaks", "flareAngle", "flareSize"]);
   const viewPages = new Set(chain(folder("View")).pages);
-  const lookPages = new Set(chain(folder("Look")).pages);
+  const lookPages = new Set(chain(lookPage()).pages);
   for (const p of layout.pages) {
+    if (isFixturesPage(p)) continue; // own dial sets, see the Fixtures tests
     assert.equal(p.dials.size, 4, p.path);
     assert.deepEqual(ids(p), [...(viewPages.has(p) ? DIAL_SETS.view : lookPages.has(p) ? DIAL_SETS.look : DIAL_SETS.standard)], p.path);
   }
   assert.equal(viewPages.size, 3);
   assert.equal(lookPages.size, 1);
   assert.deepEqual(ids(layout.home), [...DIAL_SETS.standard]);
-  for (const p of layout.pages) for (const d of p.dials.values()) assert.ok(NUMBER_PROPERTIES.some((n) => dialUuid(n) === d.uuid));
+  for (const p of layout.pages) if (!isFixturesPage(p)) for (const d of p.dials.values()) assert.ok(NUMBER_PROPERTIES.some((n) => dialUuid(n) === d.uuid));
+});
+
+test("Fixtures folder: four pages; every page has Back · Setup · Release · Home Selected · Status (+ More ▸ except the last) and its own dial set", () => {
+  const { pages } = chain(folder("Fixtures"));
+  assert.equal(pages.length, 4);
+  const U = "com.rezabehjat.capture";
+  const keyUuids = ["fixtures.setup", "fixtures.release", "fixtures.home", "fixtures.status"].map((k) => `${U}.${k}`);
+  pages.forEach((p, i) => {
+    assert.equal(p.keys.get("0,0")?.type, "back", p.path);
+    assert.deepEqual(["1,0", "2,0", "3,0", "0,1"].map((pos) => (p.keys.get(pos) as { uuid: string }).uuid), keyUuids, p.path);
+    const more = p.keys.get(MORE_SLOT);
+    if (i < 3) assert.equal(titleOf(more), "More ▸", p.path);
+    else assert.equal(more, undefined, "the last page has no More");
+    assert.equal(p.keys.size, i < 3 ? 6 : 5);
+    assert.equal(p.parent, i === 0 ? layout.home : pages[i - 1], "Back returns to the page before");
+  });
+  const dialIds = (p: Page): string[] => DIAL_POSITIONS.filter((pos) => p.dials.has(pos)).map((pos) => (p.dials.get(pos)!.uuid.slice(`${U}.fixture.`.length)));
+  assert.deepEqual(dialIds(pages[0]), ["select", "pan", "tilt", "intensity"]);
+  assert.deepEqual(dialIds(pages[1]), ["select", "zoom", "focus", "iris"]);
+  assert.deepEqual(dialIds(pages[2]), ["select", "red-cyan", "green-magenta", "blue-yellow"]);
+  assert.deepEqual(dialIds(pages[3]), ["select", "white"]);
+  assert.equal(pages[3].dials.size, 2, "two empty dial slots on the fourth page");
+  assert.equal(pages[0].dials.get("0,0")?.title, "Select");
 });
 
 test("page UUIDs are unique, and the same on every build", () => {
@@ -280,7 +318,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.3.1.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.4.0.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }

@@ -3,12 +3,16 @@
  * No file or image handling here (see build.ts); this is what the layout tests read.
  *
  * Rules (Handoff 09 §3):
- *  - HOME: row 0 = View · Camera · Select · Edit, row 1 = Patch & Focus · Windows · File · Look (all folders).
+ *  - HOME: row 0 = View · Camera · Select · Edit, row 1 = Patch & Focus · Windows · File · Fixtures (all folders). Look is the last item of the View chain.
  *  - Every child page: Back at "0,0"; commands fill "1,0" → "3,0" → "0,1" → "3,1" (7 slots) in catalog order.
  *  - More than 7 commands: the 7th slot ("3,1") becomes a "More ▸" folder to the next page (which has its own Back).
  *  - Dials: every page has its own four. Standard set everywhere; View pages get the View set; the Look folder the Flare set.
+ *  - Fixtures (v0.4): a chain of four pages; every page has Back · Setup · Release · Home Selected · Status (+ More ▸ except the last) and its own
+ *    dial set: Select·Pan·Tilt·Intensity / Select·Zoom·Focus·Iris / Select·Red|Cyan·Green|Magenta·Blue|Yellow / Select·White (+ 2 empty).
  */
 import { CATEGORIES, ENTRIES, actionName, type CatalogEntry } from "../catalog/index.js";
+import { FIXTURE_DIALS, FIXTURE_KEYS, FIXTURE_SELECT } from "../catalog/fixtures.js";
+import type { DialId } from "../fixtures/attrs.js";
 import { CONNECTION_UUID, CONNECTION_NAME, SHOW_POSITION_COUNT, STORE_MODIFIER_NAME, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "../catalog/extras.js";
 import { uuidOf } from "../catalog/index.js";
 import { BOOL_PROPERTIES, NUMBER_PROPERTIES } from "../lib/properties.js";
@@ -42,6 +46,7 @@ export interface Dial {
   name: string;
   title: string;
   icon: string;
+  /** View-property id ("exposureAdjustment"), or "fixture:<dial>" for the fixture dials. */
   property: string;
 }
 export interface Page {
@@ -91,9 +96,24 @@ interface FolderDef {
 
 const catIcon = (slug: string): string => CATEGORIES.find((c) => c.slug === slug)?.icon ?? "folder-view";
 
-/** HOME order: row 0, then row 1. */
+/** The Look folder (toggles + Connection, Flare dials): since v0.4 it is the LAST item of the View chain instead of a HOME key. */
+function lookFolder(): Item {
+  return {
+    kind: "folder",
+    title: "Look ▸",
+    slug: "look",
+    icon: "cat-look",
+    dials: "look",
+    items: [
+      ...BOOL_PROPERTIES.map<Item>((p) => ({ kind: "action", key: { type: "action", uuid: toggleUuid(p), name: toggleActionName(p.label), title: p.label, icon: PROPERTY_ICON[p.id] } })),
+      { kind: "action", key: { type: "action", uuid: CONNECTION_UUID, name: CONNECTION_NAME, title: "Connection", icon: "connection" } },
+    ],
+  };
+}
+
+/** HOME order: row 0, then row 1 (the eighth key, Fixtures, is built by buildFixtures). */
 export const FOLDERS: FolderDef[] = [
-  { slug: "view", title: "View", icon: catIcon("view"), dials: "view", items: () => inCat("view").map(cmd) },
+  { slug: "view", title: "View", icon: catIcon("view"), dials: "view", items: () => [...inCat("view").map(cmd), lookFolder()] },
   {
     slug: "camera",
     title: "Camera",
@@ -122,16 +142,6 @@ export const FOLDERS: FolderDef[] = [
   { slug: "patch", title: "Patch & Focus", icon: catIcon("patch"), dials: "standard", items: () => inCat("patch").map(cmd) },
   { slug: "windows", title: "Windows", icon: catIcon("window"), dials: "standard", items: () => [...inCat("tabs"), ...inCat("navigate"), ...inCat("window")].map(cmd) },
   { slug: "file", title: "File", icon: catIcon("file"), dials: "standard", items: () => inCat("file").map(cmd) },
-  {
-    slug: "look",
-    title: "Look",
-    icon: "cat-look",
-    dials: "look",
-    items: () => [
-      ...BOOL_PROPERTIES.map<Item>((p) => ({ kind: "action", key: { type: "action", uuid: toggleUuid(p), name: toggleActionName(p.label), title: p.label, icon: PROPERTY_ICON[p.id] } })),
-      { kind: "action", key: { type: "action", uuid: CONNECTION_UUID, name: CONNECTION_NAME, title: "Connection", icon: "connection" } },
-    ],
-  },
 ];
 
 function dialsFor(set: DialSet, pageId: string): Map<string, Dial> {
@@ -167,12 +177,50 @@ function buildChain(path: string, items: Item[], dials: DialSet, parent: Page, p
   return page;
 }
 
+/** The dial sets of the Fixtures pages, in page order ("select" = Fixture: Select). */
+export const FIXTURE_DIAL_PAGES: ("select" | DialId)[][] = [
+  ["select", "pan", "tilt", "intensity"],
+  ["select", "zoom", "focus", "iris"],
+  ["select", "red-cyan", "green-magenta", "blue-yellow"],
+  ["select", "white"],
+];
+
+function fixtureDialsFor(ids: ("select" | DialId)[]): Map<string, Dial> {
+  const m = new Map<string, Dial>();
+  ids.forEach((id, i) => {
+    if (id === "select") m.set(DIAL_POSITIONS[i], { uuid: FIXTURE_SELECT.uuid, name: FIXTURE_SELECT.name, title: "Select", icon: FIXTURE_SELECT.icon, property: "fixture:select" });
+    else {
+      const d = FIXTURE_DIALS.find((x) => x.id === id);
+      if (!d) throw new Error(`unknown fixture dial ${id}`);
+      m.set(DIAL_POSITIONS[i], { uuid: d.uuid, name: d.name, title: d.label, icon: d.icon, property: `fixture:${id}` });
+    }
+  });
+  return m;
+}
+
+/** Fixtures folder: one page per dial set; every page repeats Back · Setup · Release · Home Selected · Status and, except the last, More ▸. */
+function buildFixtures(parent: Page, pages: Page[]): Page {
+  const keyItems: Key[] = FIXTURE_KEYS.map((k) => ({ type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
+  const build = (n: number, parentPage: Page): Page => {
+    const path = n === 1 ? "fixtures" : `fixtures/${n}`;
+    const page: Page = { id: uuidFrom(path), path, parent: parentPage, keys: new Map(), dials: fixtureDialsFor(FIXTURE_DIAL_PAGES[n - 1]) };
+    pages.push(page);
+    page.keys.set("0,0", { type: "back", title: "Back", icon: "back" });
+    // Setup, Release, Home Selected, Status fill "1,0" "2,0" "3,0" "0,1"; More ▸ takes the last slot.
+    keyItems.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], k));
+    if (n < FIXTURE_DIAL_PAGES.length) page.keys.set(MORE_SLOT, { type: "folder", title: MORE_TITLE, icon: "more", child: build(n + 1, page) });
+    return page;
+  };
+  return build(1, parent);
+}
+
 export function buildLayout(): Layout {
   const home: Page = { id: uuidFrom("home"), path: "home", keys: new Map(), dials: dialsFor("standard", "home") };
   const pages: Page[] = [home];
   FOLDERS.forEach((f, i) => {
     home.keys.set(KEY_POSITIONS_ALL[i], { type: "folder", title: f.title, icon: f.icon, child: buildChain(f.slug, f.items(), f.dials, home, pages) });
   });
+  home.keys.set(KEY_POSITIONS_ALL[FOLDERS.length], { type: "folder", title: "Fixtures", icon: "cat-fixtures", child: buildFixtures(home, pages) });
   return { home, pages };
 }
 

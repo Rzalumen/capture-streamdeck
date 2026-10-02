@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.3 (beta)
+# Capture for Stream Deck+ — plugin v0.4 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -7,7 +7,7 @@ Stream Deck SDK v2 manifest, Node 20 runtime, Stream Deck 6.6+, macOS 13+.
 ## Straight commands only (v0.3)
 
 There are **no dropdown or configurable actions** in the Stream Deck action list. Every action is one named command
-(`<Group>: <Title>`), 154 in all, and the plugin offers a ready-made Stream Deck+ profile that organises them in
+(`<Group>: <Title>`), 169 in all, and the plugin offers a ready-made Stream Deck+ profile that organises them in
 folders (below).
 
 | Group | Actions |
@@ -16,6 +16,7 @@ folders (below).
 | `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
 | `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
 | `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
+| `Fixtures: Setup`, `Release`, `Home Selected`, `Status` · `Fixture: Select`, `Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` | **Fixture knobs (v0.4)**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" below. |
 | `Status: Connection` | Connected/Offline, Capture version, Accessibility status, median latency. Press to re-check. |
 | `Dial: …` (12) | *Exposure, Ambient, Bloom, White Balance, Fill, Hue Clamp, Contrast, Saturation, Flare, Flare Size, Flare Angle, Flare Streaks*. Turn: value += ticks × step (clamped, ≤ 30 msg/s, latest wins). Push or touch: fine mode (÷10). Long touch: reset. **Dial actions only appear in the action list when a dial slot (not a key) is selected.** |
 
@@ -45,7 +46,7 @@ the manifest (`Profiles`: Stream Deck+, `DeviceType` 7, editable). When the plug
 it; it switches to it automatically whenever **Capture 2026** is the active app (`AppIdentifier`
 `/Applications/Capture 2026.app`; for another version build with `CAPTURE_APP_PATH="/Applications/Capture 2025.app" npm run gen-profile`).
 
-**HOME** — row 0: View · Camera · Select · Edit; row 1: Patch & Focus · Windows · File · Look (all folders).
+**HOME** — row 0: View · Camera · Select · Edit; row 1: Patch & Focus · Windows · File · Fixtures (all folders; **Look** is the last item of the View chain).
 Every folder page has **Back** at the top-left key; commands fill the other seven keys in catalog order, and a folder
 with more than seven commands ends its page with **More ▸**, a folder to the next page (which has its own Back).
 In Camera, *Position 1–5* and *Store Modifier* share one page (Camera › Positions ▸).
@@ -62,6 +63,28 @@ To ship a profile you built yourself instead: `npm run add-profile -- Capture.st
 resolved against Capture's cached live menu tree before it is used (`src/lib/resolve.ts`: `…` ≡ `...`, whitespace,
 case) and the *exact live title* is what is clicked, polled and reported at startup, so "found" in the log means
 "clickable". A command Capture doesn't have shows `?` and is not clicked; the log names the closest live titles.
+
+## Fixture control (v0.4)
+
+Turn a fixture's pan, tilt, intensity, zoom, focus, iris and colour with the dials, from the Fixtures folder. **This sends DMX (sACN E1.31) to
+Capture's sACN input, not OSC.** Everything in Capture itself stays read-only: nothing is patched, selected or modified there.
+
+1. **Show read** (CITP, read-only, at start and when you press *Fixtures: Setup / Status*): the plugin connects to Capture's CITP port, sends only
+   `PNam`, `LaserFeedList`, `EnterShow`, `FixtureListRequest`, `LeaveShow` and `NACK` (an allowlist, checked on every send) and reads the FixtureList: model, mode,
+   channel count, Capture Channel, CaptureInstanceId and position. Capture never sends its patch over CITP (Patched=0), so addresses are entered by you.
+2. **Channel lists** come from the fixture's own object in `~/Library/Application Support/Capture 2026/Library.c2z` (read-only), parsed once per type with the
+   safety rules of `research/` (exact counts must match Capture's ChannelCount, ambiguous parses are refused unless every candidate agrees on every channel the plugin writes).
+   A type that does not parse safely is **never controllable**; the reason is on the Setup page.
+3. **Fixtures: Setup** (its Property Inspector): fixtures with pan or tilt (tick *Show all fixtures* for the rest) with Capture Channel, model, mode and a position hint
+   (`SL`/`SR` = stage left/right from X, `DS`/`US` = down/upstage from Z, `H` = height from Y; orientation not yet verified against a real show), universe 1–16 and
+   address 1–512, saved **per show name keyed by CaptureInstanceId**. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
+4. **Dials** act on the selection of **Fixture: Select** (rotate = next controllable fixture; push or touch = single ↔ all of this type). Attribute dials: rotate ±1 % per tick
+   (16-bit aware), push or touch = fine (0.1 %), long touch = home. A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
+   Attribute names are matched generically (whole words; speed/mode/macro/curve… channels are never the value).
+5. **DMX engine**: nothing is sent until you touch a fixture. A touched fixture starts from its defaults (pan/tilt 50 %, intensity 100 %, shutter 255, additive colours full, everything else 0). The
+   universe is then sent at 40 fps — **all 512 slots; every slot not set by a touched fixture is 0, which blacks out anything else on that universe** (the Setup page and the Status key say so) — until
+   **Fixtures: Release** or plugin exit, which send Stream_Terminated (3 frames) on every universe in use. Changing the setup, or reading a different show, releases output first.
+   sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
 
 ## OSC properties
 

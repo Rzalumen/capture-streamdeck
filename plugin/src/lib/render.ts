@@ -191,3 +191,90 @@ export function connectionSvg(v: ConnectionView): string {
     `</svg>`
   );
 }
+
+// ------------------------------------------------------------------ fixtures (v0.4)
+
+export interface FixtureStripState {
+  name: string;
+  /** 0..1, or null → "—" (the fixture lacks the attribute / nothing selected). */
+  value: number | null;
+  fine: boolean;
+  /** Acting on every fixture of the selected type. */
+  all: boolean;
+  /** The value shown is the starting value; nothing has been sent for this fixture yet. */
+  untouched: boolean;
+}
+
+/** Feedback for layouts/dial.json on the fixture attribute dials: name, value in %, bar, marks ALL / FINE / ~. */
+export function fixtureStripFeedback(s: FixtureStripState): Record<string, unknown> {
+  const grey = mix(COLORS.text, COLORS.bg, 0.5);
+  if (s.value === null) {
+    const dim = mix(COLORS.text, COLORS.bg, DIM_ALPHA);
+    return {
+      name: { value: s.name, color: mix(COLORS.accent, COLORS.bg, DIM_ALPHA) },
+      value: { value: "—", color: dim },
+      unit: { value: "", color: dim },
+      bar: { value: 0, bar_fill_c: mix(COLORS.accent, COLORS.bg, DIM_ALPHA) },
+      mark: { value: s.all ? "ALL" : "", color: COLORS.accent },
+    };
+  }
+  const pct = (Math.round(s.value * 1000) / 10).toFixed(1);
+  const marks = [s.all ? "ALL" : "", s.fine ? "FINE" : "", s.untouched && !s.all && !s.fine ? "~" : ""].filter(Boolean).join(" ");
+  return {
+    name: { value: s.name, color: COLORS.accent },
+    value: { value: s.untouched ? `~${pct}` : pct, color: s.untouched ? grey : COLORS.text },
+    unit: { value: "%", color: grey },
+    bar: { value: Math.round(Math.min(1, Math.max(0, s.value)) * 100), bar_fill_c: s.untouched ? mix(COLORS.accent, COLORS.bg, DIM_ALPHA) : COLORS.accent },
+    mark: { value: marks, color: COLORS.accent },
+  };
+}
+
+/** Feedback for layouts/select.json. */
+export function selectStripFeedback(s: { line1: string; line2: string; mode: "single" | "type"; index: number; count: number }): Record<string, unknown> {
+  const grey = mix(COLORS.text, COLORS.bg, 0.5);
+  const none = s.count === 0;
+  return {
+    name: { value: "FIXTURE", color: COLORS.accent },
+    mark: { value: none ? "" : `${s.mode === "type" ? "ALL · " : ""}${s.index + 1}/${s.count}`, color: COLORS.accent },
+    line1: { value: s.line1, color: none ? grey : COLORS.text },
+    line2: { value: s.line2, color: grey },
+  };
+}
+
+export interface FixtureStatusView {
+  /** "ok" once a show was read; "syncing" while reading; "error" / "idle" otherwise. */
+  sync: "idle" | "syncing" | "ok" | "error";
+  showName: string | null;
+  controllable: number;
+  fixtures: number;
+  active: boolean;
+  universes: number[];
+}
+
+/** The Fixtures: Status key (144×144): show name, controllable count, output state (with the blackout reminder while output is on). */
+export function fixtureStatusSvg(v: FixtureStatusView): string {
+  const grey = mix(COLORS.text, COLORS.bg, 0.6);
+  const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  const t = (y: number, size: number, color: string, s: string, w = 600): string =>
+    `<text x="72" y="${y}" text-anchor="middle" font-family="${FONT}" font-size="${size}" font-weight="${w}" fill="${color}">${esc(s)}</text>`;
+  let head: string;
+  let headColor: string = COLORS.text;
+  if (v.sync === "syncing") head = "Reading…";
+  else if (v.sync === "ok") head = clip(v.showName ?? "(unnamed show)", 13);
+  else {
+    head = v.sync === "error" ? "No show" : "Not read";
+    headColor = COLORS.red;
+  }
+  const count = v.sync === "ok" || v.fixtures ? `${v.controllable} of ${v.fixtures} ready` : "press to read";
+  const out = v.active ? `OUTPUT ON  U${v.universes.join(",")}` : "output off";
+  const warn = v.active ? t(130, 11, COLORS.red, "rest of the universe = 0", 500) : "";
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${KEY}" height="${KEY}" viewBox="0 0 ${KEY} ${KEY}"><rect width="${KEY}" height="${KEY}" fill="${COLORS.bg}"/>` +
+    `<g transform="translate(54 8) scale(${36 / 24})" fill="none" stroke="${v.active ? COLORS.accent : grey}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS["fx-status"]}</g>` +
+    t(68, 17, headColor, head, 700) +
+    t(90, 15, grey, count, 500) +
+    t(112, out.length > 16 ? 13 : 15, v.active ? COLORS.accent : grey, out, 700) +
+    warn +
+    `</svg>`
+  );
+}

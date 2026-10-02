@@ -47,7 +47,7 @@ export class FakeDeck {
     return fs.existsSync(this.openLog) ? fs.readFileSync(this.openLog, "utf8").split("\n").filter(Boolean) : [];
   }
 
-  async start(opts: { oscPort: number; pluginDir: string; fixtures: string; worker?: boolean; ax?: object }): Promise<void> {
+  async start(opts: { oscPort: number; pluginDir: string; fixtures: string; worker?: boolean; ax?: object; env?: Record<string, string> }): Promise<void> {
     this.pluginDir = opts.pluginDir;
     this.setAx(opts.ax ?? { mode: "ok" });
     this.wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
@@ -87,6 +87,9 @@ export class FakeDeck {
           FAKE_AX_STATE: this.axState,
           FAKE_AX_LOG: this.axLog,
           FAKE_OPEN_LOG: this.openLog,
+          // no automatic CITP show read (UDP 4809 discovery, lsof) unless a test points the plugin at a stub CITP server
+          ...(opts.env?.CAPTURE_TEST_CITP_PORT ? {} : { CAPTURE_TEST_NO_CITP: "1" }),
+          ...(opts.env ?? {}),
         },
       },
     );
