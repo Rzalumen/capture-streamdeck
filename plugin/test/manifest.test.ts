@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.4.0.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.4.1.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.4.0.0");
+  assert.equal(built.Version, "0.4.1.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 

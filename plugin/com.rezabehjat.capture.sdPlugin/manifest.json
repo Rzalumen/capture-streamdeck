@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.4.0.0",
+  "Version": "0.4.1.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2664,7 +2664,7 @@
       "Name": "Fixtures: Setup",
       "UUID": "com.rezabehjat.capture.fixtures.setup",
       "Icon": "imgs/icons/fx-setup",
-      "Tooltip": "Reads the show from Capture (read-only) and lets you enter the universe and DMX address of each fixture. Press to read the show again.",
+      "Tooltip": "Press to open the Setup page in your browser: the show read from Capture (read-only) and the universe and DMX address of each fixture. Saved as you type. (The same table is in this key's inspector.)",
       "PropertyInspectorPath": "ui/fixtures.html",
       "Controllers": [
         "Keypad"

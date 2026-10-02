@@ -48,7 +48,7 @@ export const FIXTURE_KEY_UUIDS = {
   status: `${BASE_UUID}.fixtures.status`,
 } as const;
 export const FIXTURE_KEYS = [
-  { uuid: FIXTURE_KEY_UUIDS.setup, name: "Fixtures: Setup", title: "Setup", icon: "fx-setup", pi: true, tooltip: "Reads the show from Capture (read-only) and lets you enter the universe and DMX address of each fixture. Press to read the show again." },
+  { uuid: FIXTURE_KEY_UUIDS.setup, name: "Fixtures: Setup", title: "Setup", icon: "fx-setup", pi: true, tooltip: "Press to open the Setup page in your browser: the show read from Capture (read-only) and the universe and DMX address of each fixture. Saved as you type. (The same table is in this key's inspector.)" },
   { uuid: FIXTURE_KEY_UUIDS.release, name: "Fixtures: Release", title: "Release", icon: "fx-release", pi: false, tooltip: "Stops all DMX output: Stream_Terminated is sent on every universe in use." },
   { uuid: FIXTURE_KEY_UUIDS.home, name: "Fixtures: Home Selected", title: "Home Selected", icon: "fx-home", pi: false, tooltip: "Pan and tilt 50 %, intensity 100 % on the selected fixture(s)." },
   { uuid: FIXTURE_KEY_UUIDS.status, name: "Fixtures: Status", title: "Status", icon: "fx-status", pi: false, tooltip: "Shows the show name, how many fixtures are controllable and whether DMX output is active. Press to read the show again." },

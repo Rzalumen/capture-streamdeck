@@ -55,7 +55,7 @@ export class Selection {
   view(): SelectionView {
     const { list, index } = this.resolve();
     const primary = list[index];
-    if (!primary) return { mode: this.mode, targets: [], line1: "No fixture", line2: "Fixtures: Setup" };
+    if (!primary) return { mode: this.mode, targets: [], line1: "No fixture", line2: "Press Setup" };
     if (this.mode === "type") {
       const targets = list.filter((c) => c.fixture.typeKey === primary.fixture.typeKey);
       return { mode: "type", primary, targets, line1: `All ${primary.fixture.name}`, line2: `${targets.length} fixture${targets.length === 1 ? "" : "s"}` };

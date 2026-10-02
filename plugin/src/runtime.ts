@@ -19,6 +19,8 @@ import { readShow } from "./fixtures/citpSync.js";
 import { SACN_PORT } from "./fixtures/sacn.js";
 import { FixtureService } from "./fixtures/service.js";
 import { SetupStore } from "./fixtures/setup.js";
+import { runSetupCommand } from "./fixtures/setupCommands.js";
+import { SetupServer } from "./fixtures/setupServer.js";
 import { ShowModel } from "./fixtures/show.js";
 import type { JsonObject } from "@elgato/utils";
 
@@ -69,6 +71,29 @@ class Runtime {
     new DmxEngine({ transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1") }),
     (l) => log.info(`Fixtures: ${l}`),
   );
+
+  /**
+   * The Setup page (v0.4.1): a local web page for entering universe/address per fixture, served on 127.0.0.1 only with a random token.
+   * It starts listening on the first press of Fixtures: Setup (not before) and uses the same commands as the Property Inspector.
+   */
+  readonly setupServer = new SetupServer({
+    uiDir: fileURLToPath(new URL("../ui/", import.meta.url)),
+    handle: async (m) => {
+      const error = await runSetupCommand(this.fixtures, m);
+      return { view: this.fixtures.setupView(), error };
+    },
+    log: (l) => log.info(`Fixtures: ${l}`),
+  });
+
+  /** Opens a URL in the default browser (macOS `open`). */
+  openUrl(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      execFile(process.env.CAPTURE_TEST_OPEN || "/usr/bin/open", [url], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
 
   /** Dial sends: at most 30 msg/s per (view, property), always the newest value. */
   readonly limiter = new LatestValueLimiter<{ view: ViewId; prop: string; v: number }>((_k, s) => {

@@ -1,7 +1,8 @@
-import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
+import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type PropertyInspectorDidAppearEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import { FIXTURE_KEY_UUIDS, FIXTURE_KEYS, FIXTURE_SELECT_UUID, FIXTURE_DIALS } from "../catalog/fixtures.js";
 import type { DialId } from "../fixtures/attrs.js";
 import { fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl } from "../lib/render.js";
+import { runSetupCommand, type SetupCommand } from "../fixtures/setupCommands.js";
 import { rt } from "../runtime.js";
 import { draw, Flasher, logEvent } from "./util.js";
 
@@ -164,7 +165,10 @@ abstract class FixtureKey extends SingletonAction {
   }
 }
 
-/** Fixtures: Setup — the Property Inspector holds the address table; pressing the key reads the show again. */
+/**
+ * Fixtures: Setup — pressing it opens the Setup page in the default browser (a local page, loopback only, token in the address).
+ * The Property Inspector shows the same table (same commands, same storage and checks).
+ */
 export class FixturesSetup extends FixtureKey {
   constructor() {
     super(FIXTURE_KEY_UUIDS.setup, FIXTURE_KEYS[0]);
@@ -172,55 +176,37 @@ export class FixturesSetup extends FixtureKey {
   protected view(c: KeyCtx): void {
     const st = svc().status();
     const f = c.flasher.flash;
-    draw(c.action, { icon: this.def.icon, label: this.def.title, badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
+    draw(c.action, { icon: this.def.icon, label: st.controllable ? this.def.title : "Setup ▸ press", badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
   }
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
-    logEvent("Key press", this.manifestId, undefined, "read the show again");
-    c?.flasher.show({ text: "Reading…" }, 1500);
-    await svc().show.sync();
-    const st = svc().status();
-    logEvent("Key result", this.manifestId, undefined, st.syncStatus === "ok" ? `show "${st.showName ?? ""}", ${st.fixtures} fixtures, ${st.controllable} controllable` : `show not read: ${st.error}`);
-    if (st.syncStatus !== "ok") c?.flasher.show({ text: "No show", tone: "red" }, 2000);
+    logEvent("Key press", this.manifestId, undefined, "open the setup page in the browser");
+    // read the show if it has not been read (the page also shows "Re-read show")
+    if (svc().show.status === "idle" || svc().show.status === "error") void svc().show.sync();
+    try {
+      const url = await rt.setupServer.url();
+      await rt.openUrl(url);
+      rt.log.info(`Fixtures: setup page opened in the browser (http://127.0.0.1:${rt.setupServer.port}/)`);
+      c?.flasher.show({ text: "Opening…" }, 1500);
+    } catch (e) {
+      rt.log.error(`Fixtures: could not open the setup page: ${(e as Error).message}`);
+      c?.flasher.show({ text: "Error", tone: "red" }, 2500);
+    }
+  }
+
+  /** The Property Inspector appeared (log only: tells us whether it ever shows up). */
+  override onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): void {
+    rt.log.info("Fixtures: setup inspector opened");
   }
 
   /** The Setup Property Inspector's messages: {cmd: "get" | "resync" | "set" | "clear" | "autofill", ...}. */
   override async onSendToPlugin(ev: SendToPluginEvent<{ cmd?: string }, Record<string, never>>): Promise<void> {
-    const m = (ev.payload ?? {}) as { cmd?: string; key?: string; universe?: number; address?: number; keys?: string[] };
+    const m = (ev.payload ?? {}) as SetupCommand;
     const send = async (error: string | null = null): Promise<void> => {
       await streamDeck.ui.sendToPropertyInspector({ event: "setup", view: svc().setupView() as never, error });
     };
-    switch (m.cmd) {
-      case "get":
-        if (svc().show.status === "idle") void svc().show.sync();
-        await send();
-        break;
-      case "resync":
-        await send();
-        await svc().show.sync();
-        await send();
-        break;
-      case "set": {
-        const err = await svc().setAddress(String(m.key), { universe: Number(m.universe), address: Number(m.address) });
-        logEvent("PI setup", this.manifestId, { key: m.key, universe: m.universe, address: m.address }, err ?? "saved");
-        await send(err);
-        break;
-      }
-      case "clear": {
-        const err = await svc().setAddress(String(m.key), null);
-        logEvent("PI setup", this.manifestId, { key: m.key }, err ?? "cleared");
-        await send(err);
-        break;
-      }
-      case "autofill": {
-        const err = await svc().autoFill(Array.isArray(m.keys) ? m.keys.map(String) : [], { universe: Number(m.universe), address: Number(m.address) });
-        logEvent("PI setup", this.manifestId, { keys: m.keys?.length, universe: m.universe, address: m.address }, err ?? "auto-filled");
-        await send(err);
-        break;
-      }
-      default:
-        await send();
-    }
+    const error = await runSetupCommand(svc(), m, () => send());
+    await send(error);
   }
 }
 

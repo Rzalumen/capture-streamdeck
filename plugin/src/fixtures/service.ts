@@ -170,11 +170,18 @@ export class FixtureService {
   async setAddress(key: string, addr: Address | null): Promise<string | null> {
     const f = this.show.fixtures.find((x) => x.key === key);
     if (!f) return "unknown fixture (read the show again)";
+    const what = `Ch ${f.channel} ${f.name}`;
     if (addr) {
       const bad = validateAddress(addr.universe, addr.address, f.channelCount);
-      if (bad) return bad;
+      if (bad) {
+        this.log(`set ${what} -> ${addr.universe}/${addr.address} rejected: ${bad}`);
+        return bad;
+      }
     }
-    return this.setup.set(this.show.showName, key, addr);
+    const err = await this.setup.set(this.show.showName, key, addr);
+    if (err) this.log(`set ${what} not saved: ${err}`);
+    else this.log(addr ? `set ${what} -> ${addr.universe}/${addr.address}` : `cleared ${what}`);
+    return err;
   }
 
   /** Auto-fill sequential from a start address over `keys` (in Capture channel order). Returns an error text, or null when saved. */
@@ -185,8 +192,14 @@ export class FixtureService {
       .sort((a, b) => a.channel - b.channel || a.identifier - b.identifier);
     if (!items.length) return "no fixtures to fill";
     const r = autoFill(items.map((f) => ({ key: f.key, channelCount: f.channelCount })), start);
-    if (!r.ok) return r.error;
-    return this.setup.setMany(this.show.showName, r.assign);
+    if (!r.ok) {
+      this.log(`auto-fill from ${start.universe}/${start.address} failed: ${r.error}`);
+      return r.error;
+    }
+    const err = await this.setup.setMany(this.show.showName, r.assign);
+    if (err) this.log(`auto-fill not saved: ${err}`);
+    else for (const f of items) this.log(`set Ch ${f.channel} ${f.name} -> ${r.assign[f.key].universe}/${r.assign[f.key].address} (auto-fill)`);
+    return err;
   }
 
   // ------------------------------------------------------------------ dials and keys

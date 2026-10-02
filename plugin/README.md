@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.4 (beta)
+# Capture for Stream Deck+ — plugin v0.4.1 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -75,9 +75,9 @@ Capture's sACN input, not OSC.** Everything in Capture itself stays read-only: n
 2. **Channel lists** come from the fixture's own object in `~/Library/Application Support/Capture 2026/Library.c2z` (read-only), parsed once per type with the
    safety rules of `research/` (exact counts must match Capture's ChannelCount, ambiguous parses are refused unless every candidate agrees on every channel the plugin writes).
    A type that does not parse safely is **never controllable**; the reason is on the Setup page.
-3. **Fixtures: Setup** (its Property Inspector): fixtures with pan or tilt (tick *Show all fixtures* for the rest) with Capture Channel, model, mode and a position hint
+3. **Fixtures: Setup** — **press the key and the Setup page opens in your default browser** (v0.4.1). It is a local page served by the plugin on `127.0.0.1` only, on a random port, with a random token in the address (`/?t=…`); every request needs the token, otherwise it is refused (403). Nothing listens until the first press. The same table is also in the key's Property Inspector (same commands, same storage, same checks; the plugin log says `Fixtures: setup inspector opened` when it appears). The page lists fixtures with pan or tilt (tick *Show all fixtures* for the rest) with Capture Channel, model, mode and a position hint
    (`SL`/`SR` = stage left/right from X, `DS`/`US` = down/upstage from Z, `H` = height from Y; orientation not yet verified against a real show), universe 1–16 and
-   address 1–512, saved **per show name keyed by CaptureInstanceId**. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
+   address 1–512, **saved as soon as you change a field** (inline error under the row if refused), per show name keyed by CaptureInstanceId; every change is logged (`Fixtures: set Ch 203 Rogue R2X Wash -> 1/285`). While nothing is configured the key says `Setup ▸ press` and the Select strip `Press Setup`; when exactly one fixture becomes controllable it is selected automatically. *Re-read show* reads the show again. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
 4. **Dials** act on the selection of **Fixture: Select** (rotate = next controllable fixture; push or touch = single ↔ all of this type). Attribute dials: rotate ±1 % per tick
    (16-bit aware), push or touch = fine (0.1 %), long touch = home. A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
    Attribute names are matched generically (whole words; speed/mode/macro/curve… channels are never the value).
