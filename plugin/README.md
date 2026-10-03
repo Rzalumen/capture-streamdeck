@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.5.0 (beta)
+# Capture for Stream Deck+ — plugin v0.6.0 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -16,7 +16,7 @@ folders (below).
 | `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
 | `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
 | `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
-| `Fixtures: Setup`, `Release`, `Home Selected`, `Status` · `Fixture: Select`, `Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` | **Fixture knobs (v0.4)**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" below. |
+| `Fixtures: Setup`, `Release`, `Home Selected`, `Status`, `◀ Page`, `Page ▶` · `Fixture: Select`, `Attribute 1`, `Attribute 2`, `Attribute 3` (v0.6) · `Fixture: Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` (fixed dials, kept for hand-placed layouts) | **Fixture knobs**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" and "Attribute pages" below. |
 | `Status: Connection` | Connected/Offline, Capture version, Accessibility status, median latency. Press to re-check. |
 | `Dial: …` (12) | *Exposure, Ambient, Bloom, White Balance, Fill, Hue Clamp, Contrast, Saturation, Flare, Flare Size, Flare Angle, Flare Streaks*. Turn: value += ticks × step (clamped, ≤ 30 msg/s, latest wins). Push or touch: fine mode (÷10). Long touch: reset. **Dial actions only appear in the action list when a dial slot (not a key) is selected.** |
 
@@ -64,7 +64,7 @@ resolved against Capture's cached live menu tree before it is used (`src/lib/res
 case) and the *exact live title* is what is clicked, polled and reported at startup, so "found" in the log means
 "clickable". A command Capture doesn't have shows `?` and is not clicked; the log names the closest live titles.
 
-## Fixture control (v0.4, v0.5)
+## Fixture control (v0.4 – v0.6)
 
 Turn a fixture's pan, tilt, intensity, zoom, focus, iris and colour with the dials, from the Fixtures folder. **This sends DMX (sACN E1.31) to
 Capture's sACN input, not OSC.** Everything in Capture itself stays read-only apart from one thing: the plugin gives each fixture that has no
@@ -102,6 +102,29 @@ identifier yet a number (see 2).
    **Fixtures: Release**, LeaveShow, a different show, or plugin exit, which send Stream_Terminated (3 frames) on every universe in use. Moving or clearing the address of a fixture that is being driven
    also releases output first. sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
    A dropped CITP connection does not stop output (it reconnects).
+
+### Attribute pages (v0.6, Handoff 20)
+
+The Fixtures folder is one page: **Setup · Release · Home Selected · Status · ◀ Page · Page ▶**, dials **Select · Attribute 1 · 2 · 3**.
+
+- **Every channel of the selected fixture is on exactly one page**, built from the channel names of its library mode (whole words, case-insensitive, no fixture
+  type is known): **Position** (pan, tilt) · **Intensity** (dimmer, intensity, shutter/strobe) · **Colour** (red … uv, cyan, magenta, yellow, CTO, CTB, colour wheel) ·
+  **Beam** (zoom, focus, iris, frost, diffusion, edge) · **Shutters** (blade, framing/frame, "Shutter" + number/letter such as "Shutter 1A", shutter rotation) ·
+  **Gobo/Prism/FX** (gobo, prism, animation, effect, rotation, index) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a
+  speed/time/mode/macro/control … word always goes here). Only non-empty groups are pages; more than 3 channels continue on further pages (`Shutters 1/3`).
+  Fine channels are never knobs of their own: they ride with their coarse channel (16-bit). Colour cells (`Red 1` … `Red 5`) are one knob.
+- **◀ Page / Page ▶** cycle the pages (wrapping); their titles show the current page. The page goes back to **Position** when the first selected fixture is of a
+  different type, and is kept within the same type.
+- **Attribute 1–3** show the page's channel name and value (raw %, until wheel/range decoding exists; wheels are plain value knobs for now): rotate ±1 % per tick
+  (16-bit aware), **push = home that channel**, tap the strip = fine (0.1 %). `—` when the page has no channel on that dial.
+- **Several selected**: the pages come from the **first** selected fixture's type; the dial drives each selected fixture's channel **of the same name**, each relative to
+  its own value; a fixture without that channel is skipped.
+- **Home values**: pan/tilt 50 %; dimmer/intensity 100 %; the first shutter/strobe channel 255 (open, as in v0.5), other shutter/strobe channels 0; additive colours
+  100 %, subtractive/CTO/colour wheels 0; zoom/focus/iris/frost 0; framing blades 0 (out); everything else 0. These are also the first-touch defaults and what
+  **Home Selected** sets.
+- **Channels in Setup**: each fixture row in the Setup panel has an expandable **Channels** list (1-based number, name, 8-bit / 16-bit with its fine channel, and
+  the page it is on) to compare with Capture's patch view. A type whose parse is "consistent but uniqueness not proven" is marked *check against Capture's patch view*.
+- Channels where candidate parses disagree (the Handoff 13 rule) are on no page and are never driven.
 
 **Key titles (v0.5).** Every key shows its name as Stream Deck title text; the plugin no longer draws labels into the key images (so the text is not doubled).
 

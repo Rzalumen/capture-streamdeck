@@ -91,6 +91,9 @@ export const ICONS: Record<string, string> = {
   "fx-setup": `<path d="M4 7h9M18 7h2M4 12h3M12 12h8M4 17h11M20 17h0"/><circle cx="15.500" cy="7" r="2.200"/><circle cx="9.500" cy="12" r="2.200"/><circle cx="17.500" cy="17" r="2.200"/>`,
   "fx-release": `<path d="M12 3.500v8"/><path d="M7 6.500a7.500 7.500 0 1 0 10 0"/>`,
   "fx-home": `<path d="M4 11.500l8-7 8 7"/><path d="M6 10.500v9h12v-9"/><path d="M10 19.500v-5h4v5"/>`,
+  "fx-attr": `<circle cx="12" cy="12" r="7.500"/><path d="M12 12l3.800-3.800"/><path d="M12 2.500v2M21.500 12h-2M12 21.500v-2M2.500 12h2"/>`,
+  "fx-page-prev": `<rect x="3.500" y="5" width="17" height="14" rx="2"/><path d="M13.500 8.500L10 12l3.500 3.500"/>`,
+  "fx-page-next": `<rect x="3.500" y="5" width="17" height="14" rx="2"/><path d="M10.500 8.500L14 12l-3.500 3.500"/>`,
   "fx-status": `<circle cx="12" cy="12" r="2"/><path d="M7.800 7.800a6 6 0 0 0 0 8.400M16.200 7.800a6 6 0 0 1 0 8.400M4.900 4.900a10 10 0 0 0 0 14.200M19.100 4.900a10 10 0 0 1 0 14.200"/>`,
   // --- folders (categories)
   "folder-view": `<path d="M3 7.500A1.500 1.500 0 0 1 4.500 6H9l2 2.500h8.500A1.500 1.500 0 0 1 21 10v8a1.500 1.500 0 0 1-1.500 1.500h-15A1.500 1.500 0 0 1 3 18z"/><circle cx="12" cy="14" r="2.200"/>`,

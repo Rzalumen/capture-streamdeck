@@ -3,12 +3,14 @@
  *  - NOTHING is sent until the user touches a fixture; a universe is sent only after a fixture on it was touched.
  *  - Once active: every active universe is sent at 40 fps (all 512 slots; everything not set by a touched fixture is 0 — this BLACKS OUT
  *    whatever else is on that universe) until `release()` or plugin exit, which send Stream_Terminated (3 frames) on every universe in use.
- *  - A fixture's state starts from its defaults on first touch (attrs.ts: pan/tilt 50 %, intensity 100 %, shutter 255, additive colours
- *    full, everything else 0).
+ *  - A fixture's state starts from its defaults on first touch (pages.ts: pan/tilt 50 %, intensity 100 %, the first shutter/strobe 255,
+ *    additive colours full, everything else 0). Every channel of the fixture is a knob parameter (Handoff 20); values are kept per
+ *    parameter.
  */
 import dgram from "node:dgram";
 import { localIPv4 } from "./citpSync.js";
-import { ALL_ATTRS, defaultValues, homeValue, renderFixture, type AttrId, type ChannelMap } from "./attrs.js";
+import { ALL_ATTRS, writeSlot, type AttrId, type ChannelMap } from "./attrs.js";
+import type { FixtureModel, Param } from "./pages.js";
 import { buildDataPacket, DEFAULT_PRIORITY, multicastAddress, OPT_TERMINATED, SACN_PORT } from "./sacn.js";
 
 export const SOURCE_NAME = "capture-streamdeck";
@@ -21,7 +23,18 @@ export interface Target {
   universe: number;
   /** 1-based DMX address of the fixture's first channel. */
   address: number;
+  /** v0.5 named attributes (the Pan, Tilt ... dials). */
   map: ChannelMap;
+  /** Every channel as a knob parameter (Handoff 20): what is rendered. */
+  model: FixtureModel;
+}
+
+/** All slot writes for one fixture: every knob parameter at its value (home when untouched). Channels on no page stay 0. */
+export function renderModel(slots: Uint8Array, base: number, model: FixtureModel, values: ReadonlyMap<string, number>): void {
+  for (const p of model.params) {
+    const v = values.get(p.id) ?? p.home;
+    for (const s of p.slots) writeSlot(slots, base, s, v);
+  }
 }
 
 export interface Transport {
@@ -102,8 +115,9 @@ export class UdpTransport implements Transport {
 interface FixState {
   universe: number;
   address: number;
-  map: ChannelMap;
-  values: Partial<Record<AttrId, number>>;
+  model: FixtureModel;
+  /** Knob parameter id -> value 0..1. A parameter not in here is at its home value. */
+  values: Map<string, number>;
 }
 
 export interface EngineOptions {
@@ -115,6 +129,24 @@ export interface EngineOptions {
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (h: unknown) => void;
 }
+
+/** One knob move on one fixture: these parameters of this target. */
+export interface ParamTarget {
+  target: Target;
+  params: Param[];
+}
+
+/** The knob parameters that carry a named attribute (v0.5 dials) on this fixture: every parameter writing one of the attribute's channels. */
+export function attrParams(t: Target, a: AttrId): Param[] {
+  const out: Param[] = [];
+  for (const s of t.map.attrs[a] ?? []) {
+    const p = t.model.byOffset.get(s.coarse.offset);
+    if (p && !out.includes(p)) out.push(p);
+  }
+  return out;
+}
+
+const clamp = (v: number): number => Math.min(1, Math.max(0, v));
 
 export class DmxEngine {
   private fixtures = new Map<string, FixState>();
@@ -149,40 +181,47 @@ export class DmxEngine {
     return this.fixtures.has(key);
   }
 
-  /** Current value of an attribute (the default if the fixture has not been touched yet); undefined when the fixture lacks the attribute. */
+  /** Current value of a knob parameter (its home value if the fixture or the parameter has not been touched). */
+  paramValue(t: Target, p: Param): number {
+    return this.fixtures.get(t.key)?.values.get(p.id) ?? p.home;
+  }
+
+  /** Current value of a named attribute (the default if the fixture has not been touched yet); undefined when the fixture lacks the attribute. */
   value(t: Target, a: AttrId): number | undefined {
-    if (!t.map.attrs[a]?.length) return undefined;
-    return this.fixtures.get(t.key)?.values[a] ?? homeValue(a);
+    const ps = attrParams(t, a);
+    return ps.length ? this.paramValue(t, ps[0]) : undefined;
   }
 
-  /** The user touched these fixtures: start them from their defaults if new, set `a` to `v` on each that has it, and make sure output is running. */
-  set(targets: Target[], a: AttrId, v: number): void {
-    const hit = targets.filter((t) => t.map.attrs[a]?.length);
-    if (!hit.length) return;
-    for (const t of hit) this.touch(t).values[a] = Math.min(1, Math.max(0, v));
-    this.start();
-    this.emit();
-  }
-
-  /** Relative move: each target's attribute becomes `fn(its own current value)` (default value if untouched). One emit for all. */
-  setEach(targets: Target[], a: AttrId, fn: (current: number) => number): void {
-    const hit = targets.filter((t) => t.map.attrs[a]?.length);
-    if (!hit.length) return;
-    for (const t of hit) {
-      const st = this.touch(t);
-      st.values[a] = Math.min(1, Math.max(0, fn(st.values[a] ?? homeValue(a))));
+  /**
+   * The user moved a knob: each listed parameter of each target becomes `fn(its own current value, the parameter)`. Fixtures start
+   * from their defaults if new; output starts. Items without parameters are skipped; nothing happens if no item has any.
+   */
+  adjust(items: ParamTarget[], fn: (current: number, p: Param) => number): boolean {
+    const hit = items.filter((i) => i.params.length);
+    if (!hit.length) return false;
+    for (const { target, params } of hit) {
+      const st = this.touch(target);
+      for (const p of params) st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p)));
     }
     this.start();
     this.emit();
+    return true;
   }
 
-  /** Home key: these fixtures go back to their first-touch defaults (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
+  /** Named attribute to `v` on every target that has it. */
+  set(targets: Target[], a: AttrId, v: number): void {
+    this.adjust(targets.map((t) => ({ target: t, params: attrParams(t, a) })), () => v);
+  }
+
+  /** Relative move of a named attribute: each target's value becomes `fn(its own current value)`. One emit for all. */
+  setEach(targets: Target[], a: AttrId, fn: (current: number) => number): void {
+    this.adjust(targets.map((t) => ({ target: t, params: attrParams(t, a) })), (cur) => fn(cur));
+  }
+
+  /** Home key: these fixtures go back to their first-touch defaults (every parameter at its home value). */
   home(targets: Target[]): void {
     if (!targets.length) return;
-    for (const t of targets) {
-      const st = this.touch(t);
-      st.values = defaultValues(t.map);
-    }
+    for (const t of targets) this.touch(t).values.clear();
     this.start();
     this.emit();
   }
@@ -192,14 +231,14 @@ export class DmxEngine {
     return new Map([...this.fixtures].map(([k, f]) => [k, { universe: f.universe, address: f.address }]));
   }
 
-  /** Set several attributes at once (Home Selected). Only attributes a fixture has are written; if none apply, nothing is touched. */
+  /** Set several named attributes at once. Only attributes a fixture has are written; if none apply, nothing is touched. */
   setMany(targets: Target[], values: Partial<Record<AttrId, number>>): void {
     let any = false;
     for (const t of targets) {
-      const mine = ALL_ATTRS.filter((a) => values[a] !== undefined && t.map.attrs[a]?.length);
+      const mine = ALL_ATTRS.filter((a) => values[a] !== undefined && attrParams(t, a).length);
       if (!mine.length) continue;
       const st = this.touch(t);
-      for (const a of mine) st.values[a] = Math.min(1, Math.max(0, values[a] as number));
+      for (const a of mine) for (const p of attrParams(t, a)) st.values.set(p.id, clamp(values[a] as number));
       any = true;
     }
     if (!any) return;
@@ -209,8 +248,11 @@ export class DmxEngine {
 
   private touch(t: Target): FixState {
     const have = this.fixtures.get(t.key);
-    if (have && have.universe === t.universe && have.address === t.address) return have;
-    const st: FixState = { universe: t.universe, address: t.address, map: t.map, values: defaultValues(t.map) };
+    if (have && have.universe === t.universe && have.address === t.address) {
+      have.model = t.model;
+      return have;
+    }
+    const st: FixState = { universe: t.universe, address: t.address, model: t.model, values: new Map() };
     this.fixtures.set(t.key, st);
     return st;
   }
@@ -218,7 +260,7 @@ export class DmxEngine {
   /** All 512 slots of one universe as they would be sent now. */
   slots(universe: number): Uint8Array {
     const s = new Uint8Array(512);
-    for (const f of this.fixtures.values()) if (f.universe === universe) renderFixture(s, f.address - 1, f.map, f.values);
+    for (const f of this.fixtures.values()) if (f.universe === universe) renderModel(s, f.address - 1, f.model, f.values);
     return s;
   }
 

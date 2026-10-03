@@ -8,6 +8,10 @@ import { UNIDENTIFIED, type CaexFixture } from "./citp.js";
 import { defaultLibraryPath, openLibrary, type Library } from "./library.js";
 import { loadChannels, type Channel } from "./modes.js";
 import { drivenSignature, mapChannels, type ChannelMap } from "./attrs.js";
+import { buildModel, type FixtureModel } from "./pages.js";
+
+/** The parser's warning when it could not prove the parse is the only one (Handoff 20: shown on the Setup panel). */
+export const UNPROVEN_MARK = "uniqueness is not proven";
 
 export interface ShowFixture {
   /** Stable key for the setup: CaptureInstanceId (identifier type 0x04); falls back to the FixtureList identifier. */
@@ -32,6 +36,12 @@ export interface TypeInfo {
   error?: string;
   channels: Channel[];
   map?: ChannelMap;
+  /** Every channel as a knob parameter on a page (Handoff 20). */
+  model?: FixtureModel;
+  /** The parse is consistent but the parser ran out of search budget before proving no other parse exists. */
+  unproven?: boolean;
+  /** Offsets where candidate channel lists disagree (never driven). */
+  differOffsets?: number[];
   hasPanTilt: boolean;
   /** Ambiguity note / mapping warnings, for the log and the Setup page. */
   notes: string[];
@@ -289,8 +299,11 @@ export class ShowModel {
             continue;
           }
           const map = mapChannels(l.channels);
+          const model = buildModel(l.channels, l.differOffsets);
           const notes = [...l.warnings, ...(l.note ? [l.note] : []), ...map.warnings];
-          types.set(typeKey, { typeKey, ok: true, channels: l.channels, map, hasPanTilt: !!(map.attrs.pan || map.attrs.tilt), notes });
+          if (model.excluded.length) notes.push(`channel(s) ${model.excluded.map((o) => o + 1).join(", ")} are on no knob page: the candidate channel lists disagree there`);
+          const unproven = l.warnings.some((w) => w.includes(UNPROVEN_MARK));
+          types.set(typeKey, { typeKey, ok: true, channels: l.channels, map, model, unproven, differOffsets: l.differOffsets, hasPanTilt: !!(map.attrs.pan || map.attrs.tilt), notes });
           for (const n of notes) this.log(`type ${f.name} (${f.mode}): ${n}`);
         } catch (e) {
           types.set(typeKey, bad(`cannot read ${f.fixtureGuid}.c2o from the library: ${(e as Error).message}`));

@@ -4,6 +4,7 @@
  * An empty selection in Capture keeps the last deck selection, marked "(not selected in Capture)".
  */
 import type { ChannelMap } from "./attrs.js";
+import type { FixtureModel } from "./pages.js";
 import type { Target } from "./engine.js";
 import type { Address } from "./setup.js";
 import { positionShort, type ShowFixture } from "./show.js";
@@ -11,9 +12,10 @@ import { positionShort, type ShowFixture } from "./show.js";
 export interface Controllable {
   fixture: ShowFixture;
   map: ChannelMap;
+  model: FixtureModel;
   addr: Address;
 }
-export const toTarget = (c: Controllable): Target => ({ key: c.fixture.key, universe: c.addr.universe, address: c.addr.address, map: c.map });
+export const toTarget = (c: Controllable): Target => ({ key: c.fixture.key, universe: c.addr.universe, address: c.addr.address, map: c.map, model: c.model });
 
 export const STALE_NOTE = "(not selected in Capture)";
 

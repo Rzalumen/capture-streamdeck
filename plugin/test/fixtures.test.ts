@@ -13,6 +13,7 @@ import { FixtureService } from "../src/fixtures/service.ts";
 import { autoFill, checkSetup, SetupStore, showKey, validateAddress } from "../src/fixtures/setup.ts";
 import { ShowModel } from "../src/fixtures/show.ts";
 import { loadChannels } from "../src/fixtures/modes.ts";
+import { buildModel } from "../src/fixtures/pages.ts";
 import { GlobalSettings } from "../src/lib/globals.ts";
 import { buildModeBlock, buildObject, cmyHead, movingHead } from "./fixtures/synth.ts";
 
@@ -25,6 +26,7 @@ const channelsOf = (list: ReturnType<typeof movingHead>) => {
   return l.channels;
 };
 const mapOf = (list: ReturnType<typeof movingHead>) => mapChannels(channelsOf(list));
+const modelOf = (list: ReturnType<typeof movingHead>) => buildModel(channelsOf(list));
 
 // ------------------------------------------------------------------ attribute resolution
 
@@ -160,7 +162,7 @@ function makeEngine() {
   });
   return { engine, tr, tick: () => tick?.(), created: () => created, cleared, running: () => tick !== undefined };
 }
-const target = (key: string, universe: number, address: number, list = movingHead()): Target => ({ key, universe, address, map: mapOf(list) });
+const target = (key: string, universe: number, address: number, list = movingHead()): Target => ({ key, universe, address, map: mapOf(list), model: modelOf(list) });
 
 test("engine: nothing is sent, and no socket is even created, until a fixture is touched", () => {
   const e = makeEngine();
@@ -342,6 +344,7 @@ test("setup: auto-fill sequential, wraps into the next universe, stops at univer
 const ctl = (n: number, name: string, typeKey: string, universe: number, address: number, list = movingHead(), position: [number, number, number] = [0, 0, 0], channel = n): Controllable => ({
   fixture: { key: `k${n}`, identifier: n, channel, manufacturer: "M", name, mode: "Std", channelCount: list.length, fixtureGuid: null, modeGuid: null, typeKey, position },
   map: mapOf(list),
+  model: modelOf(list),
   addr: { universe, address },
 });
 const plain = (n: number, name: string, typeKey = "T", channel = n, position: [number, number, number] = [0, 0, 0]): ShowFixture => ({ key: `k${n}`, identifier: n, channel, manufacturer: "M", name, mode: "Std", channelCount: 14, fixtureGuid: null, modeGuid: null, typeKey, position });
@@ -879,7 +882,8 @@ test("wire: FixtureSelection, FixtureRemove and FixtureModify decode per spec F 
 
 test("toTarget carries the 1-based address", () => {
   const c = ctl(1, "A", "T", 3, 17);
-  assert.deepEqual({ ...toTarget(c), map: undefined }, { key: "k1", universe: 3, address: 17, map: undefined });
+  assert.deepEqual({ ...toTarget(c), map: undefined, model: undefined }, { key: "k1", universe: 3, address: 17, map: undefined, model: undefined });
+  assert.equal(toTarget(c).model, c.model);
 });
 
 test("attrs: all coarse channels with the same base name and a cell number belong to that colour", () => {

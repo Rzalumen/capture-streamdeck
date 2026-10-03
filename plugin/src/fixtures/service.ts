@@ -7,7 +7,8 @@
  */
 import { dialAttr, stepFraction, homeValue, type AttrId, type DialId } from "./attrs.js";
 import type { ModifyItem } from "./citp.js";
-import type { DmxEngine, Target } from "./engine.js";
+import type { DmxEngine, ParamTarget, Target } from "./engine.js";
+import { GROUP_LABEL, pageTitle, sameParam, type Page, type Param } from "./pages.js";
 import { Selection, toTarget, type Controllable } from "./selection.js";
 import { autoFill, checkSetup, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
@@ -28,19 +29,51 @@ export interface SetupFixtureView {
   parsed: boolean;
   parseError: string | null;
   notes: string[];
+  /** The type's parse is consistent but not proven unique: "check against Capture's patch view". */
+  unproven: boolean;
   addr: Address | null;
   issues: string[];
   controllable: boolean;
 }
+/** One row of a type's channel list in the Setup panel (Handoff 20 §5). */
+export interface SetupChannelView {
+  /** 1-based channel number within the fixture (Capture's patch view numbering). */
+  n: number;
+  name: string;
+  /** "8-bit", "16-bit" (the coarse half; `pair` = its fine channel) or "16-bit fine" (`pair` = its coarse channel). */
+  bits: "8-bit" | "16-bit" | "16-bit fine";
+  pair: number | null;
+  /** The knob page it is on ("Shutters 1/3"), "" for a fine half, or a reason it is on none. */
+  page: string;
+}
+export interface SetupTypeView {
+  channels: SetupChannelView[];
+  unproven: boolean;
+}
+
 export interface SetupView {
   status: string;
   error: string | null;
   showName: string | null;
   fixtures: SetupFixtureView[];
+  /** typeKey -> channel list (parsed types only). */
+  types: Record<string, SetupTypeView>;
   controllable: number;
   active: boolean;
   universes: number[];
   blackoutWarning: string;
+}
+
+/** What one generic Attribute dial shows. */
+export interface AttrReadout {
+  /** The parameter on this dial on the current page (null: no fixture, or the page has fewer parameters). */
+  param: Param | null;
+  label: string;
+  value: number | null;
+  touched: boolean;
+  multi: number;
+  /** "Shutters 1/3" (or "" with no fixture). */
+  page: string;
 }
 
 export interface DialReadout {
@@ -68,10 +101,27 @@ export interface StatusView {
 const DIAL_LABEL: Record<DialId, string> = { pan: "Pan", tilt: "Tilt", intensity: "Intensity", zoom: "Zoom", focus: "Focus", iris: "Iris", "red-cyan": "Red|Cyan", "green-magenta": "Green|Magenta", "blue-yellow": "Blue|Yellow", white: "White" };
 const ATTR_LABEL: Record<AttrId, string> = { pan: "Pan", tilt: "Tilt", intensity: "Intensity", zoom: "Zoom", focus: "Focus", iris: "Iris", red: "Red", green: "Green", blue: "Blue", white: "White", cyan: "Cyan", magenta: "Magenta", yellow: "Yellow" };
 
+/** A type's channel list for the Setup panel: every channel, 1-based, with its bit depth and the page it is on. */
+export function channelList(channels: { offset: number; name: string; role: number; pair: number }[], model: import("./pages.js").FixtureModel): SetupChannelView[] {
+  const pageOf = new Map<string, string>();
+  for (const pg of model.pages) for (const p of pg.params) pageOf.set(p.id, pageTitle(pg));
+  const excluded = new Set(model.excluded);
+  return channels.map((c) => {
+    const p = model.byOffset.get(c.offset);
+    const fineOfP = !!p && p.slots.some((s) => s.fine?.offset === c.offset);
+    const bits: SetupChannelView["bits"] = c.role === 2 ? "16-bit fine" : c.role === 1 ? "16-bit" : "8-bit";
+    const pair = bits === "8-bit" ? null : c.pair + 1;
+    const page = excluded.has(c.offset) ? "on no page: the candidate parses disagree here" : fineOfP ? "" : p ? (pageOf.get(p.id) ?? "") : "";
+    return { n: c.offset + 1, name: c.name, bits, pair, page };
+  });
+}
+
 export class FixtureService {
   readonly selection: Selection;
   private listeners: (() => void)[] = [];
   private lastRefresh = 0;
+  /** The attribute page shown on the generic dials: its index within the pages of `typeKey` (the first selected fixture's type). */
+  private pageState = { typeKey: "", index: 0 };
 
   constructor(
     readonly show: ShowModel,
@@ -95,6 +145,7 @@ export class FixtureService {
     this.listeners.push(fn);
   }
   private emit(): void {
+    this.syncPage();
     for (const fn of this.listeners) fn();
   }
 
@@ -118,8 +169,8 @@ export class FixtureService {
     for (const f of this.show.fixtures) {
       const addr = saved[f.key];
       const t = this.show.types.get(f.typeKey);
-      if (!addr || !t?.ok || !t.map || issues.has(f.key)) continue;
-      out.push({ fixture: f, map: t.map, addr });
+      if (!addr || !t?.ok || !t.map || !t.model || issues.has(f.key)) continue;
+      out.push({ fixture: f, map: t.map, model: t.model, addr });
     }
     return out.sort((a, b) => a.fixture.channel - b.fixture.channel || a.fixture.identifier - b.fixture.identifier);
   }
@@ -144,13 +195,20 @@ export class FixtureService {
           parsed: !!t?.ok,
           parseError: t && !t.ok ? (t.error ?? "unknown") : null,
           notes: t?.notes ?? [],
+          unproven: !!t?.unproven,
           addr: saved[f.key] ?? null,
           issues: issues.get(f.key) ?? [],
           controllable: ctl.has(f.key),
         };
       })
       .sort((a, b) => a.channel - b.channel);
-    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING };
+    const types: Record<string, SetupTypeView> = {};
+    for (const f of fixtures) {
+      const t = this.show.types.get(f.typeKey);
+      if (types[f.typeKey] || !t?.ok || !t.model) continue;
+      types[f.typeKey] = { channels: channelList(t.channels, t.model), unproven: !!t.unproven };
+    }
+    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING };
   }
 
   private controllable(): Controllable[] {
@@ -358,6 +416,77 @@ export class FixtureService {
     if (!v.targets.length) return false;
     this.engine.home(v.targets.map(toTarget));
     return true;
+  }
+
+  // ------------------------------------------------------------------ attribute pages (Handoff 20)
+
+  /** Keeps the page within the first selected fixture's type: a different type starts at Position (or the first page). */
+  private syncPage(): void {
+    const primary = this.selection.view().primary;
+    const typeKey = primary?.fixture.typeKey ?? "";
+    const pages = primary?.model.pages ?? [];
+    if (typeKey !== this.pageState.typeKey) {
+      const pos = pages.findIndex((p) => p.group === "position");
+      this.pageState = { typeKey, index: Math.max(0, pos) };
+    } else if (this.pageState.index >= pages.length) this.pageState.index = 0;
+  }
+
+  /** The pages of the first selected fixture's type and the one shown now (undefined: nothing controllable selected). */
+  pages(): { pages: Page[]; index: number; page?: Page } {
+    this.syncPage();
+    const pages = this.selection.view().primary?.model.pages ?? [];
+    return { pages, index: this.pageState.index, page: pages[this.pageState.index] };
+  }
+
+  /** "Shutters 1/3"; "" when no fixture is selected. */
+  pageName(): string {
+    const p = this.pages().page;
+    return p ? pageTitle(p) : "";
+  }
+
+  /** ◀ Page / Page ▶: cycle through the pages (wraps). False when there is nothing to page. */
+  stepPage(d: number): boolean {
+    const { pages, index } = this.pages();
+    if (!pages.length || !d) return false;
+    const n = pages.length;
+    this.pageState.index = (((index + d) % n) + n) % n;
+    this.emit();
+    return true;
+  }
+
+  /** What the generic Attribute dial `slot` (0..2) drives: the parameter on the current page and, per selected fixture, its parameter of the same name. */
+  private attrItems(slot: number): { param: Param | null; items: ParamTarget[] } {
+    const v = this.selection.view();
+    const page = this.pages().page;
+    const param = page?.params[slot] ?? null;
+    if (!param || !v.primary) return { param: null, items: [] };
+    const items: ParamTarget[] = [];
+    for (const c of v.targets) {
+      const p = c.model === v.primary.model ? param : sameParam(c.model, param);
+      if (p) items.push({ target: toTarget(c), params: [p] });
+    }
+    return { param, items };
+  }
+
+  attrReadout(slot: number): AttrReadout {
+    const v = this.selection.view();
+    const page = this.pages().page;
+    const { param } = this.attrItems(slot);
+    const pageText = page ? pageTitle(page) : "";
+    if (!param || !v.primary) return { param: null, label: page ? GROUP_LABEL[page.group] : `Attribute ${slot + 1}`, value: null, touched: false, multi: v.targets.length, page: pageText };
+    const t = toTarget(v.primary);
+    return { param, label: param.name, value: this.engine.paramValue(t, param), touched: this.engine.isTouched(t.key), multi: v.targets.length, page: pageText };
+  }
+
+  /** Turn Attribute dial `slot`: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value; fixtures without a channel of that name are skipped. */
+  attrRotate(slot: number, ticks: number, fine: boolean): boolean {
+    if (!ticks) return false;
+    return this.engine.adjust(this.attrItems(slot).items, (cur) => stepFraction(cur, ticks, fine));
+  }
+
+  /** Press Attribute dial `slot`: that channel to its home value on every selected fixture that has it. */
+  attrHome(slot: number): boolean {
+    return this.engine.adjust(this.attrItems(slot).items, (_cur, p) => p.home);
   }
 
   async release(): Promise<void> {

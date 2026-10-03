@@ -31,7 +31,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | Patch & Focus | the Patch & Focus category |
 | Windows | **Tabs** (6) first, then the Navigate and Window categories |
 | File | the File category |
-| Fixtures | four pages chained with More ▸; every page: **Setup · Release · Home Selected · Status** (the Fixtures: keys). Dials: page 1 Select · Pan · Tilt · Intensity; page 2 Select · Zoom · Focus · Iris; page 3 Select · Red\|Cyan · Green\|Magenta · Blue\|Yellow; page 4 Select · White (two empty dial slots) |
+| Fixtures | one page (v0.6): **Setup · Release · Home Selected · Status · ◀ Page · Page ▶** (the Fixtures: keys). Dials: **Select · Attribute 1 · Attribute 2 · Attribute 3**; the attribute pages (Position, Intensity, Colour, Beam, Shutters, Gobo/Prism/FX, Other — built from the selected fixture's channels) are cycled with ◀ Page / Page ▶, not with profile pages |
 
 Camera Position 1–5 and Store Modifier share one page (Camera › Positions ▸), so holding Store Modifier while pressing a
 position works without changing page. Edit has four pages (25 commands, including the four *Edit › Model* items).
@@ -92,14 +92,8 @@ position works without changing page. Edit has four pages (25 commands, includin
     dials: Exposure · Ambient · Bloom · White Balance
     - **file/2** — Export Project · Export Model · Export Fixture Data · Export Focus Sheets · Export Documentation · Export Presentation   
       dials: Exposure · Ambient · Bloom · White Balance
-  - **fixtures** — Setup · Release · Home Selected · Status · More ▸   
-    dials: Select · Pan · Tilt · Intensity
-    - **fixtures/2** — Setup · Release · Home Selected · Status · More ▸   
-      dials: Select · Zoom · Focus · Iris
-      - **fixtures/3** — Setup · Release · Home Selected · Status · More ▸   
-        dials: Select · Red|Cyan · Green|Magenta · Blue|Yellow
-        - **fixtures/4** — Setup · Release · Home Selected · Status   
-          dials: Select · White
+  - **fixtures** — Setup · Release · Home Selected · Status · ◀ Page · Page ▶   
+    dials: Select · Attribute 1 · Attribute 2 · Attribute 3
 
 ## Changing it
 

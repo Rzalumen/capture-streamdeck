@@ -9,7 +9,7 @@
 import { NUMBER_PROPERTIES, BOOL_PROPERTIES } from "../lib/properties.js";
 import { dialUuid, PROPERTY_ICON, toggleUuid } from "../lib/named.js";
 import { CATEGORIES, actionName, isTab, orderedEntries, uuidOf, type CatalogEntry } from "./index.js";
-import { FIXTURE_DIALS, FIXTURE_KEYS, FIXTURE_SELECT, FIXTURES_PI } from "./fixtures.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_DIALS, FIXTURE_KEYS, FIXTURE_SELECT, FIXTURES_PI } from "./fixtures.js";
 import { CONNECTION_UUID, HIDDEN_GENERIC_UUIDS, SHOW_POSITION_COUNT, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "./extras.js";
 
 export interface ManifestAction {
@@ -107,7 +107,8 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     ],
   }));
 
-  // v0.4: fixture keys and dials (Fixtures: Setup / Release / Home Selected / Status, Fixture: Select / Pan / Tilt ...).
+  // v0.4–v0.6: fixture keys and dials (Fixtures: Setup / Release / Home Selected / Status / ◀ Page / Page ▶, Fixture: Select /
+  // Attribute 1–3 / Pan / Tilt ...).
   const fixtureKeys: ManifestAction[] = FIXTURE_KEYS.map((k) => ({
     Name: k.name,
     UUID: k.uuid,
@@ -130,6 +131,19 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
       background: "imgs/actions/dial/strip-background",
     },
   };
+  const attrDials: ManifestAction[] = FIXTURE_ATTR_DIALS.map((d) => ({
+    Name: d.name,
+    UUID: d.uuid,
+    Icon: iconPath(d.icon),
+    Tooltip: d.tooltip,
+    Controllers: ["Encoder"],
+    States: [{ Image: keyPath(d.icon), ShowTitle: false }],
+    Encoder: {
+      layout: "layouts/dial.json",
+      TriggerDescription: { Rotate: "Adjust", Push: "Home channel", Touch: "Fine mode" },
+      background: "imgs/actions/dial/strip-background",
+    },
+  }));
   const fixtureDials: ManifestAction[] = FIXTURE_DIALS.map((d) => ({
     Name: d.name,
     UUID: d.uuid,
@@ -147,5 +161,5 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
   // Named actions first (commands, Look toggles, fixtures, Status, dials), then the hidden generic ones (VisibleInActionsList: false).
   const hidden = HIDDEN_GENERIC_UUIDS.map(pick);
   for (const h of hidden) if (h.VisibleInActionsList !== false) throw new Error(`${h.UUID} must be hidden (VisibleInActionsList: false)`);
-  return { ...base, Version: `${maj}.${min}.${pat}.0`, Actions: [...commands, ...toggles, ...fixtureKeys, fixtureSelect, ...fixtureDials, pick(CONNECTION_UUID), ...dials, ...hidden] };
+  return { ...base, Version: `${maj}.${min}.${pat}.0`, Actions: [...commands, ...toggles, ...fixtureKeys, fixtureSelect, ...attrDials, ...fixtureDials, pick(CONNECTION_UUID), ...dials, ...hidden] };
 }

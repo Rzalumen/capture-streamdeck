@@ -65,6 +65,46 @@ export const movingHead = (): SynthChannel[] => [
 /** CMY colour mixing head: 8-bit cyan/magenta/yellow, dimmer, focus, iris. */
 export const cmyHead = (): SynthChannel[] => [{ name: "Dimmer" }, { name: "Cyan" }, { name: "Magenta" }, { name: "Yellow" }, { name: "Focus" }, { name: "Iris" }, { name: "Pan" }, { name: "Tilt" }];
 
+/**
+ * A framing-shutter spot (made up; Handoff 20): 16-bit pan/tilt/dimmer/zoom/focus, shutter/strobe, CMY + CTO + colour wheel, two gobo
+ * wheels with rotation, prism + rotation, animation wheel + rotation, frost, iris, 8 framing blades ("Shutter 1A" … "Shutter 4B") and
+ * shutter rotation, control and speed channels. 37 channels.
+ */
+export const framingHead = (): SynthChannel[] => [
+  { name: "Pan", role: 1, pair: 1 },
+  { name: "Pan Fine", role: 2, pair: 0 },
+  { name: "Tilt", role: 1, pair: 3 },
+  { name: "Tilt Fine", role: 2, pair: 2 },
+  { name: "Pan/Tilt Speed" },
+  { name: "Shutter/Strobe" },
+  { name: "Dimmer", role: 1, pair: 7 },
+  { name: "Dimmer Fine", role: 2, pair: 6 },
+  { name: "Cyan" },
+  { name: "Magenta" },
+  { name: "Yellow" },
+  { name: "CTO" },
+  { name: "Colour Wheel" },
+  { name: "Gobo Wheel 1" },
+  { name: "Gobo 1 Rotation" },
+  { name: "Gobo Wheel 2" },
+  { name: "Prism" },
+  { name: "Prism Rotation" },
+  { name: "Animation Wheel" },
+  { name: "Animation Rotation" },
+  { name: "Frost" },
+  { name: "Iris" },
+  { name: "Zoom", role: 1, pair: 23 },
+  { name: "Zoom Fine", role: 2, pair: 22 },
+  { name: "Focus", role: 1, pair: 25 },
+  { name: "Focus Fine", role: 2, pair: 24 },
+  ...["1A", "1B", "2A", "2B", "3A", "3B", "4A", "4B"].map((b) => ({ name: `Shutter ${b}` })),
+  { name: "Shutter Rotation" },
+  { name: "Control" },
+  { name: "Effects Speed" },
+];
+/** A conventional: one intensity channel. */
+export const conventional = (): SynthChannel[] => [{ name: "Intensity" }];
+
 /** Library.c2z holding objects {'<raw guid>': bytes}. */
 export function buildLibraryFile(objects: Record<string, Buffer>): Buffer {
   const data: Buffer[] = [];

@@ -7,12 +7,11 @@
  *  - Every child page: Back at "0,0"; commands fill "1,0" → "3,0" → "0,1" → "3,1" (7 slots) in catalog order.
  *  - More than 7 commands: the 7th slot ("3,1") becomes a "More ▸" folder to the next page (which has its own Back).
  *  - Dials: every page has its own four. Standard set everywhere; View pages get the View set; the Look folder the Flare set.
- *  - Fixtures (v0.4): a chain of four pages; every page has Back · Setup · Release · Home Selected · Status (+ More ▸ except the last) and its own
- *    dial set: Select·Pan·Tilt·Intensity / Select·Zoom·Focus·Iris / Select·Red|Cyan·Green|Magenta·Blue|Yellow / Select·White (+ 2 empty).
+ *  - Fixtures (v0.6, Handoff 20): one page, Back · Setup · Release · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 ·
+ *    Attribute 2 · Attribute 3 (the attribute pages are cycled by the page keys, not by profile pages). The four fixed-dial pages are gone.
  */
 import { CATEGORIES, ENTRIES, actionName, type CatalogEntry } from "../catalog/index.js";
-import { FIXTURE_DIALS, FIXTURE_KEYS, FIXTURE_SELECT } from "../catalog/fixtures.js";
-import type { DialId } from "../fixtures/attrs.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_KEYS, FIXTURE_SELECT } from "../catalog/fixtures.js";
 import { CONNECTION_UUID, CONNECTION_NAME, SHOW_POSITION_COUNT, STORE_MODIFIER_NAME, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "../catalog/extras.js";
 import { uuidOf } from "../catalog/index.js";
 import { BOOL_PROPERTIES, NUMBER_PROPERTIES } from "../lib/properties.js";
@@ -177,41 +176,23 @@ function buildChain(path: string, items: Item[], dials: DialSet, parent: Page, p
   return page;
 }
 
-/** The dial sets of the Fixtures pages, in page order ("select" = Fixture: Select). */
-export const FIXTURE_DIAL_PAGES: ("select" | DialId)[][] = [
-  ["select", "pan", "tilt", "intensity"],
-  ["select", "zoom", "focus", "iris"],
-  ["select", "red-cyan", "green-magenta", "blue-yellow"],
-  ["select", "white"],
-];
+/** The Fixtures page's dials (v0.6): Select · Attribute 1 · Attribute 2 · Attribute 3. */
+export const FIXTURE_PAGE_DIALS = ["select", "attr1", "attr2", "attr3"] as const;
 
-function fixtureDialsFor(ids: ("select" | DialId)[]): Map<string, Dial> {
+function fixtureDials(): Map<string, Dial> {
   const m = new Map<string, Dial>();
-  ids.forEach((id, i) => {
-    if (id === "select") m.set(DIAL_POSITIONS[i], { uuid: FIXTURE_SELECT.uuid, name: FIXTURE_SELECT.name, title: "Select", icon: FIXTURE_SELECT.icon, property: "fixture:select" });
-    else {
-      const d = FIXTURE_DIALS.find((x) => x.id === id);
-      if (!d) throw new Error(`unknown fixture dial ${id}`);
-      m.set(DIAL_POSITIONS[i], { uuid: d.uuid, name: d.name, title: d.label, icon: d.icon, property: `fixture:${id}` });
-    }
-  });
+  m.set(DIAL_POSITIONS[0], { uuid: FIXTURE_SELECT.uuid, name: FIXTURE_SELECT.name, title: "Select", icon: FIXTURE_SELECT.icon, property: "fixture:select" });
+  FIXTURE_ATTR_DIALS.forEach((d, i) => m.set(DIAL_POSITIONS[i + 1], { uuid: d.uuid, name: d.name, title: d.label, icon: d.icon, property: `fixture:attr${d.slot + 1}` }));
   return m;
 }
 
-/** Fixtures folder: one page per dial set; every page repeats Back · Setup · Release · Home Selected · Status and, except the last, More ▸. */
+/** Fixtures folder (v0.6): ONE page — Back · Setup · Release · Home Selected · Status · ◀ Page · Page ▶, dials Select · Attribute 1–3. */
 function buildFixtures(parent: Page, pages: Page[]): Page {
-  const keyItems: Key[] = FIXTURE_KEYS.map((k) => ({ type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
-  const build = (n: number, parentPage: Page): Page => {
-    const path = n === 1 ? "fixtures" : `fixtures/${n}`;
-    const page: Page = { id: uuidFrom(path), path, parent: parentPage, keys: new Map(), dials: fixtureDialsFor(FIXTURE_DIAL_PAGES[n - 1]) };
-    pages.push(page);
-    page.keys.set("0,0", { type: "back", title: "Back", icon: "back" });
-    // Setup, Release, Home Selected, Status fill "1,0" "2,0" "3,0" "0,1"; More ▸ takes the last slot.
-    keyItems.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], k));
-    if (n < FIXTURE_DIAL_PAGES.length) page.keys.set(MORE_SLOT, { type: "folder", title: MORE_TITLE, icon: "more", child: build(n + 1, page) });
-    return page;
-  };
-  return build(1, parent);
+  const page: Page = { id: uuidFrom("fixtures"), path: "fixtures", parent, keys: new Map(), dials: fixtureDials() };
+  pages.push(page);
+  page.keys.set("0,0", { type: "back", title: "Back", icon: "back" });
+  FIXTURE_KEYS.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], { type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
+  return page;
 }
 
 export function buildLayout(): Layout {

@@ -1,5 +1,5 @@
 import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type PropertyInspectorDidAppearEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
-import { FIXTURE_KEY_UUIDS, FIXTURE_KEYS, FIXTURE_SELECT_UUID, FIXTURE_DIALS } from "../catalog/fixtures.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, FIXTURE_KEYS, FIXTURE_SELECT_UUID, FIXTURE_DIALS } from "../catalog/fixtures.js";
 import type { DialId } from "../fixtures/attrs.js";
 import { fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl } from "../lib/render.js";
 import { runSetupCommand, type SetupCommand } from "../fixtures/setupCommands.js";
@@ -122,6 +122,80 @@ export class FixtureAttrDial extends SingletonAction {
 
 export const fixtureDialActions = (): SingletonAction[] => FIXTURE_DIALS.map((d) => new FixtureAttrDial(d.uuid, d.id));
 
+// ------------------------------------------------------------------ Fixture: Attribute 1 / 2 / 3 (v0.6)
+
+/** Strip title: the channel name, shortened to what fits the strip's name field. */
+const stripName = (s: string): string => (s.length > 15 ? `${s.slice(0, 14)}…` : s);
+
+/**
+ * A generic attribute dial: shows and drives channel `slot` of the current attribute page (◀ Page / Page ▶) of the selected fixture(s).
+ * Rotate ±1 %/tick (16-bit aware), push = home that channel, tap the strip = fine (0.1 %). "—" when the page has no channel here.
+ */
+export class FixtureSlotDial extends SingletonAction {
+  override readonly manifestId: string;
+  private ctxs = new Map<string, Ctx>();
+
+  constructor(
+    uuid: string,
+    private slot: number,
+  ) {
+    super();
+    this.manifestId = uuid;
+    svc().onChange(() => this.redrawAll());
+  }
+  private redrawAll(): void {
+    for (const c of this.ctxs.values()) this.view(c);
+  }
+  private view(c: Ctx): void {
+    const r = svc().attrReadout(this.slot);
+    const fb = fixtureStripFeedback({ name: stripName(r.label), value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched });
+    c.action.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
+  }
+  override onWillAppear(ev: WillAppearEvent): void {
+    if (!ev.action.isDial()) return;
+    const c: Ctx = { action: ev.action, fine: this.ctxs.get(ev.action.id)?.fine ?? false, rot: { ticks: 0, events: 0 } };
+    this.ctxs.set(ev.action.id, c);
+    this.view(c);
+  }
+  override onWillDisappear(ev: WillDisappearEvent): void {
+    const c = this.ctxs.get(ev.action.id);
+    if (c?.rot.timer) clearTimeout(c.rot.timer);
+    this.ctxs.delete(ev.action.id);
+  }
+  override onDialRotate(ev: DialRotateEvent): void {
+    const c = this.ctxs.get(ev.action.id);
+    if (!c) return;
+    const done = svc().attrRotate(this.slot, ev.payload.ticks, c.fine);
+    if (!done) this.view(c);
+    c.rot.ticks += ev.payload.ticks;
+    c.rot.events++;
+    if (c.rot.timer) clearTimeout(c.rot.timer);
+    c.rot.timer = setTimeout(() => {
+      const r = svc().attrReadout(this.slot);
+      logEvent("Dial rotate", this.manifestId, { fine: c.fine }, `${c.rot.events} events, ${c.rot.ticks > 0 ? "+" : ""}${c.rot.ticks} ticks → ${r.page || "(no page)"}: ${r.param ? `"${r.param.name}"` : "(no channel here)"}=${r.value === null ? "—" : `${(r.value * 100).toFixed(1)}%`}${r.multi > 1 ? ` (${r.multi} fixtures)` : ""}`);
+      c.rot = { ticks: 0, events: 0 };
+    }, 400);
+    c.rot.timer.unref?.();
+  }
+  override onDialDown(ev: DialDownEvent): void {
+    const c = this.ctxs.get(ev.action.id);
+    if (!c) return;
+    const done = svc().attrHome(this.slot);
+    const r = svc().attrReadout(this.slot);
+    logEvent("Dial push", this.manifestId, undefined, done ? `home "${r.param?.name}" (${r.page})${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "no channel here or nothing selected: nothing done");
+    this.view(c);
+  }
+  override onTouchTap(ev: TouchTapEvent): void {
+    const c = this.ctxs.get(ev.action.id);
+    if (!c || ev.payload.hold) return;
+    c.fine = !c.fine;
+    logEvent("Dial touch", this.manifestId, undefined, `fine mode ${c.fine ? "on" : "off"}`);
+    this.view(c);
+  }
+}
+
+export const fixtureSlotDialActions = (): SingletonAction[] => FIXTURE_ATTR_DIALS.map((d) => new FixtureSlotDial(d.uuid, d.slot));
+
 // ------------------------------------------------------------------ keys
 
 interface KeyCtx {
@@ -237,5 +311,22 @@ export class FixturesStatus extends FixtureKey {
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     await svc().show.sync();
+  }
+}
+
+/** Fixtures: ◀ Page / Page ▶ — cycle the attribute pages for the Attribute dials. The title shows the current page. */
+export class FixturesPage extends FixtureKey {
+  constructor(private dir: -1 | 1) {
+    super(dir < 0 ? FIXTURE_KEY_UUIDS.pagePrev : FIXTURE_KEY_UUIDS.pageNext, dir < 0 ? FIXTURE_KEYS[4] : FIXTURE_KEYS[5]);
+  }
+  protected view(c: KeyCtx): void {
+    const name = svc().pageName();
+    const f = c.flasher.flash;
+    draw(c.action, { icon: this.def.icon, label: name ? `${this.def.title}\n${name.replace(/ (\d+\/\d+)$/, "\n$1")}` : this.def.title, big: f?.text, tone: f?.tone, dim: !f && !name });
+  }
+  override onKeyDown(ev: KeyDownEvent): void {
+    const ok = svc().stepPage(this.dir);
+    logEvent("Key press", this.manifestId, undefined, ok ? `page: ${svc().pageName()} (${svc().pages().index + 1} of ${svc().pages().pages.length})` : "no controllable fixture selected: no pages");
+    if (!ok) this.ctxs.get(ev.action.id)?.flasher.show({ text: "None", tone: "red" }, 1200);
   }
 }

@@ -104,7 +104,41 @@
     l3.append(el("label", "", "Universe"), u, el("label", "", "Address"), a, clear);
     r.appendChild(l3);
     r.appendChild(el("div", "st"));
+    const unp = el("div", "unproven hidden", "Check this type against Capture's patch view: the channel list parsed consistently, but the parser could not prove it is the only possible reading.");
+    r.appendChild(unp);
+    const det = el("details", "chans");
+    det.appendChild(el("summary", "", "Channels"));
+    det.appendChild(el("div", "chlist"));
+    r.appendChild(det);
     return r;
+  }
+
+  /** The type's channel list (Handoff 20 §5): number, name, 8/16-bit, page. Rebuilt only when it changes, so an open list stays open. */
+  function channels(r, f) {
+    const det = r.querySelector(".chans");
+    const t = view.types && view.types[f.typeKey];
+    det.classList.toggle("hidden", !t);
+    r.querySelector(".unproven").classList.toggle("hidden", !(t && t.unproven));
+    if (!t) return;
+    const sig = JSON.stringify(t.channels);
+    if (det.dataset.sig === sig) return;
+    det.dataset.sig = sig;
+    det.querySelector("summary").textContent = "Channels (" + t.channels.length + ")" + (t.unproven ? " — check against Capture" : "");
+    const box = det.querySelector(".chlist");
+    box.textContent = "";
+    const tbl = el("table", "chtbl");
+    const head = el("tr");
+    for (const h of ["#", "Name", "Bits", "Page"]) head.appendChild(el("th", "", h));
+    tbl.appendChild(head);
+    for (const c of t.channels) {
+      const tr = el("tr", c.bits === "16-bit fine" ? "fine" : "");
+      tr.appendChild(el("td", "n", String(c.n)));
+      tr.appendChild(el("td", "", c.name));
+      tr.appendChild(el("td", "b", c.bits === "8-bit" ? "8-bit" : c.bits === "16-bit" ? "16-bit (fine " + c.pair + ")" : "fine of " + c.pair));
+      tr.appendChild(el("td", "p", c.page));
+      tbl.appendChild(tr);
+    }
+    box.appendChild(tbl);
   }
 
   function update(f) {
@@ -123,6 +157,7 @@
     if (rowError && rowError.key === f.key) { st.classList.remove("ok"); st.classList.add("err"); text = rowError.text; }
     if (f.parsed && f.notes.length) text += " · " + f.notes.length + " note(s) in the plugin log";
     st.textContent = text;
+    channels(r, f);
   }
 
   function start(transport) {
