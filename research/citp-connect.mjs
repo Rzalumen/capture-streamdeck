@@ -5,6 +5,7 @@
 //   node research/citp-connect.mjs --caex         --hello, then CAEX FixtureListRequest; decode FixtureList
 //   node research/citp-connect.mjs --sync         CAEX spec F show-sync handshake, 45 s (see below)
 //   node research/citp-connect.mjs --link         --sync PLUS announce as a lighting console and accept Capture's inbound TCP, 120 s (see below)
+//   node research/citp-connect.mjs --identify     --sync, then ONE FixtureIdentify giving every fixture an identifier, 90 s (see below). WRITES into the show: use a COPY.
 //
 // Read-only toward the show. The ONLY messages this script may ever send (enforced by isAllowedOutgoing() in
 // lib/citp.mjs, which refuses everything else) are: PINF/PNam, CAEX LaserFeedList (empty), EnterShow,
@@ -29,6 +30,17 @@
 //   At the end: LeaveShow, close everything. Report: reports/citp-link.txt. No DMX. The allowlist (isAllowedOutgoing) is unchanged;
 //   the UDP announcement is the only other thing ever put on the wire and is checked by isConsoleAnnouncement().
 //
+// --identify (Handoff 17): the --sync flow, and after the FIRST FixtureList
+//   * every fixture that has a CaptureInstanceId (identifier type 0x04, 16 bytes) is given FixtureIdentifier = 100001 + its index in the list;
+//     the full map is printed, then ONE FixtureIdentify (CAEX 5.6, 0x00020204) with all of them is sent. It is the ONLY new outgoing message
+//     and only in this phase (isAllowedOutgoing(msg, {identify: true}), and the script itself refuses a second one);
+//   * 2 s later a FixtureListRequest: how many fixtures now carry a non-0xffffffff identifier, whether they match the map, and whether any
+//     Patched/Universe/UniverseChannel field is now filled (listed);
+//   * for the rest of the run (default 90 s): every FixtureSelection (timestamp, identifiers, fixtures), every FixtureModify (all fields,
+//     patch fields flagged), FixtureListRequest every 20 s (--rerequest-seconds) with every change of identifiers / patch fields reported.
+//   Still never sent: FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace. No DMX.
+//   Report: reports/citp-identify.txt with an "== Identify summary ==" block.
+//
 // Test/dev options: --host <ip> --port <n> (skip discovery), --duration <s> or --seconds <s> (override log time),
 //   --announce-dest <ip:port> (--link: send the announcement ONLY there instead of the multicast groups),
 //   --report-dir <dir> (default ./reports), --citp-version <maj.min> (default 1.0; only bytes 4-5 change).
@@ -43,8 +55,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
-  CAEX, CitpFramer, buildEnterShow, buildFixtureListRequest, buildLaserFeedList, buildLeaveShow, buildNack, buildPNam,
-  buildPLoc, decodeMessage, formatFixtureTables, fourcc, hexOf, isAllowedOutgoing,
+  CAEX, CitpFramer, buildEnterShow, buildFixtureIdentify, buildFixtureListRequest, buildLaserFeedList, buildLeaveShow, buildNack, buildPNam,
+  buildPLoc, decodeMessage, formatFixtureTables, fourcc, hexOf, isAllowedOutgoing, textTable,
 } from './lib/citp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,11 +64,14 @@ const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);
 const opt = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 
-const PHASE = flag('--link') ? 'link' : flag('--sync') ? 'sync' : flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
-const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000, sync: 45000, link: 120000 }[PHASE];
+const PHASE = flag('--identify') ? 'identify' : flag('--link') ? 'link' : flag('--sync') ? 'sync' : flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
+const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000, sync: 45000, link: 120000, identify: 90000 }[PHASE];
 const durArg = opt('--seconds') ?? opt('--duration');
 const DURATION_MS = durArg ? Math.round(parseFloat(durArg) * 1000) : DEFAULT_MS;
-const REREQUEST_MS = Math.round(parseFloat(opt('--rerequest-seconds') ?? '10') * 1000);
+const isIdentify = PHASE === 'identify';
+const REREQUEST_MS = Math.round(parseFloat(opt('--rerequest-seconds') ?? (isIdentify ? '20' : '10')) * 1000);
+const IDENTIFY_BASE = 100001; // FixtureIdentifier = IDENTIFY_BASE + index in the FixtureList
+const VERIFY_DELAY_MS = Math.round(parseFloat(opt('--verify-delay') ?? '2') * 1000);
 const ANNOUNCE_MS = 1000;
 const REPORT_DIR = opt('--report-dir') ? path.resolve(opt('--report-dir')) : path.join(ROOT, 'reports');
 const [VMAJ, VMIN] = (opt('--citp-version') || '1.0').split('.').map(Number);
@@ -196,6 +211,7 @@ async function main() {
   out(`CITP header version used for anything we send: ${VMAJ}.${VMIN};  log duration: ${DURATION_MS / 1000} s`);
   out(PHASE === 'observe' ? 'Sends: NOTHING.' : PHASE === 'hello' ? 'Sends: one PINF/PNam ("' + PROBE_NAME + '").'
     : PHASE === 'link' ? `Sends (only): UDP PINF/PLoc announcements (Type LightingConsole) every ${ANNOUNCE_MS / 1000} s; on TCP (outbound AND inbound connections): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest (every ${REREQUEST_MS / 1000} s), NACK (Reason 3), LeaveShow. No DMX.`
+    : PHASE === 'identify' ? 'Sends (only): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest (also every ' + REREQUEST_MS / 1000 + ' s), NACK (Reason 3), LeaveShow, and ONE FixtureIdentify (CAEX 5.6) after the first FixtureList. It writes an identifier into every fixture of the open show: use a COPY. No DMX.'
     : PHASE === 'sync' ? 'Sends (only): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest, NACK (Reason 3), LeaveShow.'
     : 'Sends: PINF/PNam, then CAEX FixtureListRequest (0x00020200) only.');
   out('');
@@ -259,9 +275,53 @@ async function main() {
   // ---- sessions ----
   const sourceKey = randomBytes(4).readUInt32LE(0);
   const REQUESTS = new Set([CAEX.GetLiveViewStatus, CAEX.GetLiveViewImage, CAEX.FixtureListRequest, CAEX.FixtureIdentify]);
-  const synced = PHASE === 'sync' || isLink;
+  const synced = PHASE === 'sync' || isLink || isIdentify;
   const fullShown = { first: false, patched: false };
   let listCount = 0;
+  // ---- identify state (Handoff 17) ----
+  const ID = { map: new Map(), byId: new Map(), items: [], skipped: [], sent: false, sentAt: null, verifyPending: false, first: null, prev: null, lists: 0, reports: [], modifies: [], refused: 0, notSentReason: null, latestStats: null };
+  const hex8 = (v) => '0x' + v.toString(16).padStart(8, '0');
+  const stamp = () => `${since()} ${new Date().toISOString().slice(11, 23)}Z`;
+  const instanceOf = (f) => f.ids.find((d) => d.type === 0x04);
+  const keyOf = (f) => { const d = instanceOf(f); return d && d.guidRaw ? d.guidRaw : `#${f.index}`; };
+  const fxName = (f) => `${f.manufacturer ? f.manufacturer + ' ' : ''}${f.name}`;
+  const filled = (f) => f.patched || f.universe || f.universeChannel;
+  const filledRow = (f) => `Ch ${f.channel} ${fxName(f)}: patched=${f.patched} universe=${f.universe + 1} [${f.universe}] address=${f.universeChannel + 1} [${f.universeChannel}]`;
+  /** identifiers of a list against our map */
+  function listStats(fx) {
+    const identified = fx.filter((f) => f.identifier !== 0xffffffff);
+    const matched = [], mismatched = [];
+    for (const f of fx) {
+      const want = ID.map.get(keyOf(f));
+      if (!want) continue;
+      (f.identifier === want.identifier ? matched : mismatched).push(f);
+    }
+    return { total: fx.length, identified, matched, mismatched, filledRows: fx.filter(filled) };
+  }
+  /** What the Selection / Modify lines call a fixture: from the latest list by identifier, else from our own map. */
+  function describeId(id, latest) {
+    const f = latest && latest.fixtures.find((x) => x.identifier === id);
+    if (f) return `${hex8(id)} (Ch ${f.channel} ${fxName(f)})`;
+    const a = ID.byId.get(id);
+    if (a) return `${hex8(id)} (assigned by us: Ch ${a.f.channel} ${fxName(a.f)})`;
+    return hex8(id);
+  }
+  function diffLists(prev, cur) {
+    const out = [];
+    const pm = new Map(prev.map((f) => [keyOf(f), f]));
+    for (const f of cur) {
+      const o = pm.get(keyOf(f));
+      if (!o) { out.push(`new fixture Ch ${f.channel} ${fxName(f)} (identifier ${hex8(f.identifier)})`); continue; }
+      if (o.identifier !== f.identifier) out.push(`Ch ${f.channel} ${fxName(f)}: identifier ${hex8(o.identifier)} -> ${hex8(f.identifier)}`);
+      if (o.patched !== f.patched || o.universe !== f.universe || o.universeChannel !== f.universeChannel) {
+        out.push(`Ch ${f.channel} ${fxName(f)}: PATCH FIELDS patched ${o.patched}->${f.patched}, universe ${o.universe + 1}->${f.universe + 1}, address ${o.universeChannel + 1}->${f.universeChannel + 1}`);
+      }
+    }
+    const cm = new Set(cur.map(keyOf));
+    for (const f of prev) if (!cm.has(keyOf(f))) out.push(`fixture removed: Ch ${f.channel} ${fxName(f)}`);
+    return out;
+  }
+
   // log with the connection tag after the indentation (link only; sync/caex lines are unchanged)
   const lg = (ses, s) => out(ses.tag ? s.replace(/^(\s*)/, `$1[${ses.tag}] `) : s);
 
@@ -272,7 +332,9 @@ async function main() {
       onEnterShow: () => {},
     };
     const send = (label, buf) => new Promise((res) => {
-      if (!isAllowedOutgoing(buf)) { lg(ses, `  ${since()} REFUSED to send ${label}: not on the outgoing allowlist (${hexOf(buf, 32)})`); res(); return; }
+      const isIdent = buf.length >= 24 && buf.toString('latin1', 16, 20) === 'CAEX' && buf.readUInt32LE(20) === CAEX.FixtureIdentify;
+      if (!isAllowedOutgoing(buf, { identify: isIdentify }) || (isIdent && ID.sent)) { if (isIdent) ID.refused++; lg(ses, `  ${since()} REFUSED to send ${label}: ${isIdent && ID.sent ? 'a FixtureIdentify was already sent (only one is ever allowed)' : 'not on the outgoing allowlist'} (${hexOf(buf, 32)})`); res(); return; }
+      if (isIdent) { ID.sent = true; ID.sentAt = since(); }
       if (ses.closing && !/LeaveShow/.test(label)) { lg(ses, `  ${since()} not sending ${label}: shutting down`); res(); return; }
       lg(ses, `  ${since()} SEND ${label} (${buf.length} bytes): ${hexOf(buf)}`);
       decodeMessage(buf, '      ').lines.forEach((l) => lg(ses, l));
@@ -283,7 +345,7 @@ async function main() {
     ses.enqueue = (label, buf) => (ses.chain = ses.chain.then(() => send(label, buf)));
     ses.requestFixtures = (why) => {
       const S = ses.S;
-      const cap = isLink ? Infinity : 6;
+      const cap = isLink || isIdentify ? Infinity : 6;
       if (S.fixtureRequests >= cap) { lg(ses, `  (not sending another FixtureListRequest: ${cap} already sent)`); return; }
       const n = ++S.fixtureRequests; const before = S.fixtureLists;
       ses.enqueue(`CAEX FixtureListRequest #${n} (${why})`, buildFixtureListRequest(HDR_OPTS));
@@ -300,6 +362,7 @@ async function main() {
     function onFixtureList(dm, at) {
       const S = ses.S;
       S.fixtureLists++; S.latest = dm.fixtures; listCount++;
+      if (isIdentify) { onIdentifyList(dm, at); return; }
       if (!isLink) {
         lg(ses, `  ${at} -> FixtureList #${S.fixtureLists}: Type=${dm.fixtures.type} count=${dm.fixtures.count}${dm.fixtures.error ? ' DECODE ERROR: ' + dm.fixtures.error : ''}`);
         lg(ses, '  ---- fixture tables (every fixture) ----');
@@ -321,8 +384,63 @@ async function main() {
       }
       fullShown.first = true; if (patched.length) fullShown.patched = true;
     }
+    /** --identify: the first list triggers the map + the ONE FixtureIdentify; later lists are verified / diffed. */
+    function onIdentifyList(dm, at) {
+      const S = ses.S; const fx = dm.fixtures.fixtures; const n = ++ID.lists;
+      const st = listStats(fx);
+      lg(ses, `  ${at} -> FixtureList #${S.fixtureLists}: Type=${dm.fixtures.type} count=${dm.fixtures.count}${dm.fixtures.error ? ' DECODE ERROR: ' + dm.fixtures.error : ''}; identifier != 0xffffffff: ${st.identified.length}; Patched/Universe/UniverseChannel filled: ${st.filledRows.length}`);
+      if (!ID.first) {
+        ID.first = { fx, st, at }; ID.prev = fx; ID.latestStats = st;
+        lg(ses, '  ---- fixture tables (first list) ----');
+        formatFixtureTables(fx).forEach((l) => lg(ses, l));
+        lg(ses, '  ---- end fixture tables ----');
+        // the ID map: identifier = 100001 + index, for every fixture with a 16-byte CaptureInstanceId
+        for (const f of fx) {
+          const d = instanceOf(f);
+          if (!d) { ID.skipped.push({ f, why: 'no CaptureInstanceId (identifier type 0x04)' }); continue; }
+          if (d.size !== 16) { ID.skipped.push({ f, why: `CaptureInstanceId is ${d.size} byte(s), not 16` }); continue; }
+          if (ID.map.has(keyOf(f))) { ID.skipped.push({ f, why: 'same CaptureInstanceId as an earlier fixture' }); continue; }
+          const e = { f, guid: Buffer.from(d.hex.replace(/ /g, ''), 'hex'), identifier: IDENTIFY_BASE + f.index };
+          ID.map.set(keyOf(f), e); ID.byId.set(e.identifier, e); ID.items.push(e);
+        }
+        lg(ses, `  ---- ID map: identifier = ${IDENTIFY_BASE} + list index; ${ID.items.length} of ${fx.length} fixture(s) have a CaptureInstanceId ----`);
+        textTable(['index', 'channel', 'model', 'mode', 'CaptureInstanceId (as received)', 'CaptureInstanceId (spec form)', 'identifier'],
+          ID.items.map((e) => [e.f.index, e.f.channel, fxName(e.f), e.f.mode, instanceOf(e.f).guidRaw, instanceOf(e.f).guidSpec, `${e.identifier} (${hex8(e.identifier)})`])).forEach((l) => lg(ses, l));
+        ID.skipped.forEach((x) => lg(ses, `  NOT identified: #${x.f.index} Ch ${x.f.channel} ${fxName(x.f)}: ${x.why}`));
+        lg(ses, '  ---- end ID map ----');
+        if (!ID.items.length) { ID.notSentReason = 'no fixture has a usable CaptureInstanceId'; lg(ses, `  ${at} FixtureIdentify NOT sent: ${ID.notSentReason}`); return; }
+        const sent = ses.enqueue(`CAEX FixtureIdentify (${ID.items.length} fixture(s))`, buildFixtureIdentify(ID.items.map((e) => ({ guid: e.guid, identifier: e.identifier })), HDR_OPTS));
+        sent.then(() => {
+          if (!ID.sent || ses.closing) return;
+          S.timers.push(setTimeout(() => { ID.verifyPending = true; ses.requestFixtures(`${VERIFY_DELAY_MS / 1000} s after FixtureIdentify: verify`); }, VERIFY_DELAY_MS));
+        });
+        return;
+      }
+      const prev = ID.prev;
+      if (ID.verifyPending) {
+        ID.verifyPending = false;
+        const rep = { n, at, st, kind: 'verify' };
+        ID.reports.push(rep);
+        lg(ses, `  ${at} ==== AFTER FixtureIdentify (list #${S.fixtureLists}) ====`);
+        lg(ses, `    fixtures: ${st.total}; carrying an identifier other than 0xffffffff: ${st.identified.length}; matching our map: ${st.matched.length} of ${ID.items.length}; mismatching: ${st.mismatched.length}`);
+        st.mismatched.slice(0, 20).forEach((f) => lg(ses, `    MISMATCH Ch ${f.channel} ${fxName(f)}: has ${hex8(f.identifier)}, we assigned ${hex8(ID.map.get(keyOf(f)).identifier)}`));
+        const other = st.identified.filter((f) => !ID.map.has(keyOf(f)));
+        other.slice(0, 20).forEach((f) => lg(ses, `    identifier ${hex8(f.identifier)} on Ch ${f.channel} ${fxName(f)} (not in our map)`));
+        lg(ses, `    Patched/Universe/UniverseChannel filled: ${st.filledRows.length ? 'YES (' + st.filledRows.length + ' fixture(s))' : 'NO'} (first list: ${ID.first.st.filledRows.length})`);
+        st.filledRows.forEach((f) => lg(ses, `      ${filledRow(f)}`));
+        lg(ses, `  ${at} ==== end ====`);
+      } else {
+        const d = diffLists(prev, fx);
+        ID.reports.push({ n, at, st, kind: 'periodic', changes: d });
+        lg(ses, d.length ? `    CHANGES since the previous list: ${d.length}` : '    no change in identifiers or patch fields since the previous list');
+        d.slice(0, 40).forEach((l) => lg(ses, `      ${l}`));
+        if (d.length > 40) lg(ses, `      ... ${d.length - 40} more`);
+      }
+      ID.latestStats = st;
+      ID.prev = fx;
+    }
     function handleSync(m, dm) {
-      const at = since(); const S = ses.S;
+      const at = isIdentify ? stamp() : since(); const S = ses.S;
       switch (dm.code) {
         case CAEX.GetLaserFeedList:
           S.laserRequests++;
@@ -340,6 +458,7 @@ async function main() {
           return;
         case CAEX.FixtureSelection: {
           const names = (dm.selection || []).map((id) => {
+            if (isIdentify) return describeId(id, S.latest);
             const f = S.latest && S.latest.fixtures.find((x) => x.identifier === id);
             return `0x${id.toString(16).padStart(8, '0')}${f ? ` (${f.manufacturer} ${f.name}, ch ${f.channel})` : ''}`;
           });
@@ -347,7 +466,23 @@ async function main() {
           lg(ses, `  ${at} -> FIXTURE SELECTION: ${names.length ? names.join('; ') : '(empty selection)'}`);
           return;
         }
-        case CAEX.FixtureModify: S.modifies++; return;
+        case CAEX.FixtureModify:
+          S.modifies++;
+          if (isIdentify) {
+            if (!dm.modify) lg(ses, `  ${at} -> FIXTURE MODIFY received but its fields could not be decoded (raw hex above)`);
+            for (const x of dm.modify || []) {
+              const f = [];
+              if (x.changed & 0x01) f.push(`PATCH FIELDS patched=${x.patched} universe=${x.universe + 1} [${x.universe}] address=${x.universeChannel + 1} [${x.universeChannel}]`);
+              if (x.changed & 0x02) f.push(`unit=${JSON.stringify(x.unit)}`);
+              if (x.changed & 0x04) f.push(`channel=${x.channel}`);
+              if (x.changed & 0x08) f.push(`circuit=${JSON.stringify(x.circuit)}`);
+              if (x.changed & 0x10) f.push(`note=${JSON.stringify(x.note)}`);
+              if (x.changed & 0x20) f.push(`position=[${x.position.join(', ')}] angles=[${x.angles.join(', ')}]`);
+              ID.modifies.push({ at, id: x.identifier, changed: x.changed, patchFields: !!(x.changed & 0x01) });
+              lg(ses, `  ${at} -> FIXTURE MODIFY: ${describeId(x.identifier, S.latest)} ChangedFields=0x${x.changed.toString(16)}${f.length ? '; ' + f.join('; ') : ''}`);
+            }
+          }
+          return;
         case CAEX.FixtureRemove: S.removes++; return;
         default:
           if (dm.layer === 'CAEX' && REQUESTS.has(dm.code)) {
@@ -403,7 +538,7 @@ async function main() {
     setTimeout(() => { if (!primary.sawFixtureList && sent < 3 && !primary.closedByPeer) requestFixturesCaex('retry: no FixtureList after 5 s'); }, 5000);
   }
   let rereq = null;
-  if (isLink) {
+  if (isLink || isIdentify) {
     rereq = setInterval(() => {
       for (const ses of sessions) if (!ses.closing && !ses.closed && !ses.sk.destroyed) ses.requestFixtures(`periodic re-request every ${REREQUEST_MS / 1000} s`);
     }, REREQUEST_MS);
@@ -435,6 +570,30 @@ async function main() {
       }
       const any = sessions.some((x) => x.S.maxPatched > 0);
       out(`  Patched=1 seen in any FixtureList: ${any ? 'YES' : 'NO'}`);
+    }
+    if (isIdentify) {
+      const first = ID.first, ver = ID.reports.find((r) => r.kind === 'verify');
+      const last = ID.reports.at(-1) ?? null;
+      const everFilled = [first, ...ID.reports].filter(Boolean).some((r) => r.st.filledRows.length);
+      const changes = ID.reports.filter((r) => r.kind === 'periodic' && r.changes.length);
+      out('== Identify summary ==');
+      out(`  fixtures in the first FixtureList: ${first ? first.fx.length : 0}; with a usable CaptureInstanceId: ${ID.items.length}; not identified: ${ID.skipped.length}; already carrying an identifier before ours: ${first ? first.st.identified.length : 0}`);
+      out(`  FixtureIdentify sent: ${ID.sent ? `YES, ${ID.items.length} entr${ID.items.length === 1 ? 'y' : 'ies'}, identifiers ${IDENTIFY_BASE} + list index, at ${ID.sentAt}` : `NO${ID.notSentReason ? ' (' + ID.notSentReason + ')' : first ? '' : ' (no FixtureList was received)'}`}${ID.refused ? `; refused by the allowlist: ${ID.refused}` : ''}`);
+      if (ver) {
+        out(`  identified count after FixtureIdentify (list #${ver.n} at ${ver.at}): ${ver.st.identified.length} of ${ver.st.total} fixture(s) carry an identifier other than 0xffffffff`);
+        out(`  match our map: ${ver.st.matched.length} of ${ID.items.length}; mismatching: ${ver.st.mismatched.length}`);
+        out(`  Patched/Universe/UniverseChannel filled after FixtureIdentify: ${ver.st.filledRows.length ? 'YES (' + ver.st.filledRows.length + ' fixture(s))' : 'NO'} (first list: ${first.st.filledRows.length})`);
+        ver.st.filledRows.slice(0, 50).forEach((f) => out(`    ${filledRow(f)}`));
+      } else out(ID.sent ? '  identified count after FixtureIdentify: NOT VERIFIED (no FixtureList arrived after the verification request)' : '  identified count after FixtureIdentify: n/a (nothing was sent)');
+      if (last && last.kind === 'periodic') out(`  last FixtureList (#${last.n} at ${last.at}): ${last.st.identified.length} identified, ${last.st.matched.length} matching our map, ${last.st.filledRows.length} with patch fields filled`);
+      out(`  FixtureList messages: ${ID.lists}; later lists with a change in identifiers or patch fields: ${changes.length}`);
+      changes.slice(0, 10).forEach((r) => out(`    list #${r.n} at ${r.at}: ${r.changes.length} change(s), first: ${r.changes[0]}`));
+      out(`  patch fields seen in any FixtureList or FixtureModify: ${everFilled || ID.modifies.some((m) => m.patchFields) ? 'YES' : 'NO'}`);
+      out(`  FixtureSelection events: ${S.selections.length}`);
+      S.selections.forEach((x) => out(`    ${x.at}  ${x.ids.join('; ') || '(empty)'}`));
+      out(`  FixtureModify events: ${S.modifies} (items decoded: ${ID.modifies.length}; with patch fields: ${ID.modifies.filter((m) => m.patchFields).length})`);
+      ID.modifies.slice(0, 50).forEach((m) => out(`    ${m.at}  id=${hex8(m.id)} ChangedFields=0x${m.changed.toString(16)}${m.patchFields ? ' (patch fields)' : ''}`));
+      out(`  LeaveShow sent: ${S.weLeft ? 'yes' : 'no'}`);
     }
   }
   out(`== Summary ==\n  ${primary.msgCount} CITP message(s) received${isLink ? ' on the outbound connection' : ''}, ${primary.rx} byte(s) total; peer closed first: ${primary.closedByPeer}` +

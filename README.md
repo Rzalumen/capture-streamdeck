@@ -30,6 +30,13 @@ folder holds extracts of a licensed Capture library and is gitignored, as are
   FixtureListRequest, NACKs (refused) other requests, prints every fixture of the FixtureList as tables, logs
   every FixtureSelection, and sends LeaveShow before closing. It only ever sends PNam, LaserFeedList (empty),
   EnterShow, FixtureListRequest, NACK and LeaveShow (enforced in code). Writes `reports/citp-sync.txt`.
+- `npm run probe:citp -- --identify` (90 s, Handoff 17) is `--sync` plus **one** CAEX FixtureIdentify (5.6): after the first
+  FixtureList every fixture with a CaptureInstanceId (identifier type 0x04) gets FixtureIdentifier = 100001 + its list index
+  (map printed), then a FixtureListRequest 2 s later says how many fixtures carry an identifier, whether they match, and whether any
+  Patched/Universe/UniverseChannel field is filled; it then logs every FixtureSelection and FixtureModify and re-requests the list
+  every 20 s, reporting changes. **It writes an identifier into each fixture of the open show: run it on a COPY.** FixtureIdentify is
+  allowed only in this phase (`isAllowedOutgoing(msg, {identify: true})`); everything else that writes stays refused. Writes
+  `reports/citp-identify.txt` with an `== Identify summary ==` block.
 - `npm run probe:modes [-- --fixture <rawGuid> --mode <rawGuid> [--name <text>] [--expect <n>] ...]` opens a
   fixture's library object directly by its AtlaBaseFixtureId (GUID bytes in the order Capture sends them, which
   is how the library names `<guid>.c2o`) and looks for each DMX mode's GUID and name inside it, then lists the

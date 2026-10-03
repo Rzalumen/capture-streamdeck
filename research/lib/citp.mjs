@@ -10,6 +10,8 @@
 //    guid encoding come from handoff 04, which took them from the PDF directly. FixtureModify (5.7),
 //    FixtureRemove (5.8), FixtureIdentify (5.6) and FixtureConsoleStatus (5.10) were NOT in that handoff:
 //    they come from an automated summary of the PDF and are provisional (the raw hex is always logged).
+//    FixtureIdentify's layout (u16 FixtureCount, {16-byte CaptureInstanceId, u32 FixtureIdentifier}[]) was then read from the PDF
+//    directly for Handoff 17; it is the only one of these that `citp-connect --identify` ever sends.
 // All integers little-endian. ucs1 = null-terminated 8-bit string; ucs2 = null-terminated UTF-16LE.
 
 export const HEADER_SIZE = 20;
@@ -126,6 +128,25 @@ export function buildNack(reason, opts) {
 }
 
 /**
+ * CAEX FixtureIdentify (5.6, 0x00020204) - ONLY for `citp-connect --identify` (Handoff 17). Layout: u16 FixtureCount, then per fixture
+ * the 16 bytes of its CaptureInstanceId (identifier type 0x04) EXACTLY as Capture sent them in the FixtureList, and u32 FixtureIdentifier.
+ * items: [{guid: Buffer(16), identifier: u32}].
+ */
+export function buildFixtureIdentify(items, opts) {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 0xffff) throw new RangeError(`FixtureIdentify needs 1..65535 fixtures, got ${items?.length}`);
+  const parts = [Buffer.alloc(4), Buffer.alloc(2)];
+  parts[0].writeUInt32LE(CAEX.FixtureIdentify, 0);
+  parts[1].writeUInt16LE(items.length, 0);
+  for (const it of items) {
+    if (!Buffer.isBuffer(it.guid) || it.guid.length !== 16) throw new RangeError('FixtureIdentify: the CaptureInstanceId must be exactly 16 bytes');
+    const id = Buffer.alloc(4); id.writeUInt32LE(it.identifier >>> 0, 0);
+    parts.push(Buffer.from(it.guid), id);
+  }
+  const body = Buffer.concat(parts);
+  return Buffer.concat([buildHeader(HEADER_SIZE + body.length, 'CAEX', opts), body]);
+}
+
+/**
  * The ONLY messages the probe may ever put on the wire: PINF/PNam and these CAEX codes. Anything else
  * (FixtureList, FixtureModify, FixtureRemove, FixtureIdentify, FixtureSelection, FixtureConsoleStatus,
  * SetFixtureTransformationSpace, recorder/cue control, ...) is refused by isAllowedOutgoing().
@@ -133,11 +154,23 @@ export function buildNack(reason, opts) {
 export const ALLOWED_OUTGOING_CAEX = new Set([
   CAEX.LaserFeedList, CAEX.EnterShow, CAEX.LeaveShow, CAEX.FixtureListRequest, CAEX.NACK,
 ]);
-export function isAllowedOutgoing(msg) {
+/**
+ * `identify: true` (citp-connect --identify only) additionally allows ONE well-formed FixtureIdentify. By default it is refused, as before.
+ */
+export function isAllowedOutgoing(msg, { identify = false } = {}) {
   if (msg.length < HEADER_SIZE + 4 || msg.toString('latin1', 0, 4) !== 'CITP') return false;
   const layer = msg.toString('latin1', 16, 20);
   if (layer === 'PINF') return msg.toString('latin1', 20, 24) === 'PNam';
-  if (layer === 'CAEX') return ALLOWED_OUTGOING_CAEX.has(msg.readUInt32LE(20));
+  if (layer === 'CAEX') {
+    const code = msg.readUInt32LE(20);
+    if (identify && code === CAEX.FixtureIdentify) {
+      // well-formed: the declared size is the real size, and the body is exactly FixtureCount x (16-byte guid + u32)
+      if (msg.length < HEADER_SIZE + 6 || msg.readUInt32LE(8) !== msg.length) return false;
+      const n = msg.readUInt16LE(HEADER_SIZE + 4);
+      return n >= 1 && msg.length === HEADER_SIZE + 6 + n * 20;
+    }
+    return ALLOWED_OUTGOING_CAEX.has(code);
+  }
   return false;
 }
 
@@ -294,7 +327,8 @@ export function decodeMessage(msg, indent = '    ', { maxFixtures = 20 } = {}) {
         }
         case CAEX.FixtureIdentify: {
           const n = c.u16(); const items = [];
-          for (let i = 0; i < n; i++) items.push(`${guidStr(c.bytes(16))}/0x${c.u32().toString(16).padStart(8, '0')}`);
+          r.identify = [];
+          for (let i = 0; i < n; i++) { const g = c.bytes(16); const id = c.u32(); r.identify.push({ guidRaw: guidRawStr(g), guidSpec: guidStr(g), identifier: id }); items.push(`${guidStr(g)}/0x${id.toString(16).padStart(8, '0')}`); }
           lines.push(`${indent}FixtureIdentify (provisional layout): FixtureCount=${n} [${items.join(', ')}]`); break;
         }
         case CAEX.FixtureConsoleStatus: {
@@ -307,14 +341,17 @@ export function decodeMessage(msg, indent = '    ', { maxFixtures = 20 } = {}) {
           // 0x01 = u8 Patched + u8 Universe + u16 UniverseChannel; 0x02 = ucs2 Unit; 0x04 = u16 Channel; 0x08 = ucs2 Circuit;
           // 0x10 = ucs2 Note; 0x20 = float[3] Position + float[3] Angles.
           const n = c.u16(); const items = [];
+          r.modify = []; // structured copy of what is printed (filled as far as decoding got, even if it stops early)
           for (let i = 0; i < n; i++) {
             const id = c.u32(), ch = c.u8(); const parts = [`id=0x${id.toString(16).padStart(8, '0')}`, `changed=0x${ch.toString(16)}`];
-            if (ch & 0x01) parts.push(`patched=${c.u8()}`, `universe=${c.u8()}(0-based)`, `address=${c.u16()}(0-based)`);
-            if (ch & 0x02) parts.push(`unit=${JSON.stringify(c.ucs2())}`);
-            if (ch & 0x04) parts.push(`channel=${c.u16()}`);
-            if (ch & 0x08) parts.push(`circuit=${JSON.stringify(c.ucs2())}`);
-            if (ch & 0x10) parts.push(`note=${JSON.stringify(c.ucs2())}`);
-            if (ch & 0x20) parts.push(`position=[${f3([c.f32(), c.f32(), c.f32()])}]`, `angles=[${f3([c.f32(), c.f32(), c.f32()])}]`);
+            const m = { identifier: id, changed: ch };
+            r.modify.push(m);
+            if (ch & 0x01) { m.patched = c.u8(); m.universe = c.u8(); m.universeChannel = c.u16(); parts.push(`patched=${m.patched}`, `universe=${m.universe}(0-based)`, `address=${m.universeChannel}(0-based)`); }
+            if (ch & 0x02) { m.unit = c.ucs2(); parts.push(`unit=${JSON.stringify(m.unit)}`); }
+            if (ch & 0x04) { m.channel = c.u16(); parts.push(`channel=${m.channel}`); }
+            if (ch & 0x08) { m.circuit = c.ucs2(); parts.push(`circuit=${JSON.stringify(m.circuit)}`); }
+            if (ch & 0x10) { m.note = c.ucs2(); parts.push(`note=${JSON.stringify(m.note)}`); }
+            if (ch & 0x20) { m.position = [c.f32(), c.f32(), c.f32()]; m.angles = [c.f32(), c.f32(), c.f32()]; parts.push(`position=[${f3(m.position)}]`, `angles=[${f3(m.angles)}]`); }
             items.push(parts.join(' '));
           }
           lines.push(`${indent}FixtureModify (provisional layout): FixtureCount=${n}`, ...items.map((x) => `${indent}  ${x}`));
