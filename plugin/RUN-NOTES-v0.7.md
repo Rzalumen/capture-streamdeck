@@ -1,6 +1,8 @@
-# Run notes: plugin v0.7 (Handoff 21: Deck Control on/off, resume values, knob and page fixes) + `dmx-proof --pap`
+# Run notes: plugin v0.7 (Handoff 21 + addendum: Deck Control on/off, resume values, knob and page fixes, SolaFrame "Dim") + `dmx-proof --pap`
 
-**Base:** I ran `git pull` first, both in my working clone and in your `~/capture-streamdeck`. Both are at **`d9287ca`** (v0.6, which you pushed). This work is one new commit on top of it, delivered as **`capture-streamdeck-0020.bundle`**.
+**Base:** I ran `git pull` first, both in my working clone and in your `~/capture-streamdeck`. Both are at **`d9287ca`** (v0.6, which you pushed). Bundle 0020 has not been pushed yet, so the addendum is a second commit on top of it.
+
+**Use `capture-streamdeck-0021.bundle`:** it holds both commits (Handoff 21 and the addendum) on top of `d9287ca`, and it replaces 0020. The plugin file in `Claude outputs` is the new one with the addendum (still v0.7.0).
 
 **Restart brief sections 1–4 were followed:**
 - no push (commit and bundle only);
@@ -49,6 +51,31 @@ Page order is now **Main · Colour · Beam · Shutters · Gobo/FX · Strobe/Shut
 - The page keys show the page name only ("Main", "Colour" / "1/2"). With no fixture they show "◀ Page" / "Page ▶".
 - The page resets to **Main** on a type change.
 
+### Addendum: the real SolaFrame 750 "Standard" layout (47 ch)
+- **Intensity also accepts the whole word `dim`** (after `dimmer` and `intensity`). This is generic: "Dim Coarse" is now the Main page's Intensity.
+  - The named v0.5 `Fixture: Intensity` dial finds it too.
+  - Names with a speed/mode/curve word ("Dim Curve") still don't count.
+  - **Effect on the SolaFrame:** its dim channel now starts at 100 % (the intensity home value). In v0.7 before the addendum it was an "Other" channel at 0.
+- **Labels:** a 16-bit knob whose name ends in the word "Coarse" is labelled without it ("Focus Coarse" → **Focus**, "Zoom Coarse" → **Zoom**, "Dim Coarse" → **Dim**).
+  - **The pairing still comes from the library's role/pair records, not from the names.** The new test checks that, for this layout, the name-implied pairs ("X Coarse" ↔ "X Fine") agree with the records.
+  - Knob names are also what multi-selection matches on. A SolaFrame's "Focus" and another type's "Focus" now move together.
+- **SolaFrame Main page:** Pan (1) · Tilt (3) · **Dim** (41, 16-bit with 42).
+- **Test data from your patch view** (`solaFrame750()` in `test/fixtures/synth.ts`): your 38 start channels and the 9 fine channels in the gaps (2, 4, 16, 26, 30, 33, 35, 37, 42).
+  - Capture truncates the names, so everything after each truncated prefix is my guess ("Color Mix Funct…" → "Color Mix Function").
+  - New tests:
+    - the Setup **Channels** list gives exactly your start channels, with names matching Capture's prefixes, and 16-bit pairs exactly where Capture shows gaps;
+    - Main is Pan · Tilt · Dim with the right channels.
+  - This 47-channel layout also runs the parser out of its search budget, the same "uniqueness is not proven" note your real SolaFrame gives.
+- **Shutter/LED is unchanged, as you asked.** "Shutter/LED F…" (39) and "Shutter/LED" (40) stay on the **Strobe/Shutter** page with the existing defaults: **the first shutter/strobe channel at 255, every later one at 0.**
+  - On the SolaFrame that means **39 = 255 and 40 = 0** at first touch.
+  - Their real ranges are unknown, so if the SolaFrame stays dark at Dim 100 %, these two are the first suspects. Check them on the Strobe/Shutter page.
+- **Where the other SolaFrame channels land** (with my guessed full names):
+  - "… Function" channels (Color Mix, Static Color, Gobo 1, Gobo 1 Rotate, Animation, Prism, LED Animation) go to **Other**, because "function" is one of the existing "not the value" words.
+  - Mspeed and Control also go to Other.
+  - The blades and Frame Rotation make Shutters 1/3–3/3.
+  - If the real names differ from my guesses, the pages may differ. Your Channels list in Setup will show it.
+- `research/` is untouched by the addendum: `dmx-proof` still doesn't know "Dim". It isn't needed for the `--pap` test on the Rogue.
+
 ### Part B: `dmx-proof --pap` (research only, no plugin change)
 - After each live level frame (START code 0x00) it sends a **per-address-priority frame (START code 0xDD)**: same CID, same universe, the same sequence counter.
 - Priority 100 on the test fixture's slots, **0 ("ignore my level")** on all other slots, at 40 fps.
@@ -68,7 +95,8 @@ Page order is now **Main · Colour · Beam · Shutters · Gobo/FX · Strobe/Shut
 3. Brief connections don't wait for a verifying list after FixtureIdentify. The next brief connection or the ON session sees the identifiers. If Capture forgets identifiers when a console disconnects, each brief connection simply identifies again; that's logged and harmless.
 
 ## Verified (sandbox)
-- **310 plugin tests pass** (was 296); **73 research tests pass** (was 71).
+- **312 plugin tests pass** (was 296; the addendum added 2); **73 research tests pass** (was 71).
+- Addendum mutation checks: without `dim` and without the "Coarse" label cleanup, the new tests fail.
 - **`test/deck.test.ts`** (9 tests):
   - OFF at start; activity switches ON at once;
   - the idle timer switches OFF in the order termination → LeaveShow + close → save;
@@ -106,7 +134,7 @@ Page order is now **Main · Colour · Beam · Shutters · Gobo/FX · Strobe/Shut
 ## Your test
 1. Get the code (this pushes v0.7 to GitHub):
    ```
-   cd ~/capture-streamdeck && git pull && git pull "Claude outputs/capture-streamdeck-0020.bundle" main && git push origin main
+   cd ~/capture-streamdeck && git pull && git pull "Claude outputs/capture-streamdeck-0021.bundle" main && git push origin main
    ```
 2. Install the plugin over v0.6:
    ```
@@ -121,6 +149,7 @@ Page order is now **Main · Colour · Beam · Shutters · Gobo/FX · Strobe/Shut
 5. Click the Rogue in Capture, then turn **Attribute 1 (Pan)**. The key should turn "Deck ON" and the light should move; the pane is locked while ON. Click the light again in Capture if a different one moved (decision 1).
 6. Press **Deck Control**, or wait 2 minutes. The key turns "Deck OFF" and the mouse should work again.
 7. Turn Pan again. The light should continue from where you left it, not snap to home.
+7b. **SolaFrame:** click it in Capture (with Deck ON). The page keys should read **Main**, and the dials **Pan · Tilt · Dim**. Turn Dim. If it stays dark, go to **Strobe/Shutter** and try "Shutter/LED" (40). In Setup → Channels, compare the full names with Capture's patch view.
 8. With other fixtures on universe 1 lit by the Control Pane (and Deck OFF), run:
    ```
    cd ~/capture-streamdeck && npm run probe:dmx -- --fixture 62 --universe 1 --address 285 --color-full --pap

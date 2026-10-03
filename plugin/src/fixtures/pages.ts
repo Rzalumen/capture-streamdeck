@@ -3,7 +3,7 @@
  * one page, from its NAME only (whole words, case-insensitive, camelCase split; a trailing number/letter on a word is ignored:
  * "Frost2" = frost, "Shutter1A" = shutter + "1a"). No fixture type is known here.
  *
- *   Main             dial 2 = the first pan, dial 3 = the first tilt, dial 4 = the first dimmer / intensity ("—" when missing)
+ *   Main             dial 2 = the first pan, dial 3 = the first tilt, dial 4 = the first dimmer / intensity / dim ("—" when missing)
  *   Colour           red green blue white amber lime uv cyan magenta yellow cto ctb ctc, colour/color (wheel)
  *   Beam             zoom, focus, iris, frost, diffusion, edge
  *   Shutters         blade, framing / frame, "shutter" + a number or letter ("Shutter 1A"), shutter rotation
@@ -15,6 +15,8 @@
  * Fine channels (role 2) are never parameters of their own: they ride with their coarse channel (16-bit).
  * Colour: mixing channels (red … ctb, not wheels) whose names are equal once the numbers are removed ("Red 1" … "Red 5") are ONE knob.
  * Channels at offsets where candidate parses disagree (Handoff 13) are never driven, so they are on no page (`excluded`).
+ * Labels (Handoff 21 addendum): a 16-bit knob whose coarse channel's name ends in the word "Coarse" is labelled without it ("Focus Coarse"
+ * + "Focus Fine" → "Focus"). The pairing itself always comes from the library's role/pair records, never from the names.
  */
 import { isAdditiveColourName, type Slot } from "./attrs.js";
 import { NOT_THE_VALUE, tokens, type Channel } from "./modes.js";
@@ -101,7 +103,7 @@ export function kindOf(name: string): Kind {
   if (base.some((t) => NOT_THE_VALUE.has(t))) return "other";
   if (has(base, "pan")) return "pan";
   if (has(base, "tilt")) return "tilt";
-  if (has(base, "dimmer", "intensity")) return "dimmer";
+  if (has(base, "dimmer", "intensity", "dim")) return "dimmer";
   const framing = isFramingShutter(raw, base);
   if (!framing && starts(base, "shutter", "strobe")) return "strobe";
   if (has(base, ...COLOUR_WORDS)) return "colour";
@@ -197,6 +199,12 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
     if (p.group !== "colour" || p.slots.length < 2) continue;
     p.name = cellTitle(p.slots[0].coarse.name);
     p.home = isAdditiveColourName(p.name) ? 1 : 0;
+  }
+  // "Focus Coarse" (16-bit) → "Focus": the knob is the pair, so "Coarse" says nothing
+  for (const p of params) {
+    if (p.slots.length !== 1 || !p.slots[0].fine) continue;
+    const short = p.name.replace(/[\s_-]+coarse$/i, "").trim();
+    if (short && short !== p.name) p.name = short;
   }
   // unique names within the type
   const seen = new Map<string, number>();

@@ -125,12 +125,13 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
 The Fixtures folder is one page: **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶**, dials **Select · Attribute 1 · 2 · 3**.
 
 - **Every channel of the selected fixture is on exactly one page**, built from the channel names of its library mode (whole words, case-insensitive, no fixture
-  type is known): **Main** (Attribute 1 = the first pan, 2 = the first tilt, 3 = the first dimmer/intensity; `—` when missing) · **Colour** (red … uv, cyan,
+  type is known): **Main** (Attribute 1 = the first pan, 2 = the first tilt, 3 = the first dimmer/intensity/dim; `—` when missing) · **Colour** (red … uv, cyan,
   magenta, yellow, CTO, CTB, colour wheel) · **Beam** (zoom, focus, iris, frost, diffusion, edge) · **Shutters** (blade, framing/frame, "Shutter" +
   number/letter such as "Shutter 1A", shutter rotation) · **Gobo/FX** (gobo, prism, animation, effect, rotation, index) · **Strobe/Shutter** (shutter,
   strobe) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a speed/time/mode/macro/control … word always goes here —
   and a second pan, tilt or dimmer channel). Only non-empty groups are pages; more than 3 channels continue on further pages (`Shutters 1/3`).
-  Fine channels are never knobs of their own: they ride with their coarse channel (16-bit). Colour cells (`Red 1` … `Red 5`) are one knob.
+  Fine channels are never knobs of their own: they ride with their coarse channel (16-bit; the pairing comes from the library's records). A 16-bit knob
+  whose name ends in "Coarse" is labelled without it ("Focus Coarse" → "Focus"). Colour cells (`Red 1` … `Red 5`) are one knob.
 - **◀ Page / Page ▶** cycle the pages (wrapping); their titles show the current page's name ("Main", "Colour 1/2"). The page goes back to **Main** when the
   first selected fixture is of a different type, and is kept within the same type.
 - **Attribute 1–3** show the page's channel name and value (raw %, until wheel/range decoding exists; wheels are plain value knobs for now): rotate ±1 % per tick

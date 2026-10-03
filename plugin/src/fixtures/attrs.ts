@@ -3,7 +3,7 @@
  * NAMES (whole words, case-insensitive; channels whose name also has a speed/mode/curve ... word are not the value channel — the same
  * rules as research/lib/modes.mjs and research/lib/extras.mjs).
  *
- *  pan, tilt, zoom, focus, iris, intensity (dimmer/intensity) — one channel (+ its fine partner when it is the coarse half of a pair)
+ *  pan, tilt, zoom, focus, iris, intensity (dimmer/intensity/dim) — one channel (+ its fine partner when it is the coarse half of a pair)
  *  red, green, blue, white (additive), cyan, magenta, yellow (subtractive) — EVERY channel with that word (cells, "Red 1".."Red 8", ...)
  *  shutter (shutter/strobe) — held at a fixed value, not a dial
  *  additive extras (amber, lime, uv ...) — held full with the other additive colours, not a dial
@@ -52,7 +52,7 @@ const notValue = (t: string[]): boolean => t.some((w) => NOT_THE_VALUE.has(w));
 const SINGLE_MATCH: Record<(typeof SINGLE_ATTRS)[number], (t: string) => boolean> = {
   pan: (t) => t === "pan",
   tilt: (t) => t === "tilt",
-  intensity: (t) => t.startsWith("dimmer") || t.startsWith("intensity"),
+  intensity: (t) => t.startsWith("dimmer") || t.startsWith("intensity") || t === "dim",
   zoom: (t) => t === "zoom",
   focus: (t) => t === "focus",
   iris: (t) => t === "iris",

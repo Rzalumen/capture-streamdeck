@@ -102,6 +102,42 @@ export const framingHead = (): SynthChannel[] => [
   { name: "Control" },
   { name: "Effects Speed" },
 ];
+/**
+ * The real High End SolaFrame 750 "Standard" layout (47 ch) as Capture's patch view shows it on Reza's Mac (Handoff 21 addendum): start
+ * channels and 16-bit pairs are REAL; Capture truncates the names, so everything after the truncated prefix is made up for the test.
+ * Test data only — no plugin code knows this fixture.
+ */
+export const SOLAFRAME_750_PATCH_VIEW: [number, string][] = [
+  [1, "Pan"], [3, "Tilt"], [5, "Color Mix Funct"], [6, "Red"], [7, "Green"], [8, "Blue"], [9, "CTO"], [10, "Static Color F"], [11, "Static Color Po"],
+  [12, "Gobo 1 Functi"], [13, "Gobo 1 Positio"], [14, "Gobo 1 Rotate"], [15, "Gobo 1 Rotate"],
+  [17, "Blade 1 Angle"], [18, "Blade 1 Angle"], [19, "Blade 2 Angle"], [20, "Blade 2 Angle"], [21, "Blade 3 Angle"], [22, "Blade 3 Angle"],
+  [23, "Blade 4 Angle"], [24, "Blade 4 Angle"], [25, "Frame Rotatio"], [27, "Animation Fun"], [28, "Prism Functio"], [29, "Prism Rotate"],
+  [31, "Frost"], [32, "Focus Coarse"], [34, "Zoom Coarse"], [36, "Auto Focus"], [38, "Iris"], [39, "Shutter/LED F"], [40, "Shutter/LED"],
+  [41, "Dim Coarse"], [43, "LED Animatio"], [44, "LED Animatio"], [45, "LED Animatio"], [46, "Mspeed"], [47, "Control"],
+];
+/** The fine channels of that layout (the gaps in the patch view). */
+export const SOLAFRAME_750_FINE = [2, 4, 16, 26, 30, 33, 35, 37, 42];
+export const solaFrame750 = (): SynthChannel[] => {
+  const full: Record<number, string> = {
+    1: "Pan", 3: "Tilt", 5: "Color Mix Function", 6: "Red", 7: "Green", 8: "Blue", 9: "CTO", 10: "Static Color Function", 11: "Static Color Position",
+    12: "Gobo 1 Function", 13: "Gobo 1 Position", 14: "Gobo 1 Rotate Function", 15: "Gobo 1 Rotate",
+    17: "Blade 1 Angle A", 18: "Blade 1 Angle B", 19: "Blade 2 Angle A", 20: "Blade 2 Angle B", 21: "Blade 3 Angle A", 22: "Blade 3 Angle B",
+    23: "Blade 4 Angle A", 24: "Blade 4 Angle B", 25: "Frame Rotation", 27: "Animation Function", 28: "Prism Function", 29: "Prism Rotate",
+    31: "Frost", 32: "Focus Coarse", 34: "Zoom Coarse", 36: "Auto Focus", 38: "Iris", 39: "Shutter/LED Functions", 40: "Shutter/LED",
+    41: "Dim Coarse", 43: "LED Animation Function", 44: "LED Animation Position", 45: "LED Animation Rotate", 46: "Mspeed", 47: "Control",
+  };
+  const out: SynthChannel[] = [];
+  for (let n = 1; n <= 47; n++) {
+    const fine = SOLAFRAME_750_FINE.includes(n);
+    const hasFine = SOLAFRAME_750_FINE.includes(n + 1);
+    if (fine) {
+      const coarse = full[n - 1].replace(/ Coarse$/, "");
+      out.push({ name: `${coarse} Fine`, role: 2, pair: n - 2 });
+    } else out.push(hasFine ? { name: full[n], role: 1, pair: n } : { name: full[n] });
+  }
+  return out;
+};
+
 /** A conventional: one intensity channel. */
 export const conventional = (): SynthChannel[] => [{ name: "Intensity" }];
 

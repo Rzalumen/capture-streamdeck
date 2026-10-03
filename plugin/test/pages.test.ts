@@ -11,7 +11,7 @@ import { SetupStore } from "../src/fixtures/setup.ts";
 import { ShowModel } from "../src/fixtures/show.ts";
 import type { CaexFixture } from "../src/fixtures/citp.ts";
 import { GlobalSettings } from "../src/lib/globals.ts";
-import { buildModeBlock, buildObject, cmyHead, conventional, framingHead, movingHead, type SynthChannel } from "./fixtures/synth.ts";
+import { buildModeBlock, buildObject, cmyHead, conventional, framingHead, movingHead, solaFrame750, SOLAFRAME_750_FINE, SOLAFRAME_750_PATCH_VIEW, type SynthChannel } from "./fixtures/synth.ts";
 
 const MD = "bbbbbbbb-0000-0000-0000-0000000000f1";
 const channelsOf = (list: SynthChannel[]): Channel[] => {
@@ -318,4 +318,51 @@ test("Setup panel: each type's channel list (1-based number, name, 8/16-bit, pag
   assert.ok(v.fixtures.find((x) => x.key === f.s1.key)!.notes.some((n) => n.includes("uniqueness is not proven")));
   assert.equal(v.types[f.w.typeKey].unproven, false, "the 14-channel wash parses with uniqueness proven");
   assert.equal(v.fixtures.find((x) => x.key === f.w.key)!.unproven, false);
+});
+
+// ------------------------------------------------------------------ Handoff 21 addendum: the real SolaFrame 750 "Standard" layout
+
+test("SolaFrame 750 (real layout from Capture's patch view): the Setup Channels list has exactly Capture's start channels and names, 16-bit pairs where Capture shows gaps", () => {
+  const list = solaFrame750();
+  assert.equal(list.length, 47);
+  const ch = channelsOf(list);
+  const rows = channelList(ch, buildModel(ch));
+  assert.equal(rows.length, 47);
+  const starts = rows.filter((r) => r.bits !== "16-bit fine");
+  assert.deepEqual(starts.map((r) => r.n), SOLAFRAME_750_PATCH_VIEW.map(([n]) => n), "start channels = Capture's patch view");
+  starts.forEach((r, i) => assert.ok(r.name.startsWith(SOLAFRAME_750_PATCH_VIEW[i][1]), `channel ${r.n}: "${r.name}" starts with Capture's "${SOLAFRAME_750_PATCH_VIEW[i][1]}…"`));
+  assert.deepEqual(rows.filter((r) => r.bits === "16-bit fine").map((r) => r.n), SOLAFRAME_750_FINE, "the gaps are the fine channels");
+  for (const f of SOLAFRAME_750_FINE) {
+    assert.deepEqual([rows[f - 2].n, rows[f - 2].bits, rows[f - 2].pair], [f - 1, "16-bit", f], `channel ${f - 1} is 16-bit with its fine channel ${f}`);
+    assert.equal(rows[f - 1].pair, f - 1, `fine ${f} belongs to ${f - 1}`);
+  }
+  // the name-implied pairs ("X Coarse" ↔ "X Fine") agree with the library's role/pair records
+  for (const c of ch) if (/ Coarse$/.test(c.name)) assert.equal(ch[c.pair].name, c.name.replace(/ Coarse$/, " Fine"), `${c.name} pairs with its Fine`);
+});
+
+test("SolaFrame 750: Main = Pan (1) · Tilt (3) · Dim (41, 16-bit with 42); labels drop \"Coarse\"; Shutter/LED stays on Strobe/Shutter with the current defaults", () => {
+  const ch = channelsOf(solaFrame750());
+  const m = buildModel(ch);
+  assertComplete(ch, m);
+  const main = m.pages[0];
+  assert.equal(pageTitle(main), "Main");
+  assert.deepEqual(main.params.map((p) => p?.name), ["Pan", "Tilt", "Dim"]);
+  const [pan, tilt, dim] = main.params as Param[];
+  assert.deepEqual([pan.slots[0].coarse.offset + 1, pan.slots[0].fine!.offset + 1], [1, 2]);
+  assert.deepEqual([tilt.slots[0].coarse.offset + 1, tilt.slots[0].fine!.offset + 1], [3, 4]);
+  assert.deepEqual([dim.slots[0].coarse.offset + 1, dim.slots[0].fine!.offset + 1], [41, 42], "Dim Coarse + Dim Fine, 16-bit");
+  assert.equal(dim.home, 1, "intensity home 100 %");
+  assert.equal(m.noIntensity, false);
+  assert.ok(m.byName.has("focus") && m.byName.has("zoom") && m.byName.has("dim"), "Focus, Zoom, Dim — not \"… Coarse\"");
+  assert.equal(m.byName.get("focus")!.slots[0].fine!.name, "Focus Fine");
+  assert.equal(m.byName.get("auto focus")!.name, "Auto Focus");
+  const strobe = m.pages.filter((pg) => pg.group === "strobe").flatMap((pg) => pg.params).map((p) => p!.name);
+  assert.deepEqual(strobe, ["Shutter/LED Functions", "Shutter/LED"], "Shutter/LED channels stay on Strobe/Shutter");
+  assert.deepEqual([m.byName.get("shutter/led functions")!.home, m.byName.get("shutter/led")!.home], [1, 0], "unchanged rule: the first shutter/strobe channel 255, the next 0 (ranges unknown)");
+  assert.deepEqual(m.pages.map(pageTitle), ["Main", "Colour 1/2", "Colour 2/2", "Beam 1/2", "Beam 2/2", "Shutters 1/3", "Shutters 2/3", "Shutters 3/3", "Gobo/FX 1/2", "Gobo/FX 2/2", "Strobe/Shutter", "Other 1/3", "Other 2/3", "Other 3/3"]);
+  // the 47-channel layout also runs the parser out of search budget, like the real one did ("uniqueness is not proven")
+  const l = loadChannels(buildObject(buildModeBlock({ guid: MD, channels: solaFrame750() })), MD, 47, drivenSignature);
+  assert.ok(l.warnings.some((w) => w.includes("uniqueness is not proven")));
+  // the v0.5 named Intensity dial finds Dim as well
+  assert.equal(mapChannels(ch).attrs.intensity![0].coarse.name, "Dim Coarse");
 });
