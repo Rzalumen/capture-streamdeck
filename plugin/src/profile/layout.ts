@@ -7,11 +7,11 @@
  *  - Every child page: Back at "0,0"; commands fill "1,0" → "3,0" → "0,1" → "3,1" (7 slots) in catalog order.
  *  - More than 7 commands: the 7th slot ("3,1") becomes a "More ▸" folder to the next page (which has its own Back).
  *  - Dials: every page has its own four. Standard set everywhere; View pages get the View set; the Look folder the Flare set.
- *  - Fixtures (v0.6, Handoff 20): one page, Back · Setup · Release · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 ·
+ *  - Fixtures (v0.6, Handoff 20; v0.7 Deck Control replaces Release): one page, Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 ·
  *    Attribute 2 · Attribute 3 (the attribute pages are cycled by the page keys, not by profile pages). The four fixed-dial pages are gone.
  */
 import { CATEGORIES, ENTRIES, actionName, type CatalogEntry } from "../catalog/index.js";
-import { FIXTURE_ATTR_DIALS, FIXTURE_KEYS, FIXTURE_SELECT } from "../catalog/fixtures.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_SELECT, PROFILE_FIXTURE_KEYS } from "../catalog/fixtures.js";
 import { CONNECTION_UUID, CONNECTION_NAME, SHOW_POSITION_COUNT, STORE_MODIFIER_NAME, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "../catalog/extras.js";
 import { uuidOf } from "../catalog/index.js";
 import { BOOL_PROPERTIES, NUMBER_PROPERTIES } from "../lib/properties.js";
@@ -186,12 +186,12 @@ function fixtureDials(): Map<string, Dial> {
   return m;
 }
 
-/** Fixtures folder (v0.6): ONE page — Back · Setup · Release · Home Selected · Status · ◀ Page · Page ▶, dials Select · Attribute 1–3. */
+/** Fixtures folder (v0.7): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶, dials Select · Attribute 1–3. */
 function buildFixtures(parent: Page, pages: Page[]): Page {
   const page: Page = { id: uuidFrom("fixtures"), path: "fixtures", parent, keys: new Map(), dials: fixtureDials() };
   pages.push(page);
   page.keys.set("0,0", { type: "back", title: "Back", icon: "back" });
-  FIXTURE_KEYS.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], { type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
+  PROFILE_FIXTURE_KEYS.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], { type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
   return page;
 }
 

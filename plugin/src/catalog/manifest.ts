@@ -140,7 +140,7 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     States: [{ Image: keyPath(d.icon), ShowTitle: false }],
     Encoder: {
       layout: "layouts/dial.json",
-      TriggerDescription: { Rotate: "Adjust", Push: "Home channel", Touch: "Fine mode" },
+      TriggerDescription: { Rotate: "Adjust", Push: "Fine mode", Touch: "Home channel" },
       background: "imgs/actions/dial/strip-background",
     },
   }));
@@ -153,7 +153,7 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     States: [{ Image: keyPath(d.icon), ShowTitle: false }],
     Encoder: {
       layout: "layouts/dial.json",
-      TriggerDescription: { Rotate: "Adjust", Push: "Home attribute", Touch: "Fine mode" },
+      TriggerDescription: { Rotate: "Adjust", Push: "Fine mode", Touch: "Home attribute" },
       background: "imgs/actions/dial/strip-background",
     },
   }));

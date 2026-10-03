@@ -22,6 +22,9 @@
 //          --host <ip> --port <n>   CITP target (skip discovery)      --report-dir <dir> (default ./reports)
 //          --sacn-port <n>      UDP port for sACN (default 5568)      --no-multicast   unicast to 127.0.0.1 only
 //          --fps <n>            frames per second (default 40)
+//          --pap                also send per-address-priority packets (START code 0xDD, ETC extension) on the same universe with the
+//                               same CID: priority 100 on this fixture's channels, 0 ("ignore my level") on every other slot.
+//                               Question it answers: does Capture then leave the other fixtures of the universe alone?
 //
 // DMX is sent ONLY by this script and ONLY between "sending" and "terminated" in its output. CITP use is the read-only allowlist
 // of lib/citp-sync.mjs. Nothing is written to Capture's library or show.
@@ -35,7 +38,7 @@ import { textTable } from './lib/citp.mjs';
 import { describeFixtures, readPatch, localIPv4 } from './lib/citp-sync.mjs';
 import { ROLE_NAMES, ambiguityNote, loadChannels, mapAttributes } from './lib/modes.mjs';
 import { planExtras } from './lib/extras.mjs';
-import { OPT_TERMINATED, DEFAULT_PRIORITY, SACN_PORT, buildDataPacket, multicastAddress } from './lib/sacn.mjs';
+import { OPT_TERMINATED, DEFAULT_PRIORITY, SACN_PORT, START_CODE_PAP, buildDataPacket, multicastAddress, papSlots } from './lib/sacn.mjs';
 import { buildTimeline, frameSlots, stateAt } from './lib/dmx-seq.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,7 +48,7 @@ const CID = Buffer.from('cd5a0d6c-6d78-4d5f-9d0e-2b1a4c3d5e6f'.replace(/-/g, '')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function parseArgs(argv) {
-  const o = { fixture: null, seconds: 6, shutter: 255, shutterGiven: false, force: false, universe: null, address: null, sacnUniverse: null, sets: [], colorFull: false, lib: null, host: null, port: null, reportDir: path.join(ROOT, 'reports'), sacnPort: SACN_PORT, multicast: true, fps: 40 };
+  const o = { fixture: null, seconds: 6, shutter: 255, shutterGiven: false, force: false, universe: null, address: null, sacnUniverse: null, sets: [], colorFull: false, lib: null, host: null, port: null, reportDir: path.join(ROOT, 'reports'), sacnPort: SACN_PORT, multicast: true, fps: 40, pap: false };
   const need = (i, n) => { if (argv[i + 1] === undefined) throw new Error(`${n} needs a value`); return argv[i + 1]; };
   const num = (v, n, lo, hi) => { const x = Number(v); if (!Number.isFinite(x) || x < lo || x > hi) throw new Error(`${n} must be a number from ${lo} to ${hi}, got ${JSON.stringify(v)}`); return x; };
   for (let i = 0; i < argv.length; i++) {
@@ -68,6 +71,7 @@ export function parseArgs(argv) {
       }
       case '--color-full': o.colorFull = true; break;
       case '--force': o.force = true; break;
+      case '--pap': o.pap = true; break;
       case '--no-multicast': o.multicast = false; break;
       case '--sacn-universe': o.sacnUniverse = num(need(i, a), a, 1, 63999); i++; break;
       case '--universe': o.universe = num(need(i, a), a, 1, 63999); if (!Number.isInteger(o.universe)) throw new Error('--universe must be a whole number'); i++; break;
@@ -235,6 +239,11 @@ async function main(opts, say) {
   say('');
   say(`sACN E1.31, universe ${universe}${opts.sacnUniverse ? ' (from --sacn-universe)' : ` = the ${loc.source === 'manual' ? '--universe you gave' : `CAEX universe (0-based ${fx.universe}) + 1`} (an ASSUMPTION: Capture's sACN input must be set to the same universe number)`}, priority ${DEFAULT_PRIORITY}, source "${SOURCE_NAME}", ${opts.fps} fps.`);
   say(`Slots sent: ${loc.address1}..${loc.address1 + chans.length - 1} carry this fixture; all other slots are 0${extra.extras.length ? ', except the extra channels listed above' : ''}, including this fixture's channels that are not listed above (their defaults are not decoded yet).`);
+  if (opts.pap) {
+    say(`--pap: every level frame (START code 0x00) is followed by a per-address-priority frame (START code 0xDD, ETC extension to E1.31; same CID, universe ${universe}, sequence counted with the level frames): priority ${DEFAULT_PRIORITY} on slots ${loc.address1}..${loc.address1 + chans.length - 1} (this fixture), 0 = "ignore my level" on all other ${512 - chans.length} slots.`);
+    say('  Watch the OTHER fixtures of this universe: if Capture honours per-address priority they keep what the Control Pane gave them while this fixture moves; if they go dark or jump, it does not.');
+    say('  Format per ETC: https://etclabs.github.io/sACNDocs/2.0.1/per_address_priority.html (priority 1-200, 0 = ignore this address).');
+  }
   say(`Shutter/strobe raw value ${opts.shutter}${!opts.shutterGiven ? ' (default; a GUESS - 255 is often "open" but on some fixtures it is full strobe. Use --shutter-value to change)' : ''}.`);
   say('Timeline:');
   timeline.phases.forEach((p) => say(`  ${p.start.toFixed(1).padStart(5)} s - ${p.end.toFixed(1).padStart(5)} s  ${p.name}${p.axis ? '' : ' (intensity 100%, pan/tilt 50%)'}`));
@@ -242,12 +251,18 @@ async function main(opts, say) {
   say('');
   const dests = await openDestinations(universe, opts.sacnPort, opts.multicast, say);
 
-  let seq = 0, frames = 0, stop = false;
+  let seq = 0, frames = 0, papFrames = 0, stop = false;
   process.once('SIGINT', () => { stop = true; });
+  const pap = opts.pap ? papSlots({ base, count: chans.length, priority: DEFAULT_PRIORITY }) : null;
+  const put = (pkt) => { for (const d of dests) d.sock.send(pkt, d.port, d.addr, (e) => { if (e) { d.errors++; d.firstError ||= `${e.code || ''} ${e.message}`; } else d.sent++; }); };
   const sendFrame = (slots, options = 0) => {
-    const pkt = buildDataPacket({ cid: CID, sourceName: SOURCE_NAME, universe, sequence: seq++ & 0xff, priority: DEFAULT_PRIORITY, options, slots });
-    for (const d of dests) d.sock.send(pkt, d.port, d.addr, (e) => { if (e) { d.errors++; d.firstError ||= `${e.code || ''} ${e.message}`; } else d.sent++; });
+    put(buildDataPacket({ cid: CID, sourceName: SOURCE_NAME, universe, sequence: seq++ & 0xff, priority: DEFAULT_PRIORITY, options, slots }));
     frames++;
+    // per-address priority right after each live level frame (not with the termination frames: Stream_Terminated ends the whole source)
+    if (pap && !(options & OPT_TERMINATED)) {
+      put(buildDataPacket({ cid: CID, sourceName: SOURCE_NAME, universe, sequence: seq++ & 0xff, priority: DEFAULT_PRIORITY, options, slots: pap, startCode: START_CODE_PAP }));
+      papFrames++;
+    }
   };
   const slotsFor = (st) => frameSlots({ map, base, shutterRaw: opts.shutter, pan: st.pan, tilt: st.tilt, extras: extra.extras });
   say('sending ...');
@@ -271,6 +286,7 @@ async function main(opts, say) {
   for (let k = 0; k < 3; k++) { sendFrame(last ?? new Uint8Array(512), OPT_TERMINATED); await sleep(period); }
   await sleep(100);
   say(`terminated: ${live} data frames in ${elapsed.toFixed(2)} s (${(live / elapsed).toFixed(1)} fps) + 3 frames with Stream_Terminated${stop ? ' (stopped early by Ctrl-C)' : ''}.`);
+  if (pap) say(`per-address priority (0xDD): ${papFrames} frames sent, one after each live level frame.`);
   say('Frames handed to the network per destination:');
   for (const d of dests) say(`  ${d.label}: ${d.sent} sent${d.errors ? `, ${d.errors} error(s), first: ${d.firstError}` : ''}`);
   dests.forEach((d) => d.sock.close());

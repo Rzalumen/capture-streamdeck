@@ -85,6 +85,7 @@ before(async () => {
       CAPTURE_TEST_LIBRARY: lib,
       CAPTURE_TEST_SACN_PORT: String(sacn.address().port),
       CAPTURE_TEST_SACN_NO_MULTICAST: "1",
+      CAPTURE_TEST_DECK_ON: "1", // Handoff 21: these v0.5/v0.6 tests run with Deck Control ON from the start (the persistent session)
     },
   });
 });
@@ -272,7 +273,7 @@ test("an empty selection keeps the last one, marked '(not selected in Capture)';
   await waitPacket((x) => slot(x, 285, 6) === Math.round(0.6 * 255) && slot(x, 299, 6) === Math.round(0.8 * 255), "still driving both");
 });
 
-test("Home key: only the selected fixture goes home; knob press homes that attribute; tap = fine; long touch does nothing", async () => {
+test("Home key: only the selected fixture goes home; tap the strip = home that attribute; push = fine (Handoff 21); long touch does nothing", async () => {
   citp.select([IDS.r203]);
   await waitStrip("sel", (f) => f.line2.value === "Ch 203 · 1/285" && f.note.value === "", "203 selected");
   deck.dialRotate(A.pan, "pan", 10);
@@ -282,15 +283,15 @@ test("Home key: only the selected fixture goes home; knob press homes that attri
   deck.keyDown(A.home, "home");
   const h = await waitPacket((x) => slot(x, 285, 3) === 0x80 && slot(x, 285, 1) === 0x80 && slot(x, 285, 6) === 255, "203 at home");
   assert.deepEqual([...h.slots.subarray(298, 312)], other, "204 did not move");
-  // knob press: pan only
+  // tap the strip: pan only
   deck.dialRotate(A.pan, "pan", 10);
   deck.dialRotate(A.intensity, "int", -30);
   await waitPacket((x) => slot(x, 285, 6) === Math.round(0.7 * 255) && slot(x, 285, 1) === Math.round(0.6 * 65535) >> 8, "pan 60 %, intensity 70 %");
-  deck.dialDown(A.pan, "pan");
+  deck.touchTap(A.pan, "pan", false);
   const k = await waitPacket((x) => slot(x, 285, 1) === 0x80 && slot(x, 285, 6) === Math.round(0.7 * 255), "pan homed, intensity not");
   assert.ok(k);
-  // tap = fine mode; a long touch does nothing
-  deck.touchTap(A.pan, "pan", false);
+  // push = fine mode; a long touch does nothing
+  deck.dialDown(A.pan, "pan");
   await waitStrip("pan", (f) => f.mark.value.includes("FINE"), "fine on");
   deck.dialRotate(A.pan, "pan", 1);
   await waitPacket((x) => slot(x, 285, 1) === Math.round(0.501 * 65535) >> 8 && slot(x, 285, 2) === (Math.round(0.501 * 65535) & 0xff), "pan 50.1 % in the fine byte");
@@ -298,11 +299,11 @@ test("Home key: only the selected fixture goes home; knob press homes that attri
   await sleep(300);
   assert.ok(strip("pan").mark.value.includes("FINE"), "long touch changed nothing");
   assert.equal(packets.at(-1)!.slots[284], Math.round(0.501 * 65535) >> 8, "and did not home");
-  deck.touchTap(A.pan, "pan", false);
+  deck.dialDown(A.pan, "pan");
   await waitStrip("pan", (f) => !f.mark.value.includes("FINE"), "fine off");
 });
 
-test("a colour with several cells: the Red knob moves Red 1–5 together, pressing it homes them all; Channel 0 shows the position hint", async () => {
+test("a colour with several cells: the Red knob moves Red 1–5 together, tapping its strip homes them all; Channel 0 shows the position hint", async () => {
   citp.select([IDS.cells]);
   const fb = await waitStrip("sel", (f) => f.line1.value === "ColorBlaze 72", "cell bar selected");
   assert.equal(fb.line2.value, "SL 1.3 · US 0.9");
@@ -311,9 +312,9 @@ test("a colour with several cells: the Red knob moves Red 1–5 together, pressi
   const p = await waitPacket((x) => slot(x, 20, 2) === 153, "red 60 %");
   assert.deepEqual([2, 5, 8, 11, 14].map((c) => slot(p, 20, c)), [153, 153, 153, 153, 153], "Red 1..5");
   assert.deepEqual([3, 6, 9, 12, 15].map((c) => slot(p, 20, c)), [255, 255, 255, 255, 255], "Green untouched");
-  deck.dialDown(A.redCyan, "rc");
+  deck.touchTap(A.redCyan, "rc", false);
   const h = await waitPacket((x) => slot(x, 20, 2) === 255, "red homed");
-  assert.deepEqual([2, 5, 8, 11, 14].map((c) => slot(h, 20, c)), [255, 255, 255, 255, 255], "pressing the knob homes every cell");
+  assert.deepEqual([2, 5, 8, 11, 14].map((c) => slot(h, 20, c)), [255, 255, 255, 255, 255], "tapping the strip homes every cell");
   await deck.waitFor(() => /Fixtures: Capture selected ColorBlaze 72: 1 controllable/.test(deck.logText()), 3000, "selection logged");
 });
 
@@ -400,7 +401,7 @@ test("a different show: selection cleared, output released, the other show's set
   await deck.waitFor(() => deck.lastImage("st").includes("E2E SHOW") && !deck.lastImage("st").includes("0 of"), 4000, "back in the first show");
 });
 
-test("Fixtures: Release sends Stream_Terminated x3 on the universe in use, then nothing more", async () => {
+test("Fixtures: Release (kept for old keys) switches Deck Control OFF: Stream_Terminated x3, LeaveShow, connection closed, then nothing more", async () => {
   citp.select([IDS.r203]);
   await waitStrip("sel", (f) => f.line2.value === "Ch 203 · 1/285", "203 selected");
   deck.dialRotate(A.tilt, "tilt", 1);
@@ -408,25 +409,41 @@ test("Fixtures: Release sends Stream_Terminated x3 on the universe in use, then 
   assert.ok(deck.lastImage("st").includes("U1"));
   assert.ok(deck.lastImage("st").includes("rest of the universe = 0"), "the blackout reminder is on the Status key");
   const n0 = packets.length;
+  const leaves = citp.of(CAEX.LeaveShow).length;
   deck.keyDown(A.release, "rel");
   await deck.waitFor(() => packets.slice(n0).filter((p) => p.terminated).length >= 3, 3000, "3 terminated frames");
+  await deck.waitFor(() => (citp.of(CAEX.LeaveShow).length > leaves && citp.clients.size === 0) || undefined, 3000, "LeaveShow, then the connection closes");
   await sleep(300);
   const after = packets.slice(n0);
   assert.equal(after.filter((p) => p.terminated).length, 3);
   assert.ok(after.filter((p) => p.terminated).every((p) => p.universe === 1));
   const n1 = packets.length;
-  await sleep(500);
+  const m1 = citp.received.length;
+  await sleep(1200);
   assert.equal(packets.length, n1, "nothing is sent after Release");
+  assert.equal(citp.received.length, m1, "and no reconnect while Deck Control is OFF");
+  assert.equal(citp.clients.size, 0);
   await deck.waitFor(() => deck.lastImage("st").includes("output off"), 3000, "status shows output off");
+  assert.match(deck.logText(), /Fixtures: deck control OFF \(Release key\)/);
 });
 
-test("after Release a new touch starts from the defaults again; plugin exit (SIGTERM) sends the termination frames and LeaveShow", async () => {
-  deck.dialRotate(A.tilt, "tilt", -10); // 203 again: default 50 % - 10 %
-  const p = await waitPacket((x) => !x.terminated && slot(x, 285, 3) === Math.round(0.4 * 65535) >> 8, "restart from defaults");
-  assert.equal(slot(p, 285, 1), 0x80, "pan is back at 50 %");
-  assert.equal(slot(p, 285, 6), 255, "intensity back at 100 %");
+test("after Release a knob turn switches Deck Control ON again and RESUMES from the values last sent (no snap to home); plugin exit (SIGTERM) sends the termination frames and LeaveShow", async () => {
+  const last = packets.filter((x) => !x.terminated).at(-1)!;
+  const tilt0 = (slot(last, 285, 3) << 8) | slot(last, 285, 4);
+  const pan0 = (slot(last, 285, 1) << 8) | slot(last, 285, 2);
+  const int0 = slot(last, 285, 6);
+  assert.ok(pan0 !== 0x8000 || int0 !== 255 || tilt0 !== 0x8000, "203 is somewhere other than home, so a snap would show");
+  deck.dialRotate(A.tilt, "tilt", -10); // 203 again
+  const want = Math.round((Math.round((tilt0 / 65535) * 10000) / 10000 - 0.1) * 65535);
+  const p = await waitPacket((x) => !x.terminated && Math.abs(((slot(x, 285, 3) << 8) | slot(x, 285, 4)) - want) <= 7, "tilt resumed −10 %");
+  assert.equal((slot(p, 285, 1) << 8) | slot(p, 285, 2), pan0, "pan where it was, not 50 %");
+  assert.equal(slot(p, 285, 6), int0, "intensity where it was, not 100 %");
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "the persistent session is back");
+  assert.match(deck.logText(), /Fixtures: deck control ON \(Tilt dial\)/);
   const n0 = packets.length;
+  const leaves = citp.of(CAEX.LeaveShow).length;
+  await sleep(300);
   deck.proc!.kill("SIGTERM");
   await deck.waitFor(() => packets.slice(n0).filter((x) => x.terminated).length >= 3, 4000, "termination frames on exit");
-  await deck.waitFor(() => citp.of(CAEX.LeaveShow).length >= 1, 3000, "LeaveShow on exit");
+  await deck.waitFor(() => citp.of(CAEX.LeaveShow).length > leaves, 3000, "LeaveShow on exit");
 });

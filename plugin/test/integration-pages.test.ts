@@ -11,7 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { UNIDENTIFIED } from "../src/fixtures/citp.ts";
+import { CAEX, UNIDENTIFIED } from "../src/fixtures/citp.ts";
 import { parseDataPacket, type ParsedPacket } from "../src/fixtures/sacn.ts";
 import { FakeDeck, sleep } from "./fixtures/fake-deck.ts";
 import { StubCapture } from "./fixtures/stub-capture.ts";
@@ -26,6 +26,7 @@ const A = {
   home: `${U}.fixtures.home`,
   prev: `${U}.fixtures.page-prev`,
   next: `${U}.fixtures.page-next`,
+  deck: `${U}.fixtures.deck`,
   select: `${U}.fixture.select`,
   a1: `${U}.fixture.attr1`,
   a2: `${U}.fixture.attr2`,
@@ -120,7 +121,7 @@ test("Setup panel: addresses saved; the spot's Channels list (37 rows, 8/16-bit,
   assert.equal(t.unproven, true, "the 37-channel synthetic spot hits the parser's search budget, like the SolaFrame 750 did");
   assert.equal(spot.unproven, true);
   assert.deepEqual(t.channels[27], { n: 28, name: "Shutter 1B", bits: "8-bit", pair: null, page: "Shutters 1/3" });
-  assert.deepEqual(t.channels[6], { n: 7, name: "Dimmer", bits: "16-bit", pair: 8, page: "Intensity" });
+  assert.deepEqual(t.channels[6], { n: 7, name: "Dimmer", bits: "16-bit", pair: 8, page: "Main" });
   assert.deepEqual(t.channels[7], { n: 8, name: "Dimmer Fine", bits: "16-bit fine", pair: 7, page: "" });
   const wash = v.fixtures.find((f: any) => f.key === INST_WASH);
   assert.equal(v.types[wash.typeKey].unproven, false);
@@ -132,14 +133,21 @@ test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 �
   for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
   deck.willAppear(A.prev, "prev", {});
   deck.willAppear(A.next, "next", {});
+  // Deck Control is OFF at start-up (no CITP link): Capture's selection only reaches the deck while it is ON
+  await deck.waitFor(() => citp.clients.size === 0 || undefined, 4000, "no CITP connection held while OFF (the Setup panel's brief connection has closed)");
+  deck.willAppear(A.deck, "deckkey", {});
+  deck.keyDown(A.deck, "deckkey");
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "Deck Control ON: persistent session");
+  await deck.waitFor(() => citp.of(CAEX.FixtureListRequest).length >= 1 && deck.logText().includes("deck control ON (Deck Control key)") || undefined, 4000, "ON logged");
+  await sleep(300);
   citp.select([ID.spot]);
   await waitStrip("sel", (f) => f.line1.value === "Framing Spot" && f.line2.value === `Ch 207 · 1/${SPOT_ADDR}`, "strip shows the spot");
-  await waitTitle("next", "Page ▶\nPosition");
-  await waitTitle("prev", "◀ Page\nPosition");
-  assert.deepEqual(["a1", "a2", "a3"].map((k) => strip(k).name.value), ["Pan", "Tilt", "Position"]);
-  assert.equal(strip("a3").value.value, "—", "dial 4 has nothing on the Position page");
-  for (let i = 0; i < 6; i++) deck.keyDown(A.next, "next");
-  await waitTitle("next", "Page ▶\nShutters\n1/3");
+  await waitTitle("next", "Main");
+  await waitTitle("prev", "Main");
+  assert.deepEqual(["a1", "a2", "a3"].map((k) => strip(k).name.value), ["Pan", "Tilt", "Dimmer"]);
+  assert.equal(strip("a3").value.value, "~100.0", "Main: Pan · Tilt · Intensity (the dimmer)");
+  for (let i = 0; i < 5; i++) deck.keyDown(A.next, "next");
+  await waitTitle("next", "Shutters\n1/3");
   await waitStrip("a2", (f) => f.name.value === "Shutter 1B", "Attribute 2 = Shutter 1B");
   assert.deepEqual(["a1", "a3"].map((k) => strip(k).name.value), ["Shutter 1A", "Shutter 2A"]);
   assert.equal(strip("a2").value.value, "~0.0", "blades start out (0 %), nothing sent yet");
@@ -163,40 +171,40 @@ test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 �
 
   // a blade on the next page
   deck.keyDown(A.next, "next");
-  await waitTitle("next", "Page ▶\nShutters\n2/3");
+  await waitTitle("next", "Shutters\n2/3");
   await waitStrip("a3", (f) => f.name.value === "Shutter 3B", "Attribute 3 = Shutter 3B");
   const b2 = packets.at(-1)!;
   deck.dialRotate(A.a3, "a3", 40);
   const a2 = await waitPacket((p) => slot(p, SPOT_ADDR, 32) === Math.round(0.4 * 255), "Shutter 3B 40 %");
   assert.deepEqual(changed(b2, a2), [SPOT_ADDR + 31], "only Shutter 3B changed");
 
-  // press Attribute 3 = that blade home (out), Shutter 1B keeps its value
-  deck.dialDown(A.a3, "a3");
+  // tap Attribute 3's strip = that blade home (out), Shutter 1B keeps its value (Handoff 21: push = fine, tap = home)
+  deck.touchTap(A.a3, "a3", false);
   const h = await waitPacket((p) => slot(p, SPOT_ADDR, 32) === 0, "Shutter 3B out");
   assert.equal(slot(h, SPOT_ADDR, 28), Math.round(0.25 * 255));
   // back to the first Shutters page: Shutter 1B still at 25 %
   deck.keyDown(A.prev, "prev");
-  await waitTitle("prev", "◀ Page\nShutters\n1/3");
+  await waitTitle("prev", "Shutters\n1/3");
   await waitStrip("a2", (f) => f.name.value === "Shutter 1B" && f.value.value === "25.0", "Shutter 1B still 25 %");
   await deck.waitFor(() => /Fixtures: ◀ Page.*page: Shutters 1\/3|page: Shutters 1\/3/.test(deck.logText()) || undefined, 3000, "page change logged");
 });
 
-test("select the wash (a different type): pages reset to Position; the spot keeps its blade; the wash's own pages", async () => {
+test("select the wash (a different type): pages reset to Main; the spot keeps its blade; the wash's own pages", async () => {
   citp.select([ID.wash]);
   await waitStrip("sel", (f) => f.line2.value === `Ch 203 · 1/${WASH_ADDR}`, "strip shows the wash");
-  await waitTitle("next", "Page ▶\nPosition");
+  await waitTitle("next", "Main");
   const before = packets.at(-1)!;
-  deck.keyDown(A.next, "next");
-  await waitTitle("next", "Page ▶\nIntensity");
-  await waitStrip("a1", (f) => f.name.value === "Dimmer", "Attribute 1 = Dimmer");
-  deck.dialRotate(A.a1, "a1", -30);
+  await waitStrip("a3", (f) => f.name.value === "Dimmer", "Attribute 3 = Dimmer");
+  deck.dialRotate(A.a3, "a3", -30);
   const p = await waitPacket((x) => slot(x, WASH_ADDR, 6) === Math.round(0.7 * 255), "wash dimmer 70 %");
   assert.equal(slot(p, SPOT_ADDR, 28), Math.round(0.25 * 255), "the spot keeps its blade");
   const diff = changed(before, p);
   assert.ok(diff.every((s) => s >= WASH_ADDR && s < WASH_ADDR + 14), `only the wash's slots changed: ${diff}`);
-  // back to the spot: Position again (a different type than the wash)
+  deck.keyDown(A.next, "next");
+  await waitTitle("next", "Colour\n1/2");
+  // back to the spot: Main again (a different type than the wash)
   citp.select([ID.spot]);
-  await waitTitle("next", "Page ▶\nPosition");
+  await waitTitle("next", "Main");
   await sleep(100);
   deck.keyDown(A.release, "rel");
 });

@@ -127,6 +127,16 @@ export class ShowModel {
     this.emit();
   }
 
+  /** We closed the connection ourselves (Deck Control OFF, end of a brief connection): the list stays; this is not an error. */
+  setOffline(): void {
+    this.connected = false;
+    if (this.status === "syncing") {
+      this.status = this.fixtures.length ? "ok" : "error";
+      this.error = this.fixtures.length ? null : "Capture sent no FixtureList (is a show open?)";
+    }
+    this.emit();
+  }
+
   /** Capture entered a show. A different name than before clears the old show's fixtures. Returns true when the show changed. */
   setShowName(name: string | null): boolean {
     const changed = this.showName !== null && this.showName !== name;
@@ -301,6 +311,7 @@ export class ShowModel {
           const map = mapChannels(l.channels);
           const model = buildModel(l.channels, l.differOffsets);
           const notes = [...l.warnings, ...(l.note ? [l.note] : []), ...map.warnings];
+          if (model.noIntensity) notes.push(`no dimmer/intensity channel (Main shows "—" on dial 4); channels: ${l.channels.map((c) => `${c.offset + 1} "${c.name}"`).join(", ")}`);
           if (model.excluded.length) notes.push(`channel(s) ${model.excluded.map((o) => o + 1).join(", ")} are on no knob page: the candidate channel lists disagree there`);
           const unproven = l.warnings.some((w) => w.includes(UNPROVEN_MARK));
           types.set(typeKey, { typeKey, ok: true, channels: l.channels, map, model, unproven, differOffsets: l.differOffsets, hasPanTilt: !!(map.attrs.pan || map.attrs.tilt), notes });

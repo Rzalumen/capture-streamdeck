@@ -81,6 +81,7 @@ export class CitpSession {
   private handlers: { [K in keyof Events]: Events[K][] } = { state: [], show: [], leave: [], list: [], selection: [], modify: [], remove: [] };
   private t: SessionTiming;
   private running = false;
+  private once = false;
   private sock: net.Socket | undefined;
   private lastGood: { h: string; p: number } | undefined;
   private wake: (() => void) | undefined;
@@ -119,10 +120,25 @@ export class CitpSession {
     this.o.log?.(s);
   }
 
-  start(): void {
+  /** True while the connection loop runs (a persistent session, or a brief one-attempt connection). */
+  get active(): boolean {
+    return this.running;
+  }
+
+  /**
+   * Start the connection loop. `once` (Handoff 21 brief connection): one connection attempt and no reconnect; the loop ends when that
+   * connection closes or fails.
+   */
+  start(opts: { once?: boolean } = {}): void {
     if (this.running) return;
     this.running = true;
+    this.once = !!opts.once;
     this.loopDone = this.loop();
+  }
+
+  /** Resolves when the loop has ended (stop(), or a brief connection that closed / failed). */
+  whenStopped(): Promise<void> {
+    return this.loopDone;
   }
 
   /** Leave the show (when we entered), close and stop reconnecting. */
@@ -192,6 +208,10 @@ export class CitpSession {
         this.noteError(attempt, `CITP error: ${(e as Error).message}`);
       }
       if (!this.running) break;
+      if (this.once) {
+        this.running = false;
+        break;
+      }
       if (established) {
         delay = this.t.backoffMin;
         attempt = 0;

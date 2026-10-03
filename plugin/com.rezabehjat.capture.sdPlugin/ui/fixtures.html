@@ -37,6 +37,14 @@
 
   <div class="warn" id="blackout"></div>
 
+  <div class="sect">Deck Control</div>
+  <div id="deck-state" class="hint full"></div>
+  <div class="inline fill">
+    <span class="small">Switch OFF after</span><input id="idle-s" type="number" min="0" max="3600" step="1" value="120" />
+    <span class="small">s without fixture activity (0 = never)</span>
+  </div>
+  <div class="hint full">While Deck Control is ON the deck holds the CITP link to Capture (it follows the selection and drives DMX) and Capture's Control Pane is locked. OFF frees the Control Pane. Any fixture knob or key switches it ON.</div>
+
   <div class="sect">Fixtures</div>
   <div class="cbx"><input id="all" type="checkbox" /><label for="all">Show all fixtures (not only those with pan or tilt)</label></div>
   <div id="summary" class="small"></div>

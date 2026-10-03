@@ -1,15 +1,15 @@
 /**
- * Attribute pages (Handoff 20, v0.6): every channel of a fixture type becomes a knob parameter on exactly one page, from its NAME only
- * (whole words, case-insensitive, camelCase split; a trailing number/letter on a word is ignored: "Frost2" = frost, "Shutter1A" = shutter
- * + "1a"). No fixture type is known here.
+ * Attribute pages (Handoff 20, v0.6; Main page Handoff 21, v0.7): every channel of a fixture type becomes a knob parameter on exactly
+ * one page, from its NAME only (whole words, case-insensitive, camelCase split; a trailing number/letter on a word is ignored:
+ * "Frost2" = frost, "Shutter1A" = shutter + "1a"). No fixture type is known here.
  *
- *   Position         pan, tilt
- *   Intensity        dimmer, intensity, shutter / strobe (a framing shutter goes to Shutters)
+ *   Main             dial 2 = the first pan, dial 3 = the first tilt, dial 4 = the first dimmer / intensity ("—" when missing)
  *   Colour           red green blue white amber lime uv cyan magenta yellow cto ctb ctc, colour/color (wheel)
  *   Beam             zoom, focus, iris, frost, diffusion, edge
  *   Shutters         blade, framing / frame, "shutter" + a number or letter ("Shutter 1A"), shutter rotation
- *   Gobo/Prism/FX    gobo, prism, animation, effect, fx, rotation, index
- *   Other            everything else, so nothing is unreachable
+ *   Gobo/FX          gobo, prism, animation, effect, fx, rotation, index
+ *   Strobe/Shutter   shutter, strobe (not a framing shutter)
+ *   Other            everything else, so nothing is unreachable (also a second pan, tilt or dimmer channel)
  *
  * A name that also has a speed/time/mode/macro/control ... word (NOT_THE_VALUE) is never the value of a group: it goes to Other.
  * Fine channels (role 2) are never parameters of their own: they ride with their coarse channel (16-bit).
@@ -19,9 +19,14 @@
 import { isAdditiveColourName, type Slot } from "./attrs.js";
 import { NOT_THE_VALUE, tokens, type Channel } from "./modes.js";
 
-export type GroupId = "position" | "intensity" | "colour" | "beam" | "shutters" | "gobo" | "other";
-export const GROUP_ORDER: readonly GroupId[] = ["position", "intensity", "colour", "beam", "shutters", "gobo", "other"];
-export const GROUP_LABEL: Record<GroupId, string> = { position: "Position", intensity: "Intensity", colour: "Colour", beam: "Beam", shutters: "Shutters", gobo: "Gobo/Prism/FX", other: "Other" };
+export type GroupId = "main" | "colour" | "beam" | "shutters" | "gobo" | "strobe" | "other";
+export const GROUP_ORDER: readonly GroupId[] = ["main", "colour", "beam", "shutters", "gobo", "strobe", "other"];
+export const GROUP_LABEL: Record<GroupId, string> = { main: "Main", colour: "Colour", beam: "Beam", shutters: "Shutters", gobo: "Gobo/FX", strobe: "Strobe/Shutter", other: "Other" };
+/** What a channel name is (before the Main page takes the first pan, tilt and dimmer). */
+export type Kind = "pan" | "tilt" | "dimmer" | "strobe" | "colour" | "beam" | "shutters" | "gobo" | "other";
+/** The Main page's dials 2–4, and what each shows when the fixture has no such channel. */
+export const MAIN_KINDS = ["pan", "tilt", "dimmer"] as const;
+export const MAIN_LABELS = ["Pan", "Tilt", "Intensity"] as const;
 /** Knobs per page (dials 2–4). */
 export const PER_PAGE = 3;
 
@@ -44,7 +49,10 @@ export interface Page {
   /** "Colour", or "Shutters" with part "1/3". */
   label: string;
   part: string;
-  params: Param[];
+  /** One per dial (2–4). The Main page keeps its positions: null = the fixture has no such channel ("—"). */
+  params: (Param | null)[];
+  /** What a null dial is called ("Intensity"). */
+  placeholders?: string[];
 }
 
 export interface FixtureModel {
@@ -56,6 +64,8 @@ export interface FixtureModel {
   byOffset: Map<number, Param>;
   /** Channels on no page (candidate parses disagree there), never driven. */
   excluded: number[];
+  /** No dimmer/intensity channel: Main shows "—" on dial 4. */
+  noIntensity: boolean;
 }
 
 /** Word tokens, each with a trailing number/letter suffix removed for matching ("frost2" → "frost", "shutter1a" → "shutter"). */
@@ -85,19 +95,24 @@ const mergeable = (name: string): boolean => {
   return has(base, ...MIX_WORDS) && !has(base, "colour", "color", "colours", "colors", "wheel");
 };
 
-/** The group of one channel name (first rule that matches, in GROUP_ORDER). */
-export function groupOf(name: string): GroupId {
+/** What one channel name is (first rule that matches). */
+export function kindOf(name: string): Kind {
   const { raw, base } = words(name);
   if (base.some((t) => NOT_THE_VALUE.has(t))) return "other";
-  if (has(base, "pan", "tilt")) return "position";
+  if (has(base, "pan")) return "pan";
+  if (has(base, "tilt")) return "tilt";
+  if (has(base, "dimmer", "intensity")) return "dimmer";
   const framing = isFramingShutter(raw, base);
-  if (!framing && (starts(base, "dimmer", "intensity") || has(base, "shutter", "strobe"))) return "intensity";
+  if (!framing && starts(base, "shutter", "strobe")) return "strobe";
   if (has(base, ...COLOUR_WORDS)) return "colour";
   if (has(base, "zoom", "focus", "iris", "frost", "diffusion", "diffuser", "edge")) return "beam";
   if (framing) return "shutters";
   if (has(base, "gobo", "gobos", "prism", "prisms", "animation", "anim", "effect", "effects", "fx", "rotation", "rot", "index")) return "gobo";
   return "other";
 }
+
+/** The group a channel of this kind goes to when it is NOT the first pan / tilt / dimmer (those are on Main). */
+const GROUP_OF_KIND: Record<Kind, GroupId> = { pan: "other", tilt: "other", dimmer: "other", strobe: "strobe", colour: "colour", beam: "beam", shutters: "shutters", gobo: "gobo", other: "other" };
 
 /** Colour cells merge on the name without its numbers ("Red 3" → "red", "Cell 2 Red" → "cell red"). */
 const cellKey = (name: string): string =>
@@ -117,13 +132,14 @@ const cellTitle = (name: string): string =>
  * shutter/strobe channels 0; additive colour 100 %, subtractive / CTO / wheels 0; zoom, focus, iris, frost 0 (their v0.5 default);
  * framing shutters 0 (blades out); everything else 0.
  */
-function homeOf(group: GroupId, name: string, firstShutter: boolean, sixteen: boolean): number {
-  const { base } = words(name);
-  switch (group) {
-    case "position":
+function homeOf(kind: Kind, name: string, firstShutter: boolean, sixteen: boolean): number {
+  switch (kind) {
+    case "pan":
+    case "tilt":
       return 0.5;
-    case "intensity":
-      if (starts(base, "dimmer", "intensity")) return 1;
+    case "dimmer":
+      return 1;
+    case "strobe":
       if (!firstShutter) return 0;
       return sixteen ? 0xff00 / 0xffff : 1; // coarse 255, fine 0 (the v0.5 shutter value)
     case "colour":
@@ -147,6 +163,7 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
   const colourByKey = new Map<string, Param>();
   const excluded: number[] = [];
   let shutterSeen = false;
+  const main: (Param | null)[] = [null, null, null];
   for (const c of channels) {
     if (c.role === 2 && claimed.has(c.offset)) continue; // a fine half: it rides with its coarse channel
     const s = slotOf(c);
@@ -154,7 +171,10 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
       excluded.push(c.offset, ...(s.fine ? [s.fine.offset] : []));
       continue;
     }
-    const group = groupOf(c.name);
+    const kind = kindOf(c.name);
+    const mainSlot = (MAIN_KINDS as readonly string[]).indexOf(kind);
+    const onMain = mainSlot >= 0 && !main[mainSlot];
+    const group: GroupId = onMain ? "main" : GROUP_OF_KIND[kind];
     const sixteen = !!s.fine;
     if (group === "colour" && mergeable(c.name)) {
       const k = cellKey(c.name);
@@ -165,10 +185,10 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
         continue;
       }
     }
-    const { base } = words(c.name);
-    const isShutter = group === "intensity" && !starts(base, "dimmer", "intensity");
-    const p: Param = { id: `ch${c.offset}`, name: c.name, group, slots: [s], home: homeOf(group, c.name, isShutter && !shutterSeen, sixteen), sixteen };
+    const isShutter = kind === "strobe";
+    const p: Param = { id: `ch${c.offset}`, name: c.name, group, slots: [s], home: homeOf(kind, c.name, isShutter && !shutterSeen, sixteen), sixteen };
     if (isShutter) shutterSeen = true;
+    if (onMain) main[mainSlot] = p;
     if (group === "colour" && mergeable(c.name)) colourByKey.set(cellKey(c.name), p);
     params.push(p);
   }
@@ -188,7 +208,9 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
   }
 
   const pages: Page[] = [];
+  if (main.some(Boolean)) pages.push({ group: "main", label: GROUP_LABEL.main, part: "", params: main, placeholders: [...MAIN_LABELS] });
   for (const g of GROUP_ORDER) {
+    if (g === "main") continue;
     const ps = params.filter((p) => p.group === g);
     if (!ps.length) continue;
     const n = Math.ceil(ps.length / PER_PAGE);
@@ -200,7 +222,7 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
     byOffset.set(s.coarse.offset, p);
     if (s.fine) byOffset.set(s.fine.offset, p);
   }
-  return { params, pages, byName, byOffset, excluded: excluded.sort((a, b) => a - b) };
+  return { params, pages, byName, byOffset, excluded: excluded.sort((a, b) => a - b), noIntensity: !main[2] };
 }
 
 /** "Shutters 1/3", "Colour". */

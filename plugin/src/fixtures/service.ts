@@ -58,6 +58,8 @@ export interface SetupView {
   fixtures: SetupFixtureView[];
   /** typeKey -> channel list (parsed types only). */
   types: Record<string, SetupTypeView>;
+  /** Handoff 21: Deck Control state and the idle switch-off time (null without Deck Control, e.g. unit tests). */
+  deck: { on: boolean; idleSeconds: number } | null;
   controllable: number;
   active: boolean;
   universes: number[];
@@ -104,7 +106,7 @@ const ATTR_LABEL: Record<AttrId, string> = { pan: "Pan", tilt: "Tilt", intensity
 /** A type's channel list for the Setup panel: every channel, 1-based, with its bit depth and the page it is on. */
 export function channelList(channels: { offset: number; name: string; role: number; pair: number }[], model: import("./pages.js").FixtureModel): SetupChannelView[] {
   const pageOf = new Map<string, string>();
-  for (const pg of model.pages) for (const p of pg.params) pageOf.set(p.id, pageTitle(pg));
+  for (const pg of model.pages) for (const p of pg.params) if (p) pageOf.set(p.id, pageTitle(pg));
   const excluded = new Set(model.excluded);
   return channels.map((c) => {
     const p = model.byOffset.get(c.offset);
@@ -116,8 +118,19 @@ export function channelList(channels: { offset: number; name: string; role: numb
   });
 }
 
+/** Handoff 21: what the service needs from Deck Control. */
+export interface DeckHooks {
+  readonly on: boolean;
+  /** A fixture knob or key was used: switches Deck Control ON when OFF, restarts the idle timer. */
+  activity(why: string): void;
+  readonly idleSeconds: number;
+  setIdleSeconds(n: number): Promise<string | null>;
+}
+
 export class FixtureService {
   readonly selection: Selection;
+  /** Handoff 21: set by the runtime. Without it (unit tests) everything behaves as if Deck Control were always ON. */
+  deck: DeckHooks | undefined;
   private listeners: (() => void)[] = [];
   private lastRefresh = 0;
   /** The attribute page shown on the generic dials: its index within the pages of `typeKey` (the first selected fixture's type). */
@@ -143,6 +156,10 @@ export class FixtureService {
 
   onChange(fn: () => void): void {
     this.listeners.push(fn);
+  }
+  /** Something outside the service changed what it shows (Deck Control): redraw everything. */
+  notify(): void {
+    this.emit();
   }
   private emit(): void {
     this.syncPage();
@@ -208,7 +225,8 @@ export class FixtureService {
       if (types[f.typeKey] || !t?.ok || !t.model) continue;
       types[f.typeKey] = { channels: channelList(t.channels, t.model), unproven: !!t.unproven };
     }
-    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING };
+    const deck = this.deck ? { on: this.deck.on, idleSeconds: this.deck.idleSeconds } : null;
+    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, deck, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING };
   }
 
   private controllable(): Controllable[] {
@@ -372,6 +390,7 @@ export class FixtureService {
 
   /** Rotate the Select dial: choose one controllable fixture by hand (Capture's next click overrides it). */
   rotateSelect(ticks: number): void {
+    this.deck?.activity("Select dial");
     this.selection.step(ticks);
     this.emit();
   }
@@ -398,6 +417,7 @@ export class FixtureService {
   /** Rotate an attribute dial: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value. */
   rotate(dial: DialId, ticks: number, fine: boolean): boolean {
     if (!ticks) return false;
+    this.deck?.activity(`${DIAL_LABEL[dial]} dial`);
     const g = this.groups(dial);
     for (const [attr, ts] of g) this.engine.setEach(ts, attr, (cur) => stepFraction(cur, ticks, fine));
     return g.size > 0;
@@ -405,6 +425,7 @@ export class FixtureService {
 
   /** Knob press: this attribute goes to its home value on every selected fixture (all cells of a colour). */
   home(dial: DialId): boolean {
+    this.deck?.activity(`${DIAL_LABEL[dial]} dial`);
     const g = this.groups(dial);
     for (const [attr, ts] of g) this.engine.set(ts, attr, homeValue(attr));
     return g.size > 0;
@@ -412,6 +433,7 @@ export class FixtureService {
 
   /** Home key: the selected fixtures (only) at full home, the same defaults as at first touch. */
   homeSelected(): boolean {
+    this.deck?.activity("Home Selected key");
     const v = this.selection.view();
     if (!v.targets.length) return false;
     this.engine.home(v.targets.map(toTarget));
@@ -420,13 +442,13 @@ export class FixtureService {
 
   // ------------------------------------------------------------------ attribute pages (Handoff 20)
 
-  /** Keeps the page within the first selected fixture's type: a different type starts at Position (or the first page). */
+  /** Keeps the page within the first selected fixture's type: a different type starts at Main (or the first page). */
   private syncPage(): void {
     const primary = this.selection.view().primary;
     const typeKey = primary?.fixture.typeKey ?? "";
     const pages = primary?.model.pages ?? [];
     if (typeKey !== this.pageState.typeKey) {
-      const pos = pages.findIndex((p) => p.group === "position");
+      const pos = pages.findIndex((p) => p.group === "main");
       this.pageState = { typeKey, index: Math.max(0, pos) };
     } else if (this.pageState.index >= pages.length) this.pageState.index = 0;
   }
@@ -446,6 +468,7 @@ export class FixtureService {
 
   /** ◀ Page / Page ▶: cycle through the pages (wraps). False when there is nothing to page. */
   stepPage(d: number): boolean {
+    this.deck?.activity("Page key");
     const { pages, index } = this.pages();
     if (!pages.length || !d) return false;
     const n = pages.length;
@@ -473,7 +496,7 @@ export class FixtureService {
     const page = this.pages().page;
     const { param } = this.attrItems(slot);
     const pageText = page ? pageTitle(page) : "";
-    if (!param || !v.primary) return { param: null, label: page ? GROUP_LABEL[page.group] : `Attribute ${slot + 1}`, value: null, touched: false, multi: v.targets.length, page: pageText };
+    if (!param || !v.primary) return { param: null, label: page ? (page.placeholders?.[slot] ?? GROUP_LABEL[page.group]) : `Attribute ${slot + 1}`, value: null, touched: false, multi: v.targets.length, page: pageText };
     const t = toTarget(v.primary);
     return { param, label: param.name, value: this.engine.paramValue(t, param), touched: this.engine.isTouched(t.key), multi: v.targets.length, page: pageText };
   }
@@ -481,11 +504,13 @@ export class FixtureService {
   /** Turn Attribute dial `slot`: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value; fixtures without a channel of that name are skipped. */
   attrRotate(slot: number, ticks: number, fine: boolean): boolean {
     if (!ticks) return false;
+    this.deck?.activity(`Attribute ${slot + 1} dial`);
     return this.engine.adjust(this.attrItems(slot).items, (cur) => stepFraction(cur, ticks, fine));
   }
 
   /** Press Attribute dial `slot`: that channel to its home value on every selected fixture that has it. */
   attrHome(slot: number): boolean {
+    this.deck?.activity(`Attribute ${slot + 1} dial`);
     return this.engine.adjust(this.attrItems(slot).items, (_cur, p) => p.home);
   }
 

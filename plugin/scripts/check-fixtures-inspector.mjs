@@ -37,6 +37,7 @@ const view = {
     fx("s1", 207, "Framing Spot", { channelCount: 37, typeKey: "T4", unproven: true, addr: { universe: 1, address: 420 } }),
   ],
   types: { T1: typeView(movingHead()), T4: typeView(framingHead()) },
+  deck: { on: false, idleSeconds: 120 },
 };
 assert.equal(view.types.T4.unproven, true, "the synthetic spot is the 'uniqueness not proven' case");
 const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
@@ -60,6 +61,13 @@ await page.evaluate((port) => window.connectElgatoStreamDeckSocket(port, "UUID1"
 await page.waitForSelector(".fx");
 assert.equal(await page.locator(".fx").count(), 3, "only fixtures with pan/tilt that parsed are listed");
 assert.match(await page.textContent("#show"), /Test Show.*5 fixtures, 1 controllable/);
+// Handoff 21: Deck Control state and the idle time
+assert.match(await page.textContent("#deck-state"), /Deck Control is OFF/);
+assert.equal(await page.inputValue("#idle-s"), "120");
+got.length = 0;
+await page.fill("#idle-s", "45");
+await page.dispatchEvent("#idle-s", "change");
+assert.deepEqual(got.at(-1).payload, { cmd: "idle", seconds: 45 });
 // Handoff 20: the Channels list per row and the "check against Capture's patch view" note
 assert.equal(await page.isVisible(".fx[data-key=s1] .unproven"), true, "unproven note on the spot");
 assert.equal(await page.isVisible(".fx[data-key=a1] .unproven"), false, "no note on the wash");
@@ -68,7 +76,7 @@ assert.equal(await page.isVisible(".fx[data-key=s1] .chtbl"), false, "collapsed 
 await page.click(".fx[data-key=s1] .chans summary");
 assert.equal(await page.locator(".fx[data-key=s1] .chtbl tr").count(), 38, "header + 37 channels");
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(29) td").allTextContents(), ["28", "Shutter 1B", "8-bit", "Shutters 1/3"]);
-assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(8) td").allTextContents(), ["7", "Dimmer", "16-bit (fine 8)", "Intensity"]);
+assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(8) td").allTextContents(), ["7", "Dimmer", "16-bit (fine 8)", "Main"]);
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(9) td").allTextContents(), ["8", "Dimmer Fine", "fine of 7", ""]);
 // a re-sent view keeps the list open
 sock.send(JSON.stringify({ event: "sendToPropertyInspector", payload: { event: "setup", view, error: null } }));

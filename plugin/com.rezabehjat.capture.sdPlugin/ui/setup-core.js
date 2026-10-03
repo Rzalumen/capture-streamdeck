@@ -1,5 +1,5 @@
 /* Setup table (plain JS) for the Property Inspector (fixtures.js).
- * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill, ...}) goes to the plugin; the plugin's
+ * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill | idle, ...}) goes to the plugin; the plugin's
  * answer is handed to the returned object's receive(view, error) (error: text, null = none, undefined = leave the shown error alone). */
 (function () {
   "use strict";
@@ -37,6 +37,10 @@
   function render() {
     if (!view) return;
     $("blackout").textContent = view.blackoutWarning;
+    if (view.deck) {
+      $("deck-state").textContent = view.deck.on ? "Deck Control is ON: the CITP link is held, Capture's Control Pane is locked." : "Deck Control is OFF: no CITP link, no DMX; Capture's Control Pane works.";
+      if (document.activeElement !== $("idle-s")) $("idle-s").value = String(view.deck.idleSeconds);
+    }
     const st = view.status;
     $("show").textContent =
       st === "ok" ? 'Show "' + (view.showName || "(unnamed)") + '" — ' + view.fixtures.length + " fixtures, " + view.controllable + " controllable" + (view.active ? ", output ON (universe " + view.universes.join(", ") + ")" : "")
@@ -164,6 +168,11 @@
     send = transport.send;
     $("resync").onclick = () => { $("show").textContent = "Reading the show from Capture…"; toPlugin({ cmd: "resync" }); };
     $("all").onchange = () => { built = ""; render(); };
+    $("idle-s").onchange = () => {
+      const v = $("idle-s").value.trim();
+      if (v === "") return;
+      toPlugin({ cmd: "idle", seconds: Number(v) });
+    };
     $("fill-go").onclick = () => {
       const t = $("fill-type")._types && $("fill-type")._types.get($("fill-type").value);
       if (!t) return showError("Choose a fixture type first.");

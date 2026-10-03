@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.6.0.0",
+  "Version": "0.7.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2680,7 +2680,7 @@
       "Name": "Fixtures: Release",
       "UUID": "com.rezabehjat.capture.fixtures.release",
       "Icon": "imgs/icons/fx-release",
-      "Tooltip": "Stops all DMX output: Stream_Terminated is sent on every universe in use.",
+      "Tooltip": "Kept for keys placed earlier: switches Deck Control OFF (Stream_Terminated on every universe in use, then LeaveShow and the CITP connection closes).",
       "Controllers": [
         "Keypad"
       ],
@@ -2722,10 +2722,25 @@
       ]
     },
     {
+      "Name": "Fixtures: Deck Control",
+      "UUID": "com.rezabehjat.capture.fixtures.deck",
+      "Icon": "imgs/icons/fx-deck",
+      "Tooltip": "Deck Control ON (amber, \"Deck ON\"): the deck holds the CITP link to Capture (follows the selection, drives DMX); Capture's Control Pane is locked while ON. OFF (grey, \"Deck OFF\"): no link, no DMX, the Control Pane works. Any fixture knob or key switches it ON; it switches OFF after the idle time set in Setup.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-deck",
+          "ShowTitle": true
+        }
+      ]
+    },
+    {
       "Name": "Fixtures: ◀ Page",
       "UUID": "com.rezabehjat.capture.fixtures.page-prev",
       "Icon": "imgs/icons/fx-page-prev",
-      "Tooltip": "Previous attribute page (Position, Intensity, Colour, Beam, Shutters, Gobo/Prism/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Previous attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Strobe/Shutter, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],
@@ -2740,7 +2755,7 @@
       "Name": "Fixtures: Page ▶",
       "UUID": "com.rezabehjat.capture.fixtures.page-next",
       "Icon": "imgs/icons/fx-page-next",
-      "Tooltip": "Next attribute page (Position, Intensity, Colour, Beam, Shutters, Gobo/Prism/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Next attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Strobe/Shutter, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],
@@ -2777,7 +2792,7 @@
       "Name": "Fixture: Attribute 1",
       "UUID": "com.rezabehjat.capture.fixture.attr1",
       "Icon": "imgs/icons/fx-attr",
-      "Tooltip": "Shows and drives channel 1 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = home that channel, tap the strip = fine (0.1 %). With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Shows and drives channel 1 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = fine mode (0.1 %) on/off, tap the strip = home that channel. With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2791,8 +2806,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home channel",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home channel"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2801,7 +2816,7 @@
       "Name": "Fixture: Attribute 2",
       "UUID": "com.rezabehjat.capture.fixture.attr2",
       "Icon": "imgs/icons/fx-attr",
-      "Tooltip": "Shows and drives channel 2 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = home that channel, tap the strip = fine (0.1 %). With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Shows and drives channel 2 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = fine mode (0.1 %) on/off, tap the strip = home that channel. With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2815,8 +2830,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home channel",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home channel"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2825,7 +2840,7 @@
       "Name": "Fixture: Attribute 3",
       "UUID": "com.rezabehjat.capture.fixture.attr3",
       "Icon": "imgs/icons/fx-attr",
-      "Tooltip": "Shows and drives channel 3 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = home that channel, tap the strip = fine (0.1 %). With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Shows and drives channel 3 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = fine mode (0.1 %) on/off, tap the strip = home that channel. With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2839,8 +2854,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home channel",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home channel"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2849,7 +2864,7 @@
       "Name": "Fixture: Pan",
       "UUID": "com.rezabehjat.capture.fixture.pan",
       "Icon": "imgs/icons/fx-pan",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Pan of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Pan of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2863,8 +2878,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2873,7 +2888,7 @@
       "Name": "Fixture: Tilt",
       "UUID": "com.rezabehjat.capture.fixture.tilt",
       "Icon": "imgs/icons/fx-tilt",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Tilt of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Tilt of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2887,8 +2902,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2897,7 +2912,7 @@
       "Name": "Fixture: Intensity",
       "UUID": "com.rezabehjat.capture.fixture.intensity",
       "Icon": "imgs/icons/fx-intensity",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Intensity of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Intensity of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2911,8 +2926,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2921,7 +2936,7 @@
       "Name": "Fixture: Zoom",
       "UUID": "com.rezabehjat.capture.fixture.zoom",
       "Icon": "imgs/icons/fx-zoom",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Zoom of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Zoom of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2935,8 +2950,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2945,7 +2960,7 @@
       "Name": "Fixture: Focus",
       "UUID": "com.rezabehjat.capture.fixture.focus",
       "Icon": "imgs/icons/fx-focus",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Focus of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Focus of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2959,8 +2974,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2969,7 +2984,7 @@
       "Name": "Fixture: Iris",
       "UUID": "com.rezabehjat.capture.fixture.iris",
       "Icon": "imgs/icons/fx-iris",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Iris of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Iris of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2983,8 +2998,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2993,7 +3008,7 @@
       "Name": "Fixture: Red|Cyan",
       "UUID": "com.rezabehjat.capture.fixture.red-cyan",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Red (additive) or, on a fixture without it, Cyan (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Red (additive) or, on a fixture without it, Cyan (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -3007,8 +3022,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -3017,7 +3032,7 @@
       "Name": "Fixture: Green|Magenta",
       "UUID": "com.rezabehjat.capture.fixture.green-magenta",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Green (additive) or, on a fixture without it, Magenta (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Green (additive) or, on a fixture without it, Magenta (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -3031,8 +3046,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -3041,7 +3056,7 @@
       "Name": "Fixture: Blue|Yellow",
       "UUID": "com.rezabehjat.capture.fixture.blue-yellow",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Blue (additive) or, on a fixture without it, Yellow (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change Blue (additive) or, on a fixture without it, Yellow (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -3055,8 +3070,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -3065,7 +3080,7 @@
       "Name": "Fixture: White",
       "UUID": "com.rezabehjat.capture.fixture.white",
       "Icon": "imgs/icons/fx-white",
-      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change White of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "(Fixed dial, kept for hand-placed layouts; the default profile uses Attribute 1–3.) Turn to change White of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: fine mode (0.1 %) on/off. Tap the strip: home this attribute on the selected fixture(s). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -3079,8 +3094,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Home attribute",
-          "Touch": "Fine mode"
+          "Push": "Fine mode",
+          "Touch": "Home attribute"
         },
         "background": "imgs/actions/dial/strip-background"
       }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OPT_TERMINATED, PACKET_SIZE, buildDataPacket, multicastAddress, parseDataPacket } from '../lib/sacn.mjs';
+import { OPT_TERMINATED, PACKET_SIZE, START_CODE_PAP, buildDataPacket, multicastAddress, papSlots, parseDataPacket } from '../lib/sacn.mjs';
 
 // KNOWN-GOOD VECTOR, written out by hand field by field (not produced by the builder). Layout: ANSI E1.31 data packet as
 // implemented by hhromic/libe131 (struct e131_packet_t: root 38 + framing 77 + DMP 523 = 638 bytes) and Hundemeier/sacn.
@@ -74,4 +74,26 @@ test('E1.31: multicast address and argument checks', () => {
   assert.throws(() => buildDataPacket({ ...base, universe: 1, priority: 201 }), /priority/);
   assert.throws(() => buildDataPacket({ ...base, universe: 1, slots: new Array(513).fill(0) }), /512/);
   assert.throws(() => buildDataPacket({ ...base, cid: Buffer.alloc(15), universe: 1 }), /cid/);
+});
+
+test('per-address priority (--pap): a 0xDD packet is the 0x00 packet with START code 0xDD and 512 priorities (100 on the fixture, 0 elsewhere)', () => {
+  const cid = Buffer.from(CID, 'hex');
+  const pr = papSlots({ base: 284, count: 14 });
+  assert.equal(pr.length, 512);
+  for (let k = 0; k < 512; k++) assert.equal(pr[k], k >= 284 && k < 298 ? 100 : 0, `slot ${k + 1}`);
+  const lv = buildDataPacket({ cid, sourceName: NAME, universe: 1, sequence: 7, slots: new Uint8Array(512) });
+  const dd = buildDataPacket({ cid, sourceName: NAME, universe: 1, sequence: 8, slots: pr, startCode: START_CODE_PAP });
+  assert.equal(dd.length, PACKET_SIZE);
+  assert.equal(dd[125], 0xdd, 'DMP first property value = START code 0xDD');
+  assert.equal(lv[125], 0x00);
+  // byte for byte the same as a level packet except the sequence number, the START code and the slot values
+  for (let i = 0; i < 126; i++) if (i !== 111 && i !== 125) assert.equal(dd[i], lv[i], `header byte ${i}`);
+  assert.equal(dd.readUInt16BE(123), 513, 'property value count = 1 + 512');
+  assert.deepEqual([...dd.subarray(126)], [...pr]);
+  const p = parseDataPacket(dd);
+  assert.equal(p.startCode, 0xdd);
+  assert.ok(p.cid.equals(cid), 'same CID as the level packets');
+  assert.throws(() => papSlots({ base: 500, count: 14 }), /do not fit/);
+  assert.throws(() => papSlots({ base: 0, count: 1, priority: 0 }), /1\.\.200/);
+  assert.throws(() => buildDataPacket({ cid, sourceName: NAME, universe: 1, sequence: 0, slots: [], startCode: 256 }), /start code/);
 });

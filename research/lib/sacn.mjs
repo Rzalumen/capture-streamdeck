@@ -48,8 +48,26 @@ export const OPT_FORCE_SYNC = 0x20;
 
 const ACN_PID = Buffer.from('ASC-E1.17\0\0\0', 'latin1');
 
-/** Build one data packet. `slots` = up to 512 bytes (missing slots are 0). */
-export function buildDataPacket({ cid, sourceName, universe, sequence, priority = DEFAULT_PRIORITY, options = 0, slots }) {
+/**
+ * Per-address priority (ETC extension to E1.31, Handoff 21 --pap): a data packet with the alternate START code 0xDD whose 512 slots are
+ * the source's priority for the matching level slot of its 0x00 packets: 1 (lowest) .. 200 (highest), 0 = "ignore my level for this
+ * address". Sources: ETC sACN library docs, "Per Address Priority" (https://etclabs.github.io/sACNDocs/2.0.1/per_address_priority.html);
+ * ETC support, "Difference between sACN per-address and per-port priority" (an extension to ANSI E1.31, not part of the standard).
+ */
+export const START_CODE_LEVELS = 0x00;
+export const START_CODE_PAP = 0xdd;
+
+/** Priorities for a 0xDD packet: `priority` on slots base .. base+count-1 (0-based), 0 everywhere else. */
+export function papSlots({ base, count, priority = DEFAULT_PRIORITY }) {
+  if (!Number.isInteger(priority) || priority < 1 || priority > 200) throw new Error(`per-address priority out of range 1..200: ${priority}`);
+  if (base < 0 || base + count > 512) throw new Error(`slots ${base + 1}..${base + count} do not fit in 512`);
+  const p = new Uint8Array(512);
+  p.fill(priority, base, base + count);
+  return p;
+}
+
+/** Build one data packet. `slots` = up to 512 bytes (missing slots are 0). `startCode` 0x00 = levels, 0xDD = per-address priority. */
+export function buildDataPacket({ cid, sourceName, universe, sequence, priority = DEFAULT_PRIORITY, options = 0, slots, startCode = START_CODE_LEVELS }) {
   if (!Buffer.isBuffer(cid) || cid.length !== 16) throw new Error('cid must be a 16-byte Buffer');
   if (!Number.isInteger(universe) || universe < 1 || universe > 63999) throw new Error(`sACN universe out of range 1..63999: ${universe}`);
   if (!Number.isInteger(priority) || priority < 0 || priority > 200) throw new Error(`priority out of range 0..200: ${priority}`);
@@ -77,7 +95,8 @@ export function buildDataPacket({ cid, sourceName, universe, sequence, priority 
   b.writeUInt16BE(0x0000, 119);
   b.writeUInt16BE(0x0001, 121);
   b.writeUInt16BE(513, 123);
-  b[125] = 0x00;
+  if (!Number.isInteger(startCode) || startCode < 0 || startCode > 255) throw new Error(`start code out of range: ${startCode}`);
+  b[125] = startCode;
   Buffer.from(slots).copy(b, 126);
   return b;
 }

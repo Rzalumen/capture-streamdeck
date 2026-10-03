@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.6.0.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.7.0.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.6.0.0");
+  assert.equal(built.Version, "0.7.0.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -122,14 +122,14 @@ test("the action list contains no configurable actions: the six generic ones are
   // what remains visible is a named action: catalog command, Show Position k, Look toggle, Store Modifier, Connection, dial
   for (const a of visible) assert.match(a.UUID, /^com\.rezabehjat\.capture\.(cmd\.[a-z]+\.[a-z0-9-]+|showpos\.[1-8]|toggle\.[a-z-]+|dial\.[a-z-]+|fixture\.[a-z0-9-]+|fixtures\.[a-z-]+|store|connection)$/, a.UUID);
   assert.equal(visible.length, built.Actions.length - GENERIC.length);
-  assert.equal(built.Actions.length, 174, "v0.6: + Attribute 1–3 dials, ◀ Page and Page ▶ keys");
+  assert.equal(built.Actions.length, 175, "v0.6: + Attribute 1–3 dials, ◀ Page and Page ▶ keys; v0.7: + Deck Control");
 });
 
 test("the handoff's named actions exist, visible, with the handoff's names", () => {
   const names = new Set(visible.map((a) => a.Name));
   for (let k = 1; k <= 8; k++) assert.ok(names.has(`Camera: Show Position ${k}`), `Show Position ${k}`);
   for (let k = 1; k <= 5; k++) for (const n of [`Camera: Position ${k}`, `Camera: Store Position ${k}`]) assert.ok(names.has(n), n);
-  for (const n of ["Camera: Store Modifier", "Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection", "Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixture: Select", "Fixture: Pan", "Fixture: Tilt", "Fixture: Intensity", "Fixture: Zoom", "Fixture: Focus", "Fixture: Iris", "Fixture: Red|Cyan", "Fixture: Green|Magenta", "Fixture: Blue|Yellow", "Fixture: White", "Fixture: Attribute 1", "Fixture: Attribute 2", "Fixture: Attribute 3", "Fixtures: ◀ Page", "Fixtures: Page ▶"]) assert.ok(names.has(n), n);
+  for (const n of ["Camera: Store Modifier", "Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection", "Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixture: Select", "Fixture: Pan", "Fixture: Tilt", "Fixture: Intensity", "Fixture: Zoom", "Fixture: Focus", "Fixture: Iris", "Fixture: Red|Cyan", "Fixture: Green|Magenta", "Fixture: Blue|Yellow", "Fixture: White", "Fixture: Attribute 1", "Fixture: Attribute 2", "Fixture: Attribute 3", "Fixtures: ◀ Page", "Fixtures: Page ▶", "Fixtures: Deck Control"]) assert.ok(names.has(n), n);
   for (const a of visible) assert.ok(!/^(Capture Command|Capture Tab|Camera Slot|Show Position|View Dial|View Toggle)$/.test(a.Name), a.Name);
 });
 
@@ -162,11 +162,12 @@ test("fixture actions: the dials are Encoder actions with the dial/select layout
     assert.equal((a.Encoder as { layout: string }).layout, "layouts/dial.json");
     assert.equal(a.PropertyInspectorPath, undefined, a.UUID);
     const td = (a.Encoder as { TriggerDescription: Record<string, string | undefined> }).TriggerDescription;
-    const push = a.UUID.includes(".fixture.attr") ? "Home channel" : "Home attribute";
-    assert.deepEqual([td.Push, td.Touch, td.LongTouch], [push, "Fine mode", undefined], "push homes, tap = fine, no long touch");
+    const touch = a.UUID.includes(".fixture.attr") ? "Home channel" : "Home attribute";
+    assert.deepEqual([td.Push, td.Touch, td.LongTouch], ["Fine mode", touch, undefined], "Handoff 21: push = fine, tap = home, no long touch");
   }
   const keys = built.Actions.filter((a) => a.UUID.startsWith("com.rezabehjat.capture.fixtures."));
-  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixtures: ◀ Page", "Fixtures: Page ▶"]);
+  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixtures: Deck Control", "Fixtures: ◀ Page", "Fixtures: Page ▶"]);
+  assert.match(keys.find((a) => a.Name === "Fixtures: Release")!.Tooltip, /switches Deck Control OFF/, "Release kept for compatibility");
   for (const a of keys) {
     assert.deepEqual(a.Controllers, ["Keypad"]);
     assert.equal(a.States[0].ShowTitle, true);

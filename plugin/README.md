@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.6.0 (beta)
+# Capture for Stream Deck+ — plugin v0.7.0 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -16,7 +16,7 @@ folders (below).
 | `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
 | `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
 | `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
-| `Fixtures: Setup`, `Release`, `Home Selected`, `Status`, `◀ Page`, `Page ▶` · `Fixture: Select`, `Attribute 1`, `Attribute 2`, `Attribute 3` (v0.6) · `Fixture: Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` (fixed dials, kept for hand-placed layouts) | **Fixture knobs**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" and "Attribute pages" below. |
+| `Fixtures: Setup`, `Deck Control` (v0.7), `Home Selected`, `Status`, `◀ Page`, `Page ▶`, `Release` (kept for old keys: = Deck Control OFF) · `Fixture: Select`, `Attribute 1`, `Attribute 2`, `Attribute 3` (v0.6) · `Fixture: Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` (fixed dials, kept for hand-placed layouts) | **Fixture knobs**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" and "Attribute pages" below. |
 | `Status: Connection` | Connected/Offline, Capture version, Accessibility status, median latency. Press to re-check. |
 | `Dial: …` (12) | *Exposure, Ambient, Bloom, White Balance, Fill, Hue Clamp, Contrast, Saturation, Flare, Flare Size, Flare Angle, Flare Streaks*. Turn: value += ticks × step (clamped, ≤ 30 msg/s, latest wins). Push or touch: fine mode (÷10). Long touch: reset. **Dial actions only appear in the action list when a dial slot (not a key) is selected.** |
 
@@ -92,9 +92,9 @@ identifier yet a number (see 2).
    universe 1–16 and address 1–512, **saved as soon as you change a field**, per show name keyed by CaptureInstanceId. **Re-patching a fixture in Capture is picked up
    automatically** (FixtureModify with the patch bit): its universe and address (1-based) are stored if they fit and overlap nothing (`Fixtures: address from Capture Ch 203 -> 1/285`);
    Patched=0 clears the entry; a refused one is logged with the reason. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
-6. **Dials** act on the fixtures selected in Capture. Attribute dials: rotate ±1 % per tick (16-bit aware), **push = home that attribute** on the selected fixture(s),
-   **tap the touch strip = fine (0.1 %)**; a long touch does nothing. **Fixtures: Home Selected** puts the selected fixture(s) — only — at full home (pan/tilt 50 %, intensity 100 %,
-   additive colours full, the rest 0, as at first touch). A colour with several cells (`Red 1`…`Red 5`) is one knob: it moves every cell together and pressing it homes them all.
+6. **Dials** act on the fixtures selected in Capture. Attribute dials: rotate ±1 % per tick (16-bit aware), **push = fine (0.1 %) on/off**,
+   **tap the touch strip = home that attribute** on the selected fixture(s) (v0.7; swapped from v0.5/v0.6); a long touch does nothing. **Fixtures: Home Selected** puts the selected fixture(s) — only — at full home (pan/tilt 50 %, intensity 100 %,
+   additive colours full, the rest 0, as at first touch). A colour with several cells (`Red 1`…`Red 5`) is one knob: it moves every cell together and tapping its strip homes them all.
    A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
    Attribute names are matched generically (whole words; speed/mode/macro/curve… channels are never the value).
 7. **DMX engine**: nothing is sent until you touch a fixture. A touched fixture starts from its defaults. The
@@ -103,20 +103,38 @@ identifier yet a number (see 2).
    also releases output first. sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
    A dropped CITP connection does not stop output (it reconnects).
 
-### Attribute pages (v0.6, Handoff 20)
+### Deck Control (v0.7, Handoff 21)
 
-The Fixtures folder is one page: **Setup · Release · Home Selected · Status · ◀ Page · Page ▶**, dials **Select · Attribute 1 · 2 · 3**.
+Any CITP console connection locks Capture's Control Pane, and closing it frees the pane again. So the deck no longer holds the link all the time:
+
+- **OFF (at start-up)**: no CITP session is held and no DMX is sent; command keys and the view dials work as usual. The fixture list (and the
+  FixtureIdentify for new fixtures) is read over a **brief connection** — PNam → EnterShow → FixtureList → FixtureIdentify → LeaveShow → close — at
+  start-up, when the Setup panel opens and when Setup or Status is pressed. Each is logged with its duration (`Fixtures: brief sync (start-up): 412 ms, …`).
+  While OFF, Capture's clicks do not reach the deck: it keeps the selection it had.
+- **ON**: the persistent session as in v0.6 (follows the selection, picks up re-patching) and the knobs drive DMX. The Control Pane is locked while ON.
+- Switch ON with **Fixtures: Deck Control** (amber "Deck ON" / grey "Deck OFF"), or with **any fixture knob turn or fixture key** (Home Selected, the page keys,
+  a strip tap). Switch OFF with the key, the old **Release** key, or automatically after the idle time set in the Setup panel (default 120 s without fixture
+  activity; 0 = never). OFF = Stream_Terminated ×3 on every universe in use, then LeaveShow, then the connection closes (`Fixtures: deck control OFF (idle 120 s): …`).
+- **Resume**: the last value the deck sent for every channel of every fixture is kept per show in the global settings. When output starts again (after OFF, or
+  after a restart) a fixture starts from those values; the home values are used only for channels never touched in that show. Home Selected and the strip
+  tap store the home values.
+- **Knob gestures**: **push = fine mode (0.1 %) on/off; tap the strip = home that channel**. (Before v0.7 it was the other way round.)
+
+### Attribute pages (v0.6, Handoff 20; Main page v0.7)
+
+The Fixtures folder is one page: **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶**, dials **Select · Attribute 1 · 2 · 3**.
 
 - **Every channel of the selected fixture is on exactly one page**, built from the channel names of its library mode (whole words, case-insensitive, no fixture
-  type is known): **Position** (pan, tilt) · **Intensity** (dimmer, intensity, shutter/strobe) · **Colour** (red … uv, cyan, magenta, yellow, CTO, CTB, colour wheel) ·
-  **Beam** (zoom, focus, iris, frost, diffusion, edge) · **Shutters** (blade, framing/frame, "Shutter" + number/letter such as "Shutter 1A", shutter rotation) ·
-  **Gobo/Prism/FX** (gobo, prism, animation, effect, rotation, index) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a
-  speed/time/mode/macro/control … word always goes here). Only non-empty groups are pages; more than 3 channels continue on further pages (`Shutters 1/3`).
+  type is known): **Main** (Attribute 1 = the first pan, 2 = the first tilt, 3 = the first dimmer/intensity; `—` when missing) · **Colour** (red … uv, cyan,
+  magenta, yellow, CTO, CTB, colour wheel) · **Beam** (zoom, focus, iris, frost, diffusion, edge) · **Shutters** (blade, framing/frame, "Shutter" +
+  number/letter such as "Shutter 1A", shutter rotation) · **Gobo/FX** (gobo, prism, animation, effect, rotation, index) · **Strobe/Shutter** (shutter,
+  strobe) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a speed/time/mode/macro/control … word always goes here —
+  and a second pan, tilt or dimmer channel). Only non-empty groups are pages; more than 3 channels continue on further pages (`Shutters 1/3`).
   Fine channels are never knobs of their own: they ride with their coarse channel (16-bit). Colour cells (`Red 1` … `Red 5`) are one knob.
-- **◀ Page / Page ▶** cycle the pages (wrapping); their titles show the current page. The page goes back to **Position** when the first selected fixture is of a
-  different type, and is kept within the same type.
+- **◀ Page / Page ▶** cycle the pages (wrapping); their titles show the current page's name ("Main", "Colour 1/2"). The page goes back to **Main** when the
+  first selected fixture is of a different type, and is kept within the same type.
 - **Attribute 1–3** show the page's channel name and value (raw %, until wheel/range decoding exists; wheels are plain value knobs for now): rotate ±1 % per tick
-  (16-bit aware), **push = home that channel**, tap the strip = fine (0.1 %). `—` when the page has no channel on that dial.
+  (16-bit aware), push = fine (0.1 %) on/off, **tap the strip = home that channel**. `—` when the page has no channel on that dial.
 - **Several selected**: the pages come from the **first** selected fixture's type; the dial drives each selected fixture's channel **of the same name**, each relative to
   its own value; a fixture without that channel is skipped.
 - **Home values**: pan/tilt 50 %; dimmer/intensity 100 %; the first shutter/strobe channel 255 (open, as in v0.5), other shutter/strobe channels 0; additive colours

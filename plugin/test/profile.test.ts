@@ -187,15 +187,16 @@ test("dials: every page has its own four; standard set everywhere, View set on V
   for (const p of layout.pages) if (!isFixturesPage(p)) for (const d of p.dials.values()) assert.ok(NUMBER_PROPERTIES.some((n) => dialUuid(n) === d.uuid));
 });
 
-test("Fixtures folder (v0.6): ONE page — Back · Setup · Release · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 · 2 · 3", () => {
+test("Fixtures folder (v0.7): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 · 2 · 3", () => {
   const { pages } = chain(folder("Fixtures"));
   assert.equal(pages.length, 1, "the four fixed-dial pages are gone");
   const p = pages[0];
   const U = "com.rezabehjat.capture";
   assert.equal(p.keys.get("0,0")?.type, "back");
-  const keyUuids = ["fixtures.setup", "fixtures.release", "fixtures.home", "fixtures.status", "fixtures.page-prev", "fixtures.page-next"].map((k) => `${U}.${k}`);
+  const keyUuids = ["fixtures.setup", "fixtures.deck", "fixtures.home", "fixtures.status", "fixtures.page-prev", "fixtures.page-next"].map((k) => `${U}.${k}`);
   assert.deepEqual(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1"].map((pos) => (p.keys.get(pos) as { uuid: string }).uuid), keyUuids);
-  assert.deepEqual(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1"].map((pos) => titleOf(p.keys.get(pos))), ["Setup", "Release", "Home Selected", "Status", "◀ Page", "Page ▶"]);
+  assert.deepEqual(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1"].map((pos) => titleOf(p.keys.get(pos))), ["Setup", "Deck OFF", "Home Selected", "Status", "◀ Page", "Page ▶"]);
+  assert.ok(!layout.pages.some((x) => [...x.keys.values()].some((k) => k.type === "action" && k.uuid === `${U}.fixtures.release`)), "Release is not in the profile any more");
   assert.equal(p.keys.get(MORE_SLOT), undefined, "no More ▸");
   assert.equal(p.keys.size, 7);
   assert.equal(p.parent, layout.home);
@@ -313,7 +314,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.6.0.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.7.0.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }

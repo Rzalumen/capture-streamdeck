@@ -21,6 +21,7 @@ import { SACN_PORT } from "./fixtures/sacn.js";
 import { FixtureService } from "./fixtures/service.js";
 import { SetupStore } from "./fixtures/setup.js";
 import { ShowModel } from "./fixtures/show.js";
+import { DeckControl, ValueMemory } from "./fixtures/deck.js";
 import type { JsonObject } from "@elgato/utils";
 
 const log: Logger = streamDeck.logger;
@@ -56,10 +57,12 @@ class Runtime {
   });
 
   /**
-   * Fixture control (v0.5): a persistent CITP session follows Capture's show and selection, identifies fixtures, reads patch changes;
-   * library channel lists, per-show address setup, DMX over sACN. Nothing is sent to DMX until the user touches a fixture.
+   * Fixture control: library channel lists, per-show address setup, DMX over sACN. Handoff 21 (v0.7): "Deck Control" — OFF at
+   * start-up (no CITP session held, no DMX; brief connections read the fixture list), ON = the persistent session of v0.5/v0.6
+   * (selection, patch changes) and DMX. Nothing is sent to DMX until the user touches a fixture.
    * Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_CITP_TIMING / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
-   * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 does not start the CITP session.
+   * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 makes no CITP connection at all; CAPTURE_TEST_DECK_ON=1 starts with
+   * Deck Control ON (the v0.6 end-to-end tests); CAPTURE_TEST_BRIEF_MS = brief-connection timeout.
    */
   readonly citp = new CitpSession({
     host: process.env.CAPTURE_TEST_CITP_PORT ? "127.0.0.1" : undefined,
@@ -67,18 +70,34 @@ class Runtime {
     timing: timingFromEnv(process.env.CAPTURE_TEST_CITP_TIMING),
     log: (l) => log.info(`CITP: ${l}`),
   });
-  readonly fixtures = new FixtureService(
+  /** The last value the deck sent for every channel of every fixture, per show (resume instead of snapping to home). */
+  readonly memory = new ValueMemory(this.globals);
+  readonly fixtures: FixtureService = new FixtureService(
     new ShowModel({
-      request: () => this.citp.requestList(),
-      reconnect: () => this.citp.reconnectNow(),
+      request: () => this.link.requestList("read the show"),
+      reconnect: () => this.link.reconnect("read the show"),
       libraryPath: process.env.CAPTURE_TEST_LIBRARY || undefined,
       log: (l) => log.info(`Fixtures: ${l}`),
     }),
     new SetupStore(this.globals),
-    new DmxEngine({ transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1") }),
+    new DmxEngine({
+      transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1"),
+      allowed: () => this.deck.on,
+      resume: (key) => this.memory.get(this.fixtures.show.showName, key),
+      remember: (key, values) => this.memory.set(this.fixtures.show.showName, key, values),
+    }),
     (l) => log.info(`Fixtures: ${l}`),
   );
-  readonly link = new CitpLink(this.citp, this.fixtures.show, this.fixtures, (l) => log.info(`Fixtures: ${l}`));
+  readonly link = new CitpLink(this.citp, this.fixtures.show, this.fixtures, (l) => log.info(`Fixtures: ${l}`), undefined, undefined, Number(process.env.CAPTURE_TEST_BRIEF_MS) || undefined);
+  /** Deck Control: OFF = no CITP session, no DMX (Capture's Control Pane is free); ON = persistent session + DMX. */
+  readonly deck = new DeckControl({
+    start: () => this.link.startPersistent(),
+    stop: () => this.link.stopPersistent(),
+    release: () => this.fixtures.engine.release(),
+    afterOff: () => this.memory.flush(),
+    log: (l) => log.info(`Fixtures: ${l}`),
+    globals: this.globals,
+  });
 
   /** Dial sends: at most 30 msg/s per (view, property), always the newest value. */
   readonly limiter = new LatestValueLimiter<{ view: ViewId; prop: string; v: number }>((_k, s) => {
@@ -114,10 +133,17 @@ class Runtime {
     this.monitor.start();
     // Stored values come from Stream Deck's global settings; never let a slow answer block the connection.
     await Promise.race([this.values.init(), new Promise((r) => setTimeout(r, 4000))]);
-    await Promise.race([this.fixtures.setup.load(), new Promise((r) => setTimeout(r, 4000))]);
+    await Promise.race([Promise.all([this.fixtures.setup.load(), this.memory.load(), this.deck.load()]), new Promise((r) => setTimeout(r, 4000))]);
+    this.fixtures.deck = this.deck;
+    this.deck.onChange(() => this.fixtures.notify());
     this.installExitHandlers();
-    // CITP session (stays connected, reconnects with back-off). Nothing goes to DMX from here.
-    if (process.env.CAPTURE_TEST_NO_CITP !== "1") this.link.start();
+    // Deck Control is OFF at start-up: one brief connection reads the fixture list and identifies new fixtures, then closes.
+    // Nothing goes to DMX from here.
+    if (process.env.CAPTURE_TEST_NO_CITP !== "1") {
+      this.link.attach();
+      if (process.env.CAPTURE_TEST_DECK_ON === "1") void this.deck.setOn(true, "test start-up");
+      else void this.link.briefSync("start-up");
+    }
 
     // Accessibility side (read-only, background): one summary line per minute, and the menu tree cached per Capture PID.
     this.ax.startSummary();
@@ -145,7 +171,7 @@ class Runtime {
         exiting = true;
         log.info(`${sig}: releasing DMX output`);
         void this.link.stop().catch(() => undefined);
-        void this.fixtures.engine.release().finally(() => process.exit(0));
+        void Promise.all([this.fixtures.engine.release(), this.memory.flush()]).finally(() => process.exit(0));
         setTimeout(() => process.exit(0), 1500).unref();
       });
     }

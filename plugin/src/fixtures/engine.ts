@@ -128,6 +128,12 @@ export interface EngineOptions {
   /** Test hooks. */
   setInterval?: (fn: () => void, ms: number) => unknown;
   clearInterval?: (h: unknown) => void;
+  /** Handoff 21: false = Deck Control is OFF, nothing may be touched or sent. */
+  allowed?: () => boolean;
+  /** Handoff 21: the values last sent for a fixture in this show (a fixture starts from these, home only for channels never touched). */
+  resume?: (key: string) => ReadonlyMap<string, number> | undefined;
+  /** Handoff 21: called with a fixture's values after every change. */
+  remember?: (key: string, values: ReadonlyMap<string, number>) => void;
 }
 
 /** One knob move on one fixture: these parameters of this target. */
@@ -181,9 +187,15 @@ export class DmxEngine {
     return this.fixtures.has(key);
   }
 
-  /** Current value of a knob parameter (its home value if the fixture or the parameter has not been touched). */
+  /** Current value of a knob parameter: what is being sent, else what was last sent in this show (resume), else its home value. */
   paramValue(t: Target, p: Param): number {
-    return this.fixtures.get(t.key)?.values.get(p.id) ?? p.home;
+    const st = this.fixtures.get(t.key);
+    if (st) return st.values.get(p.id) ?? p.home;
+    return this.o.resume?.(t.key)?.get(p.id) ?? p.home;
+  }
+
+  private ok(): boolean {
+    return this.o.allowed?.() ?? true;
   }
 
   /** Current value of a named attribute (the default if the fixture has not been touched yet); undefined when the fixture lacks the attribute. */
@@ -198,10 +210,11 @@ export class DmxEngine {
    */
   adjust(items: ParamTarget[], fn: (current: number, p: Param) => number): boolean {
     const hit = items.filter((i) => i.params.length);
-    if (!hit.length) return false;
+    if (!hit.length || !this.ok()) return false;
     for (const { target, params } of hit) {
       const st = this.touch(target);
       for (const p of params) st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p)));
+      this.o.remember?.(target.key, st.values);
     }
     this.start();
     this.emit();
@@ -220,8 +233,12 @@ export class DmxEngine {
 
   /** Home key: these fixtures go back to their first-touch defaults (every parameter at its home value). */
   home(targets: Target[]): void {
-    if (!targets.length) return;
-    for (const t of targets) this.touch(t).values.clear();
+    if (!targets.length || !this.ok()) return;
+    for (const t of targets) {
+      const st = this.touch(t);
+      st.values = new Map(t.model.params.map((p) => [p.id, p.home]));
+      this.o.remember?.(t.key, st.values);
+    }
     this.start();
     this.emit();
   }
@@ -234,11 +251,13 @@ export class DmxEngine {
   /** Set several named attributes at once. Only attributes a fixture has are written; if none apply, nothing is touched. */
   setMany(targets: Target[], values: Partial<Record<AttrId, number>>): void {
     let any = false;
+    if (!this.ok()) return;
     for (const t of targets) {
       const mine = ALL_ATTRS.filter((a) => values[a] !== undefined && attrParams(t, a).length);
       if (!mine.length) continue;
       const st = this.touch(t);
       for (const a of mine) for (const p of attrParams(t, a)) st.values.set(p.id, clamp(values[a] as number));
+      this.o.remember?.(t.key, st.values);
       any = true;
     }
     if (!any) return;
@@ -252,7 +271,8 @@ export class DmxEngine {
       have.model = t.model;
       return have;
     }
-    const st: FixState = { universe: t.universe, address: t.address, model: t.model, values: new Map() };
+    // resume: the values last sent for this fixture in this show; channels never touched start at their home value
+    const st: FixState = { universe: t.universe, address: t.address, model: t.model, values: new Map(this.o.resume?.(t.key) ?? []) };
     this.fixtures.set(t.key, st);
     return st;
   }

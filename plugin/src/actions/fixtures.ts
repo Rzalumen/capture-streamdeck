@@ -1,5 +1,5 @@
 import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type PropertyInspectorDidAppearEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
-import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, FIXTURE_KEYS, FIXTURE_SELECT_UUID, FIXTURE_DIALS } from "../catalog/fixtures.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, FIXTURE_SELECT_UUID, FIXTURE_DIALS, fixtureKey } from "../catalog/fixtures.js";
 import type { DialId } from "../fixtures/attrs.js";
 import { fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl } from "../lib/render.js";
 import { runSetupCommand, type SetupCommand } from "../fixtures/setupCommands.js";
@@ -7,6 +7,10 @@ import { rt } from "../runtime.js";
 import { draw, Flasher, logEvent } from "./util.js";
 
 const svc = () => rt.fixtures;
+/** Fixture activity that sends no DMX (fine mode, Setup, Status): restarts the idle timer while Deck Control is ON, never switches it ON. */
+const keepAlive = (why: string): void => {
+  if (rt.deck.on) rt.deck.activity(why);
+};
 
 // ------------------------------------------------------------------ Fixture: Select
 
@@ -104,19 +108,21 @@ export class FixtureAttrDial extends SingletonAction {
     logEvent(what, this.manifestId, undefined, `fine mode ${c.fine ? "on" : "off"}`);
     this.view(c);
   }
-  /** Push: home this attribute on the selected fixture(s) (a colour: every cell of it). */
+  /** Push (Handoff 21): fine mode on/off. */
   override onDialDown(ev: DialDownEvent): void {
     const c = this.ctxs.get(ev.action.id);
     if (!c) return;
-    const done = svc().home(this.dial);
-    const r = svc().readout(this.dial);
-    logEvent("Dial push", this.manifestId, undefined, done ? `home ${r.attr}${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "attribute missing or nothing selected: nothing done");
-    this.view(c);
+    keepAlive("fine mode");
+    this.toggleFine(c, "Dial push");
   }
-  /** Tap on the strip: fine mode on/off. (A long touch does nothing: homing is the knob press and the Home key.) */
+  /** Tap on the strip (Handoff 21): home this attribute on the selected fixture(s) (a colour: every cell of it). A long touch does nothing. */
   override onTouchTap(ev: TouchTapEvent): void {
     const c = this.ctxs.get(ev.action.id);
-    if (c && !ev.payload.hold) this.toggleFine(c, "Dial touch");
+    if (!c || ev.payload.hold) return;
+    const done = svc().home(this.dial);
+    const r = svc().readout(this.dial);
+    logEvent("Dial touch", this.manifestId, undefined, done ? `home ${r.attr}${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "attribute missing or nothing selected: nothing done");
+    this.view(c);
   }
 }
 
@@ -177,19 +183,22 @@ export class FixtureSlotDial extends SingletonAction {
     }, 400);
     c.rot.timer.unref?.();
   }
+  /** Push (Handoff 21): fine mode on/off. */
   override onDialDown(ev: DialDownEvent): void {
     const c = this.ctxs.get(ev.action.id);
     if (!c) return;
-    const done = svc().attrHome(this.slot);
-    const r = svc().attrReadout(this.slot);
-    logEvent("Dial push", this.manifestId, undefined, done ? `home "${r.param?.name}" (${r.page})${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "no channel here or nothing selected: nothing done");
+    keepAlive("fine mode");
+    c.fine = !c.fine;
+    logEvent("Dial push", this.manifestId, undefined, `fine mode ${c.fine ? "on" : "off"}`);
     this.view(c);
   }
+  /** Tap on the strip (Handoff 21): home that channel on the selected fixture(s). A long touch does nothing. */
   override onTouchTap(ev: TouchTapEvent): void {
     const c = this.ctxs.get(ev.action.id);
     if (!c || ev.payload.hold) return;
-    c.fine = !c.fine;
-    logEvent("Dial touch", this.manifestId, undefined, `fine mode ${c.fine ? "on" : "off"}`);
+    const done = svc().attrHome(this.slot);
+    const r = svc().attrReadout(this.slot);
+    logEvent("Dial touch", this.manifestId, undefined, done ? `home "${r.param?.name}" (${r.page})${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "no channel here or nothing selected: nothing done");
     this.view(c);
   }
 }
@@ -234,23 +243,27 @@ abstract class FixtureKey extends SingletonAction {
  */
 export class FixturesSetup extends FixtureKey {
   constructor() {
-    super(FIXTURE_KEY_UUIDS.setup, FIXTURE_KEYS[0]);
+    super(FIXTURE_KEY_UUIDS.setup, fixtureKey(FIXTURE_KEY_UUIDS.setup));
   }
   protected view(c: KeyCtx): void {
     const st = svc().status();
     const f = c.flasher.flash;
     draw(c.action, { icon: this.def.icon, label: this.def.title, badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
   }
+  /** Reads the show again: a brief connection while Deck Control is OFF (it does not switch it ON), a fresh list request while ON. */
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     c?.flasher.show({ text: "Reading…" }, 1500);
-    await svc().show.sync();
+    keepAlive("Setup key");
+    if (rt.deck.on) await svc().show.sync();
+    else await rt.link.briefSync("Setup key");
   }
 
-  /** The Property Inspector appeared (log only: tells us whether it ever shows up). */
+  /** The Property Inspector appeared: read the fixture list (brief connection while Deck Control is OFF). */
   override onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): void {
     rt.log.info("Fixtures: setup inspector opened");
+    if (!rt.deck.on && process.env.CAPTURE_TEST_NO_CITP !== "1") void rt.link.briefSync("Setup panel");
   }
 
   /** The Setup Property Inspector's messages: {cmd: "get" | "resync" | "set" | "clear" | "autofill", ...}. */
@@ -264,10 +277,10 @@ export class FixturesSetup extends FixtureKey {
   }
 }
 
-/** Fixtures: Release — stops all output (Stream_Terminated on every universe in use). */
+/** Fixtures: Release — kept for keys placed earlier (Handoff 21): switches Deck Control OFF (termination frames, LeaveShow, close). */
 export class FixturesRelease extends FixtureKey {
   constructor() {
-    super(FIXTURE_KEY_UUIDS.release, FIXTURE_KEYS[1]);
+    super(FIXTURE_KEY_UUIDS.release, fixtureKey(FIXTURE_KEY_UUIDS.release));
   }
   protected view(c: KeyCtx): void {
     const on = svc().engine.active;
@@ -276,8 +289,9 @@ export class FixturesRelease extends FixtureKey {
   }
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const was = svc().engine.universes;
-    await svc().release();
-    logEvent("Key press", this.manifestId, undefined, was.length ? `output released on universe(s) ${was.join(", ")}` : "nothing was sending");
+    const on = rt.deck.on;
+    await rt.deck.setOn(false, "Release key");
+    logEvent("Key press", this.manifestId, undefined, `${on ? "deck control OFF" : "deck control was already OFF"}${was.length ? `; output released on universe(s) ${was.join(", ")}` : ""}`);
     this.ctxs.get(ev.action.id)?.flasher.show({ text: was.length ? "Released" : "Idle" }, 1200);
   }
 }
@@ -285,7 +299,7 @@ export class FixturesRelease extends FixtureKey {
 /** Fixtures: Home Selected — the selected fixture(s) only, at full home (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
 export class FixturesHome extends FixtureKey {
   constructor() {
-    super(FIXTURE_KEY_UUIDS.home, FIXTURE_KEYS[2]);
+    super(FIXTURE_KEY_UUIDS.home, fixtureKey(FIXTURE_KEY_UUIDS.home));
   }
   protected view(c: KeyCtx): void {
     const f = c.flasher.flash;
@@ -302,7 +316,7 @@ export class FixturesHome extends FixtureKey {
 /** Fixtures: Status — show name, controllable count, output state. */
 export class FixturesStatus extends FixtureKey {
   constructor() {
-    super(FIXTURE_KEY_UUIDS.status, FIXTURE_KEYS[3]);
+    super(FIXTURE_KEY_UUIDS.status, fixtureKey(FIXTURE_KEY_UUIDS.status));
   }
   protected view(c: KeyCtx): void {
     const st = svc().status();
@@ -310,23 +324,42 @@ export class FixturesStatus extends FixtureKey {
   }
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     logEvent("Key press", this.manifestId, undefined, "read the show again");
-    await svc().show.sync();
+    keepAlive("Status key");
+    if (rt.deck.on) await svc().show.sync();
+    else await rt.link.briefSync("Status key");
   }
 }
 
-/** Fixtures: ◀ Page / Page ▶ — cycle the attribute pages for the Attribute dials. The title shows the current page. */
+/** Fixtures: ◀ Page / Page ▶ — cycle the attribute pages for the Attribute dials. The title is the current page's name ("Main", "Colour 1/2"). */
 export class FixturesPage extends FixtureKey {
   constructor(private dir: -1 | 1) {
-    super(dir < 0 ? FIXTURE_KEY_UUIDS.pagePrev : FIXTURE_KEY_UUIDS.pageNext, dir < 0 ? FIXTURE_KEYS[4] : FIXTURE_KEYS[5]);
+    super(dir < 0 ? FIXTURE_KEY_UUIDS.pagePrev : FIXTURE_KEY_UUIDS.pageNext, fixtureKey(dir < 0 ? FIXTURE_KEY_UUIDS.pagePrev : FIXTURE_KEY_UUIDS.pageNext));
   }
   protected view(c: KeyCtx): void {
     const name = svc().pageName();
     const f = c.flasher.flash;
-    draw(c.action, { icon: this.def.icon, label: name ? `${this.def.title}\n${name.replace(/ (\d+\/\d+)$/, "\n$1")}` : this.def.title, big: f?.text, tone: f?.tone, dim: !f && !name });
+    draw(c.action, { icon: this.def.icon, label: name ? name.replace(/ (\d+\/\d+)$/, "\n$1") : this.def.title, big: f?.text, tone: f?.tone, dim: !f && !name });
   }
   override onKeyDown(ev: KeyDownEvent): void {
     const ok = svc().stepPage(this.dir);
     logEvent("Key press", this.manifestId, undefined, ok ? `page: ${svc().pageName()} (${svc().pages().index + 1} of ${svc().pages().pages.length})` : "no controllable fixture selected: no pages");
     if (!ok) this.ctxs.get(ev.action.id)?.flasher.show({ text: "None", tone: "red" }, 1200);
+  }
+}
+
+/** Fixtures: Deck Control (Handoff 21) — ON (amber, "Deck ON") holds the CITP link and drives DMX; OFF (grey, "Deck OFF") frees Capture's Control Pane. */
+export class FixturesDeck extends FixtureKey {
+  constructor() {
+    super(FIXTURE_KEY_UUIDS.deck, fixtureKey(FIXTURE_KEY_UUIDS.deck));
+    rt.deck.onChange(() => this.redrawAll());
+  }
+  protected view(c: KeyCtx): void {
+    const on = rt.deck.on;
+    draw(c.action, { icon: this.def.icon, label: on ? "Deck ON" : "Deck OFF", active: on, tone: on ? "accent" : "normal", dim: !on });
+  }
+  override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
+    const to = !rt.deck.on;
+    logEvent("Key press", this.manifestId, undefined, `deck control ${to ? "ON" : "OFF"}`);
+    await rt.deck.toggle("Deck Control key");
   }
 }

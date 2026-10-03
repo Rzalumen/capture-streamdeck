@@ -1,0 +1,250 @@
+/**
+ * End-to-end (Handoff 21): Deck Control on the REAL built plugin (bin/plugin.js) with a stub CITP server, a synthetic library, a UDP
+ * listener for sACN and the fake Stream Deck application.
+ *  - OFF at start-up: one brief connection (PNam → EnterShow → list → FixtureIdentify → LeaveShow → close), then NO socket to the stub's
+ *    CITP port in the plugin process (read from /proc) and no sACN;
+ *  - ON by the Deck Control key, by a knob turn, by a fixture key; Setup / Status / the Setup panel only make brief connections;
+ *  - idle auto-OFF: termination frames, LeaveShow, close;
+ *  - resume after OFF → ON and after a plugin restart; push = fine, tap = home.
+ */
+import test, { after, before } from "node:test";
+import assert from "node:assert/strict";
+import dgram from "node:dgram";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { CAEX, UNIDENTIFIED, decodeMessage } from "../src/fixtures/citp.ts";
+import { parseDataPacket, type ParsedPacket } from "../src/fixtures/sacn.ts";
+import { FakeDeck, sleep } from "./fixtures/fake-deck.ts";
+import { StubCapture } from "./fixtures/stub-capture.ts";
+import { buildLibraryFile, buildModeBlock, buildObject, movingHead, startPatchStub, type CitpStub } from "./fixtures/synth.ts";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const pluginDir = path.resolve(here, "../com.rezabehjat.capture.sdPlugin");
+const U = "com.rezabehjat.capture";
+const A = {
+  setup: `${U}.fixtures.setup`,
+  status: `${U}.fixtures.status`,
+  home: `${U}.fixtures.home`,
+  deck: `${U}.fixtures.deck`,
+  next: `${U}.fixtures.page-next`,
+  select: `${U}.fixture.select`,
+  a1: `${U}.fixture.attr1`,
+  a2: `${U}.fixture.attr2`,
+  a3: `${U}.fixture.attr3`,
+};
+const FX = "aaaaaaaa-0000-0000-0000-0000000000e1";
+const MD = "bbbbbbbb-0000-0000-0000-0000000000e1";
+const INST = "00000000-0000-0000-0000-0000000000e1";
+const ADDR = 285;
+const ID = 100001;
+
+let deck = new FakeDeck();
+const capture = new StubCapture();
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "deck-e2e-"));
+const lib = path.join(tmp, "Library.c2z");
+const sacn = dgram.createSocket("udp4");
+const packets: ParsedPacket[] = [];
+let citp: CitpStub;
+
+const env = (): Record<string, string> => ({
+  CAPTURE_TEST_CITP_PORT: String(citp.port),
+  CAPTURE_TEST_CITP_TIMING: "300,1000,1500,800,200",
+  CAPTURE_TEST_LIBRARY: lib,
+  CAPTURE_TEST_SACN_PORT: String(sacn.address().port),
+  CAPTURE_TEST_SACN_NO_MULTICAST: "1",
+});
+
+before(async () => {
+  assert.ok(fs.existsSync(path.join(pluginDir, "bin/plugin.js")), "run `npm run build` first");
+  fs.writeFileSync(lib, buildLibraryFile({ [FX]: buildObject(buildModeBlock({ guid: MD, channels: movingHead() })) }));
+  citp = await startPatchStub([{ mfr: "Test", name: "Rogue R2X Wash", mode: "Std", channels: 14, channel: 203, fixtureGuid: FX, modeGuid: MD, instanceId: INST, position: [4, 6, 2], identifier: UNIDENTIFIED }], { showName: "DECK SHOW" });
+  sacn.on("message", (m) => {
+    try {
+      packets.push(parseDataPacket(m));
+    } catch {
+      /* not an E1.31 data packet */
+    }
+  });
+  await new Promise<void>((r) => sacn.bind(0, "127.0.0.1", r));
+  await capture.start();
+  await deck.start({ oscPort: capture.port, pluginDir, fixtures: path.join(here, "fixtures"), env: env() });
+});
+after(async () => {
+  await deck.stop();
+  capture.stop();
+  await citp.close();
+  sacn.close();
+});
+
+const codes = (from = 0): string[] =>
+  citp.received.slice(from).map((m) => {
+    const d = decodeMessage(m);
+    return d.layer === "CAEX" ? `CAEX:0x${d.code!.toString(16)}` : `${d.layer}:${m.toString("latin1", 20, 24)}`;
+  });
+const C = (c: number): string => `CAEX:0x${c.toString(16)}`;
+const lastSetupView = (): any => deck.received.filter((m) => m.event === "sendToPropertyInspector" && m.payload?.event === "setup").at(-1)?.payload;
+const slot = (p: ParsedPacket, channel: number): number => p.slots[ADDR - 1 + channel - 1];
+const pan16 = (p: ParsedPacket): number => (slot(p, 1) << 8) | slot(p, 2);
+const waitPacket = async (pred: (p: ParsedPacket) => boolean, what: string): Promise<ParsedPacket> => {
+  const n0 = packets.length;
+  return deck.waitFor(() => packets.slice(Math.max(0, n0 - 1)).reverse().find(pred), 3000, what);
+};
+const strip = (ctx: string): any => deck.lastFeedback(ctx);
+const waitStrip = (ctx: string, pred: (fb: any) => boolean, what: string): Promise<any> => deck.waitFor(() => (deck.lastFeedback(ctx) && pred(deck.lastFeedback(ctx)) ? deck.lastFeedback(ctx) : undefined), 3000, what);
+const waitTitle = (ctx: string, t: string): Promise<unknown> => deck.waitFor(() => deck.sent(ctx, "setTitle").at(-1)?.payload.title === t || undefined, 4000, `title ${JSON.stringify(t)}`);
+
+/**
+ * The plugin process's TCP connections to the stub's CITP port, read from /proc (null where /proc is not available).
+ * Matches the process's socket inodes against /proc/net/tcp entries whose REMOTE port is the stub's port.
+ */
+function citpSocketsOfPlugin(): number | null {
+  const pid = deck.proc?.pid;
+  if (!pid || !fs.existsSync(`/proc/${pid}/fd`) || !fs.existsSync("/proc/net/tcp")) return null;
+  const inodes = new Set<string>();
+  for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) {
+    try {
+      const m = /^socket:\[(\d+)\]$/.exec(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (m) inodes.add(m[1]);
+    } catch {
+      /* closed meanwhile */
+    }
+  }
+  let n = 0;
+  for (const f of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    if (!fs.existsSync(f)) continue;
+    for (const line of fs.readFileSync(f, "utf8").split("\n").slice(1)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length < 10) continue;
+      const remotePort = parseInt(c[2].split(":")[1], 16);
+      if (remotePort === citp.port && inodes.has(c[9])) n++;
+    }
+  }
+  return n;
+}
+
+test("start-up: Deck Control OFF — one brief connection (PNam → EnterShow → list → FixtureIdentify → LeaveShow → close), then no CITP socket in the plugin process and no sACN", async () => {
+  deck.willAppear(A.deck, "deckkey", {});
+  await waitTitle("deckkey", "Deck OFF");
+  await deck.waitFor(() => /Fixtures: brief sync \(start-up\): \d+ ms, 1 fixture\(s\), connection closed/.test(deck.logText()) || undefined, 8000, "brief sync logged with its duration");
+  assert.deepEqual(codes(), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify), C(CAEX.LeaveShow)]);
+  assert.deepEqual(citp.identifies, [[[INST, ID]]]);
+  await deck.waitFor(() => citp.clients.size === 0 || undefined, 2000, "stub: connection closed");
+  const socks = citpSocketsOfPlugin();
+  if (process.platform === "linux") assert.notEqual(socks, null, "/proc is readable here");
+  if (socks !== null) assert.equal(socks, 0, "no TCP socket to the CITP port in the plugin process (/proc)");
+  const n = citp.received.length;
+  await sleep(1800); // longer than the session's list period (1.5 s) and back-off: nothing may happen while OFF
+  assert.equal(citp.received.length, n, "no reconnect, no list requests while OFF");
+  assert.equal(packets.length, 0, "no UDP to the sACN port");
+  assert.ok(deck.lastImageRaw("deckkey").length > 0);
+});
+
+test("Setup panel / Setup key / Status key while OFF: a brief connection each (Deck Control stays OFF); the panel shows the Deck Control state and saves the idle time", async () => {
+  deck.willAppear(A.setup, "setup", {});
+  deck.inspectorAppeared(A.setup, "setup");
+  await deck.waitFor(() => /brief sync \(Setup panel\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Setup panel");
+  deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST, universe: 1, address: ADDR });
+  const v = (await deck.waitFor(() => (lastSetupView()?.view?.controllable === 1 ? lastSetupView() : undefined), 3000, "address saved")).view;
+  assert.deepEqual(v.deck, { on: false, idleSeconds: 120 });
+  deck.keyDown(A.setup, "setup");
+  await deck.waitFor(() => /brief sync \(Setup key\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Setup key");
+  deck.willAppear(A.status, "st", {});
+  deck.keyDown(A.status, "st");
+  await deck.waitFor(() => /brief sync \(Status key\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Status key");
+  assert.doesNotMatch(deck.logText(), /deck control ON/, "none of these switches Deck Control ON");
+  await deck.waitFor(() => citp.clients.size === 0 || undefined, 2000, "closed again");
+  assert.equal(citp.identifies.length, 1, "identified once: later brief connections find the identifier");
+  assert.equal(packets.length, 0);
+  // idle time: validated and saved
+  deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 99999 });
+  await deck.waitFor(() => /0 to 3600/.test(lastSetupView()?.error ?? "") || undefined, 3000, "range error");
+  deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 1 });
+  await deck.waitFor(() => (lastSetupView()?.view?.deck?.idleSeconds === 1 && !lastSetupView().error) || undefined, 3000, "idle 1 s saved");
+  assert.deepEqual((deck.globals as any).fixtureDeck, { idleSeconds: 1 });
+});
+
+test("ON by a knob turn: Deck Control switches ON, the knob drives the light at once, the persistent session connects; idle 1 s → OFF: termination ×3, LeaveShow, close", async () => {
+  deck.willAppear(A.select, "sel", {}, "Encoder");
+  for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
+  await waitStrip("a1", (f) => f.name.value === "Pan", "Main page: Pan");
+  const leaves = citp.of(CAEX.LeaveShow).length;
+  deck.dialRotate(A.a1, "a1", 10);
+  const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.6 * 65535), "pan 60 %");
+  assert.equal(slot(p, 6), 255, "intensity starts at home (never touched in this show)");
+  await waitTitle("deckkey", "Deck ON");
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "persistent session");
+  assert.match(deck.logText(), /Fixtures: deck control ON \(Attribute 1 dial\)/);
+  if (process.platform === "linux") assert.equal(citpSocketsOfPlugin(), 1, "the /proc check does see the connection while ON (so its 0 while OFF means something)");
+  // no further activity: after 1 s it switches OFF by itself
+  await deck.waitFor(() => (citp.of(CAEX.LeaveShow).length > leaves && citp.clients.size === 0) || undefined, 5000, "idle OFF: LeaveShow + close");
+  const term = packets.filter((x) => x.terminated);
+  assert.equal(term.length, 3, "Stream_Terminated ×3");
+  assert.equal(pan16(term[0]), Math.round(0.6 * 65535), "the termination frames carry the last values");
+  await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): output terminated, LeaveShow sent, CITP connection closed/.test(deck.logText()) || undefined, 3000, "OFF logged");
+  await waitTitle("deckkey", "Deck OFF");
+  const socks = citpSocketsOfPlugin();
+  if (socks !== null) assert.equal(socks, 0, "after OFF no socket to the CITP port stays open (/proc)");
+  const n = packets.length;
+  await sleep(600);
+  assert.equal(packets.length, n, "no DMX while OFF");
+});
+
+test("resume after OFF → ON: the next turn continues from 60 % (no snap to home); push = fine, tap = home that channel; ON/OFF by the Deck Control key; ON by a fixture key", async () => {
+  deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 0 }); // never, for the rest of the file
+  await deck.waitFor(() => lastSetupView()?.view?.deck?.idleSeconds === 0 || undefined, 3000, "idle off");
+  assert.equal(strip("a1").value.value, "~60.0", "OFF: the strip shows the remembered value");
+  deck.dialRotate(A.a1, "a1", 5);
+  await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.65 * 65535), "65 %: resumed from 60 %, not from 50 %");
+  // push = fine mode
+  deck.dialDown(A.a1, "a1");
+  await waitStrip("a1", (f) => f.mark.value.includes("FINE"), "fine on");
+  deck.dialRotate(A.a1, "a1", 1);
+  await waitPacket((x) => pan16(x) === Math.round(0.651 * 65535), "fine step 0.1 %");
+  deck.dialDown(A.a1, "a1");
+  await waitStrip("a1", (f) => !f.mark.value.includes("FINE"), "fine off");
+  // tap = home that channel
+  deck.dialRotate(A.a3, "a3", -40); // dimmer 60 %
+  await waitPacket((x) => slot(x, 6) === Math.round(0.6 * 255), "dimmer 60 %");
+  deck.touchTap(A.a1, "a1", false);
+  await waitPacket((x) => pan16(x) === 0x8000 && slot(x, 6) === Math.round(0.6 * 255), "pan home, dimmer kept");
+  deck.dialRotate(A.a1, "a1", 20); // pan 70 % before the restart test
+  await waitPacket((x) => pan16(x) === Math.round(0.7 * 65535), "pan 70 %");
+  // the key: OFF
+  deck.keyDown(A.deck, "deckkey");
+  await waitTitle("deckkey", "Deck OFF");
+  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "OFF by key: closed");
+  assert.match(deck.logText(), /deck control OFF \(Deck Control key\)/);
+  // a fixture key switches it ON (Home Selected), and homes the light
+  deck.willAppear(A.home, "home", {});
+  deck.keyDown(A.home, "home");
+  await waitTitle("deckkey", "Deck ON");
+  await waitPacket((x) => !x.terminated && pan16(x) === 0x8000 && slot(x, 6) === 255, "Home Selected after ON");
+  assert.match(deck.logText(), /deck control ON \(Home Selected key\)/);
+  deck.dialRotate(A.a1, "a1", 25); // 75 %
+  await waitPacket((x) => pan16(x) === Math.round(0.75 * 65535), "pan 75 %");
+  deck.keyDown(A.deck, "deckkey"); // OFF: the values are saved
+  await waitTitle("deckkey", "Deck OFF");
+  await deck.waitFor(() => (deck.globals as any).fixtureValues?.["DECK SHOW"]?.[INST]?.ch0 === 0.75 || undefined, 3000, "values saved in the global settings");
+  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "closed");
+});
+
+test("resume after a plugin restart: a new plugin process starts OFF and the first turn continues from the stored 75 %", async () => {
+  const globals = JSON.parse(JSON.stringify(deck.globals));
+  await deck.stop();
+  await sleep(500);
+  deck = new FakeDeck();
+  deck.globals = globals;
+  packets.length = 0;
+  await deck.start({ oscPort: capture.port, pluginDir, fixtures: path.join(here, "fixtures"), env: env() });
+  await deck.waitFor(() => /brief sync \(start-up\)/.test(deck.logText()) || undefined, 8000, "brief sync after restart");
+  deck.willAppear(A.a1, "a1", {}, "Encoder");
+  await waitStrip("a1", (f) => f.value.value === "~75.0", "the strip shows the stored value before any touch");
+  deck.dialRotate(A.a1, "a1", -5);
+  const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.7 * 65535), "70 %: resumed from 75 %");
+  assert.equal(slot(p, 6), 255, "dimmer: last value sent before the restart was 100 % (Home Selected)");
+  deck.willAppear(A.deck, "deckkey2", {});
+  await waitTitle("deckkey2", "Deck ON");
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "ON after the restart");
+});

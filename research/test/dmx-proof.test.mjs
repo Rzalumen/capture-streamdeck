@@ -440,3 +440,34 @@ test('dmx-proof --color-full / --set: plan lists them, the right slots (1-based 
     stub.received.forEach((m) => assert.ok(isAllowedOutgoing(m)));
   } finally { cleanup(dir, stub); }
 });
+
+test('dmx-proof --pap: each live level frame is followed by a 0xDD frame (same CID, universe, sequence counted together): 100 on the fixture, 0 elsewhere; termination is level frames only', async () => {
+  const { dir, lib } = setup();
+  const stub = await startPatchStub([noPatch(), noPatch({ name: 'Spinner 2' })]);
+  const udp = await listener();
+  try {
+    const r = await run(['--fixture', '0', '--universe', '1', '--address', '285', '--color-full', '--pap', '--seconds', '0.5', '--no-multicast'], { stub, lib, dir, udp });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /--pap: every level frame \(START code 0x00\) is followed by a per-address-priority frame \(START code 0xDD/);
+    assert.match(r.stdout, /priority 100 on slots 285\.\.292 \(this fixture\), 0 = "ignore my level" on all other 504 slots/);
+    assert.match(r.stdout, /etclabs\.github\.io\/sACNDocs/);
+    assert.match(r.stdout, /per-address priority \(0xDD\): \d+ frames sent/);
+    await new Promise((s) => setTimeout(s, 200));
+    const pk = decode(udp.got);
+    const lv = pk.filter((p) => p.startCode === 0x00);
+    const dd = pk.filter((p) => p.startCode === 0xdd);
+    assert.ok(lv.length > 60 && dd.length > 60);
+    const liveLv = lv.filter((p) => !p.terminated);
+    assert.equal(dd.length, liveLv.length, 'one 0xDD frame per live level frame');
+    assert.ok(dd.every((p) => !p.terminated), 'no termination on the 0xDD frames');
+    assert.deepEqual(lv.slice(-3).map((p) => p.terminated), [true, true, true]);
+    for (let i = 0; i < pk.length - 3; i += 2) {
+      assert.equal(pk[i].startCode, 0x00, `frame ${i} is levels`);
+      assert.equal(pk[i + 1].startCode, 0xdd, `frame ${i + 1} is priorities`);
+      assert.equal(pk[i + 1].sequence, (pk[i].sequence + 1) & 0xff, 'one sequence counter for both');
+    }
+    for (const p of pk) { assert.ok(p.cid.equals(pk[0].cid)); assert.equal(p.universe, 1); assert.equal(p.priority, 100); }
+    for (const p of dd) for (let k = 0; k < 512; k++) assert.equal(p.slots[k], k >= 284 && k < 292 ? 100 : 0, `0xDD slot ${k + 1}`);
+    stub.received.forEach((m) => assert.ok(isAllowedOutgoing(m)));
+  } finally { cleanup(dir, udp, stub); }
+});

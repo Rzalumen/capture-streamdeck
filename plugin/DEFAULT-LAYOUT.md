@@ -31,7 +31,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | Patch & Focus | the Patch & Focus category |
 | Windows | **Tabs** (6) first, then the Navigate and Window categories |
 | File | the File category |
-| Fixtures | one page (v0.6): **Setup · Release · Home Selected · Status · ◀ Page · Page ▶** (the Fixtures: keys). Dials: **Select · Attribute 1 · Attribute 2 · Attribute 3**; the attribute pages (Position, Intensity, Colour, Beam, Shutters, Gobo/Prism/FX, Other — built from the selected fixture's channels) are cycled with ◀ Page / Page ▶, not with profile pages |
+| Fixtures | one page (v0.7): **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶** (the Fixtures: keys; Release is no longer in the profile). Dials: **Select · Attribute 1 · Attribute 2 · Attribute 3**; the attribute pages (Main, Colour, Beam, Shutters, Gobo/FX, Strobe/Shutter, Other — built from the selected fixture's channels) are cycled with ◀ Page / Page ▶, not with profile pages |
 
 Camera Position 1–5 and Store Modifier share one page (Camera › Positions ▸), so holding Store Modifier while pressing a
 position works without changing page. Edit has four pages (25 commands, including the four *Edit › Model* items).
@@ -92,7 +92,7 @@ position works without changing page. Edit has four pages (25 commands, includin
     dials: Exposure · Ambient · Bloom · White Balance
     - **file/2** — Export Project · Export Model · Export Fixture Data · Export Focus Sheets · Export Documentation · Export Presentation   
       dials: Exposure · Ambient · Bloom · White Balance
-  - **fixtures** — Setup · Release · Home Selected · Status · ◀ Page · Page ▶   
+  - **fixtures** — Setup · Deck OFF · Home Selected · Status · ◀ Page · Page ▶   
     dials: Select · Attribute 1 · Attribute 2 · Attribute 3
 
 ## Changing it
