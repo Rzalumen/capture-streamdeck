@@ -10,7 +10,7 @@ const svc = () => rt.fixtures;
 
 // ------------------------------------------------------------------ Fixture: Select
 
-/** Rotate: step through the controllable fixtures. Push or touch: single ↔ all of this type. */
+/** Shows what the deck is driving (Capture's selection). Rotate: pick one controllable fixture by hand until Capture's next click. */
 export class FixtureSelect extends SingletonAction {
   override readonly manifestId = FIXTURE_SELECT_UUID;
   private dials = new Map<string, DialAction>();
@@ -21,9 +21,7 @@ export class FixtureSelect extends SingletonAction {
   }
   private redraw(): void {
     const v = svc().selection.view();
-    const list = svc().controllables();
-    const index = v.primary ? list.findIndex((c) => c.fixture.key === v.primary!.fixture.key) : 0;
-    const fb = selectStripFeedback({ line1: v.line1, line2: v.line2, mode: v.mode, index: Math.max(0, index), count: list.length });
+    const fb = selectStripFeedback({ line1: v.line1, line2: v.line2, note: v.note, mark: v.mark, count: v.count });
     for (const d of this.dials.values()) d.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
   }
   override onWillAppear(ev: WillAppearEvent): void {
@@ -39,16 +37,6 @@ export class FixtureSelect extends SingletonAction {
     const v = svc().selection.view();
     logEvent("Dial rotate", this.manifestId, undefined, `${ev.payload.ticks > 0 ? "+" : ""}${ev.payload.ticks} → ${v.line1} · ${v.line2}`);
   }
-  private toggle(what: string): void {
-    svc().toggleSelectMode();
-    logEvent(what, this.manifestId, undefined, `selection mode ${svc().selection.mode}`);
-  }
-  override onDialDown(_ev: DialDownEvent): void {
-    this.toggle("Dial push");
-  }
-  override onTouchTap(_ev: TouchTapEvent): void {
-    this.toggle("Dial touch");
-  }
 }
 
 // ------------------------------------------------------------------ Fixture: Pan / Tilt / ...
@@ -59,7 +47,7 @@ interface Ctx {
   rot: { ticks: number; events: number; timer?: NodeJS.Timeout };
 }
 
-/** One attribute dial: rotate ±1 %/tick (16-bit aware), push or touch = fine (0.1 %), long touch = home. No-op with "—" when the fixture lacks it. */
+/** One attribute dial: rotate ±1 %/tick (16-bit aware), push = home this attribute on the selected fixture(s), tap the strip = fine (0.1 %). No-op with "—" when the fixture lacks it. */
 export class FixtureAttrDial extends SingletonAction {
   override readonly manifestId: string;
   private ctxs = new Map<string, Ctx>();
@@ -78,7 +66,7 @@ export class FixtureAttrDial extends SingletonAction {
   }
   private view(c: Ctx): void {
     const r = svc().readout(this.dial);
-    const fb = fixtureStripFeedback({ name: r.label, value: r.value, fine: c.fine, all: r.all, untouched: !r.touched });
+    const fb = fixtureStripFeedback({ name: r.label, value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched });
     c.action.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
   }
 
@@ -105,7 +93,7 @@ export class FixtureAttrDial extends SingletonAction {
     if (c.rot.timer) clearTimeout(c.rot.timer);
     c.rot.timer = setTimeout(() => {
       const r = svc().readout(this.dial);
-      logEvent("Dial rotate", this.manifestId, { fine: c.fine }, `${c.rot.events} events, ${c.rot.ticks > 0 ? "+" : ""}${c.rot.ticks} ticks → ${r.attr ?? "(attribute missing)"}=${r.value === null ? "—" : `${(r.value * 100).toFixed(1)}%`}${r.all ? " (all of type)" : ""}`);
+      logEvent("Dial rotate", this.manifestId, { fine: c.fine }, `${c.rot.events} events, ${c.rot.ticks > 0 ? "+" : ""}${c.rot.ticks} ticks → ${r.attr ?? "(attribute missing)"}=${r.value === null ? "—" : `${(r.value * 100).toFixed(1)}%`}${r.multi > 1 ? ` (${r.multi} fixtures)` : ""}`);
       c.rot = { ticks: 0, events: 0 };
     }, 400);
     c.rot.timer.unref?.();
@@ -116,18 +104,19 @@ export class FixtureAttrDial extends SingletonAction {
     logEvent(what, this.manifestId, undefined, `fine mode ${c.fine ? "on" : "off"}`);
     this.view(c);
   }
+  /** Push: home this attribute on the selected fixture(s) (a colour: every cell of it). */
   override onDialDown(ev: DialDownEvent): void {
     const c = this.ctxs.get(ev.action.id);
-    if (c) this.toggleFine(c, "Dial push");
+    if (!c) return;
+    const done = svc().home(this.dial);
+    const r = svc().readout(this.dial);
+    logEvent("Dial push", this.manifestId, undefined, done ? `home ${r.attr}${r.multi > 1 ? ` on ${r.multi} fixtures` : ""}` : "attribute missing or nothing selected: nothing done");
+    this.view(c);
   }
+  /** Tap on the strip: fine mode on/off. (A long touch does nothing: homing is the knob press and the Home key.) */
   override onTouchTap(ev: TouchTapEvent): void {
     const c = this.ctxs.get(ev.action.id);
-    if (!c) return;
-    if (ev.payload.hold) {
-      const done = svc().home(this.dial);
-      logEvent("Dial long touch", this.manifestId, undefined, done ? "home value" : "attribute missing: nothing done");
-      this.view(c);
-    } else this.toggleFine(c, "Dial touch");
+    if (c && !ev.payload.hold) this.toggleFine(c, "Dial touch");
   }
 }
 
@@ -166,8 +155,8 @@ abstract class FixtureKey extends SingletonAction {
 }
 
 /**
- * Fixtures: Setup — pressing it opens the Setup page in the default browser (a local page, loopback only, token in the address).
- * The Property Inspector shows the same table (same commands, same storage and checks).
+ * Fixtures: Setup. The address table lives in this key's panel in the Stream Deck app (Property Inspector). Pressing the key only
+ * reads the show again (asks Capture for a fresh FixtureList).
  */
 export class FixturesSetup extends FixtureKey {
   constructor() {
@@ -176,22 +165,13 @@ export class FixturesSetup extends FixtureKey {
   protected view(c: KeyCtx): void {
     const st = svc().status();
     const f = c.flasher.flash;
-    draw(c.action, { icon: this.def.icon, label: st.controllable ? this.def.title : "Setup ▸ press", badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
+    draw(c.action, { icon: this.def.icon, label: this.def.title, badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
   }
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
-    logEvent("Key press", this.manifestId, undefined, "open the setup page in the browser");
-    // read the show if it has not been read (the page also shows "Re-read show")
-    if (svc().show.status === "idle" || svc().show.status === "error") void svc().show.sync();
-    try {
-      const url = await rt.setupServer.url();
-      await rt.openUrl(url);
-      rt.log.info(`Fixtures: setup page opened in the browser (http://127.0.0.1:${rt.setupServer.port}/)`);
-      c?.flasher.show({ text: "Opening…" }, 1500);
-    } catch (e) {
-      rt.log.error(`Fixtures: could not open the setup page: ${(e as Error).message}`);
-      c?.flasher.show({ text: "Error", tone: "red" }, 2500);
-    }
+    logEvent("Key press", this.manifestId, undefined, "read the show again");
+    c?.flasher.show({ text: "Reading…" }, 1500);
+    await svc().show.sync();
   }
 
   /** The Property Inspector appeared (log only: tells us whether it ever shows up). */
@@ -228,7 +208,7 @@ export class FixturesRelease extends FixtureKey {
   }
 }
 
-/** Fixtures: Home Selected — pan/tilt 50 %, intensity 100 % on the selection. */
+/** Fixtures: Home Selected — the selected fixture(s) only, at full home (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
 export class FixturesHome extends FixtureKey {
   constructor() {
     super(FIXTURE_KEY_UUIDS.home, FIXTURE_KEYS[2]);
@@ -240,7 +220,7 @@ export class FixturesHome extends FixtureKey {
   override onKeyDown(ev: KeyDownEvent): void {
     const ok = svc().homeSelected();
     const v = svc().selection.view();
-    logEvent("Key press", this.manifestId, undefined, ok ? `home: ${v.line1} · ${v.line2}` : "no controllable fixture or no pan/tilt/intensity: nothing done");
+    logEvent("Key press", this.manifestId, undefined, ok ? `home: ${v.line1} · ${v.line2}` : "no controllable fixture selected: nothing done");
     if (!ok) this.ctxs.get(ev.action.id)?.flasher.show({ text: "None", tone: "red" }, 1200);
   }
 }

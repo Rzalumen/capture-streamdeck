@@ -15,12 +15,11 @@ import { StoreModifier } from "./lib/storeModifier.js";
 import { ValueStore } from "./lib/valueStore.js";
 import { GlobalSettings } from "./lib/globals.js";
 import { DmxEngine, UdpTransport } from "./fixtures/engine.js";
-import { readShow } from "./fixtures/citpSync.js";
+import { CitpLink } from "./fixtures/link.js";
+import { CitpSession, timingFromEnv } from "./fixtures/citpSession.js";
 import { SACN_PORT } from "./fixtures/sacn.js";
 import { FixtureService } from "./fixtures/service.js";
 import { SetupStore } from "./fixtures/setup.js";
-import { runSetupCommand } from "./fixtures/setupCommands.js";
-import { SetupServer } from "./fixtures/setupServer.js";
 import { ShowModel } from "./fixtures/show.js";
 import type { JsonObject } from "@elgato/utils";
 
@@ -57,13 +56,21 @@ class Runtime {
   });
 
   /**
-   * Fixture control (v0.4): read-only CITP show sync, library channel lists, per-show address setup, DMX over sACN. Nothing is sent
-   * until the user touches a fixture. Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
-   * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 skips the automatic show read.
+   * Fixture control (v0.5): a persistent CITP session follows Capture's show and selection, identifies fixtures, reads patch changes;
+   * library channel lists, per-show address setup, DMX over sACN. Nothing is sent to DMX until the user touches a fixture.
+   * Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_CITP_TIMING / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
+   * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 does not start the CITP session.
    */
+  readonly citp = new CitpSession({
+    host: process.env.CAPTURE_TEST_CITP_PORT ? "127.0.0.1" : undefined,
+    port: Number(process.env.CAPTURE_TEST_CITP_PORT) || undefined,
+    timing: timingFromEnv(process.env.CAPTURE_TEST_CITP_TIMING),
+    log: (l) => log.info(`CITP: ${l}`),
+  });
   readonly fixtures = new FixtureService(
     new ShowModel({
-      sync: () => readShow({ host: process.env.CAPTURE_TEST_CITP_PORT ? "127.0.0.1" : undefined, port: Number(process.env.CAPTURE_TEST_CITP_PORT) || undefined, log: (l) => log.info(`CITP: ${l}`) }),
+      request: () => this.citp.requestList(),
+      reconnect: () => this.citp.reconnectNow(),
       libraryPath: process.env.CAPTURE_TEST_LIBRARY || undefined,
       log: (l) => log.info(`Fixtures: ${l}`),
     }),
@@ -71,29 +78,7 @@ class Runtime {
     new DmxEngine({ transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1") }),
     (l) => log.info(`Fixtures: ${l}`),
   );
-
-  /**
-   * The Setup page (v0.4.1): a local web page for entering universe/address per fixture, served on 127.0.0.1 only with a random token.
-   * It starts listening on the first press of Fixtures: Setup (not before) and uses the same commands as the Property Inspector.
-   */
-  readonly setupServer = new SetupServer({
-    uiDir: fileURLToPath(new URL("../ui/", import.meta.url)),
-    handle: async (m) => {
-      const error = await runSetupCommand(this.fixtures, m);
-      return { view: this.fixtures.setupView(), error };
-    },
-    log: (l) => log.info(`Fixtures: ${l}`),
-  });
-
-  /** Opens a URL in the default browser (macOS `open`). */
-  openUrl(url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      execFile(process.env.CAPTURE_TEST_OPEN || "/usr/bin/open", [url], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
+  readonly link = new CitpLink(this.citp, this.fixtures.show, this.fixtures, (l) => log.info(`Fixtures: ${l}`));
 
   /** Dial sends: at most 30 msg/s per (view, property), always the newest value. */
   readonly limiter = new LatestValueLimiter<{ view: ViewId; prop: string; v: number }>((_k, s) => {
@@ -131,16 +116,8 @@ class Runtime {
     await Promise.race([this.values.init(), new Promise((r) => setTimeout(r, 4000))]);
     await Promise.race([this.fixtures.setup.load(), new Promise((r) => setTimeout(r, 4000))]);
     this.installExitHandlers();
-    // Show read (CITP, read-only): at start, and again whenever Capture becomes reachable and no show has been read yet.
-    if (process.env.CAPTURE_TEST_NO_CITP !== "1") {
-      void this.fixtures.show.sync();
-      let was = this.monitor.state.connected;
-      this.monitor.on("change", () => {
-        const now = this.monitor.state.connected;
-        if (now && !was && this.fixtures.show.status !== "ok") void this.fixtures.show.sync();
-        was = now;
-      });
-    }
+    // CITP session (stays connected, reconnects with back-off). Nothing goes to DMX from here.
+    if (process.env.CAPTURE_TEST_NO_CITP !== "1") this.link.start();
 
     // Accessibility side (read-only, background): one summary line per minute, and the menu tree cached per Capture PID.
     this.ax.startSummary();
@@ -167,6 +144,7 @@ class Runtime {
         if (exiting) return;
         exiting = true;
         log.info(`${sig}: releasing DMX output`);
+        void this.link.stop().catch(() => undefined);
         void this.fixtures.engine.release().finally(() => process.exit(0));
         setTimeout(() => process.exit(0), 1500).unref();
       });

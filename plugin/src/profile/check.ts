@@ -15,7 +15,7 @@ interface ActionJson {
   UUID?: string;
   Plugin?: { UUID?: string };
   Settings?: Record<string, unknown>;
-  States?: { Image?: string; Title?: string }[];
+  States?: { Image?: string; Title?: string; ShowTitle?: boolean }[];
 }
 interface PageJson {
   Controllers?: { Type: string; Actions: Record<string, ActionJson> }[];
@@ -137,6 +137,13 @@ export function checkProfile(files: Map<string, Buffer | null>, manifest: Manife
         if (m && a.Name !== m.Name) err(`${at} ${pos}: Name "${a.Name}" differs from the manifest's "${m.Name}"`);
         if (m && (m.Controllers.includes("Encoder") ? enc[pos] !== a : pad[pos] !== a)) err(`${at} ${pos}: ${u} is on the wrong controller`);
         if (m && a.States?.length !== m.States.length) err(`${at} ${pos}: ${u} has ${a.States?.length} states, the manifest ${m.States.length}`);
+      }
+      // v0.5: every KEY shows its name as Stream Deck title text (the plugin no longer draws labels into key images)
+      if (pad[pos] === a) {
+        for (const s of a.States ?? []) {
+          if (s.ShowTitle !== true) err(`${at} ${pos}: key ${u} does not show its title (ShowTitle must be true)`);
+          if (!s.Title) err(`${at} ${pos}: key ${u} has no title text`);
+        }
       }
       if (!a.ActionID || !LOWER.test(a.ActionID)) err(`${at} ${pos}: bad ActionID`);
       else if (seenAction.has(a.ActionID)) err(`${at} ${pos}: duplicate ActionID`);

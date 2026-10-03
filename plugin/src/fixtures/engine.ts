@@ -164,6 +164,34 @@ export class DmxEngine {
     this.emit();
   }
 
+  /** Relative move: each target's attribute becomes `fn(its own current value)` (default value if untouched). One emit for all. */
+  setEach(targets: Target[], a: AttrId, fn: (current: number) => number): void {
+    const hit = targets.filter((t) => t.map.attrs[a]?.length);
+    if (!hit.length) return;
+    for (const t of hit) {
+      const st = this.touch(t);
+      st.values[a] = Math.min(1, Math.max(0, fn(st.values[a] ?? homeValue(a))));
+    }
+    this.start();
+    this.emit();
+  }
+
+  /** Home key: these fixtures go back to their first-touch defaults (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
+  home(targets: Target[]): void {
+    if (!targets.length) return;
+    for (const t of targets) {
+      const st = this.touch(t);
+      st.values = defaultValues(t.map);
+    }
+    this.start();
+    this.emit();
+  }
+
+  /** Where each touched fixture is currently sent (key -> universe/address). */
+  touchedAddresses(): Map<string, { universe: number; address: number }> {
+    return new Map([...this.fixtures].map(([k, f]) => [k, { universe: f.universe, address: f.address }]));
+  }
+
   /** Set several attributes at once (Home Selected). Only attributes a fixture has are written; if none apply, nothing is touched. */
   setMany(targets: Target[], values: Partial<Record<AttrId, number>>): void {
     let any = false;

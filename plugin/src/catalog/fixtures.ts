@@ -1,4 +1,4 @@
-/** The v0.4 fixture actions: Select + attribute dials ("Fixture: …") and the four "Fixtures: …" keys. UUIDs, names, icons. */
+/** The fixture actions (v0.4, v0.5): Select + attribute dials ("Fixture: …") and the four "Fixtures: …" keys. UUIDs, names, icons. */
 import type { DialId } from "../fixtures/attrs.js";
 import { BASE_UUID } from "../lib/named.js";
 
@@ -20,7 +20,7 @@ const dial = (id: DialId, label: string, icon: string, what: string): FixtureDia
   name: `Fixture: ${label}`,
   label,
   icon,
-  tooltip: `Turn to change ${what} of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.`,
+  tooltip: `Turn to change ${what} of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.`,
 });
 export const FIXTURE_DIALS: FixtureDialDef[] = [
   dial("pan", "Pan", "fx-pan", "Pan"),
@@ -38,7 +38,7 @@ export const FIXTURE_SELECT = {
   uuid: FIXTURE_SELECT_UUID,
   name: "Fixture: Select",
   icon: "fx-select",
-  tooltip: "Turn to step through the fixtures that are set up (Fixtures: Setup) and parsed safely. Push or touch: single fixture ↔ all of this type.",
+  tooltip: "Shows the fixture(s) selected in Capture (the deck follows Capture's selection). Turn to pick one fixture by hand; Capture's next click overrides it.",
 };
 
 export const FIXTURE_KEY_UUIDS = {
@@ -48,9 +48,9 @@ export const FIXTURE_KEY_UUIDS = {
   status: `${BASE_UUID}.fixtures.status`,
 } as const;
 export const FIXTURE_KEYS = [
-  { uuid: FIXTURE_KEY_UUIDS.setup, name: "Fixtures: Setup", title: "Setup", icon: "fx-setup", pi: true, tooltip: "Press to open the Setup page in your browser: the show read from Capture (read-only) and the universe and DMX address of each fixture. Saved as you type. (The same table is in this key's inspector.)" },
+  { uuid: FIXTURE_KEY_UUIDS.setup, name: "Fixtures: Setup", title: "Setup", icon: "fx-setup", pi: true, tooltip: "Press to read the show from Capture again. The universe and DMX address of each fixture are in this key's inspector panel (addresses re-patched in Capture are picked up automatically)." },
   { uuid: FIXTURE_KEY_UUIDS.release, name: "Fixtures: Release", title: "Release", icon: "fx-release", pi: false, tooltip: "Stops all DMX output: Stream_Terminated is sent on every universe in use." },
-  { uuid: FIXTURE_KEY_UUIDS.home, name: "Fixtures: Home Selected", title: "Home Selected", icon: "fx-home", pi: false, tooltip: "Pan and tilt 50 %, intensity 100 % on the selected fixture(s)." },
+  { uuid: FIXTURE_KEY_UUIDS.home, name: "Fixtures: Home Selected", title: "Home Selected", icon: "fx-home", pi: false, tooltip: "Puts the selected fixture(s) (only) at full home: pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0." },
   { uuid: FIXTURE_KEY_UUIDS.status, name: "Fixtures: Status", title: "Status", icon: "fx-status", pi: false, tooltip: "Shows the show name, how many fixtures are controllable and whether DMX output is active. Press to read the show again." },
 ] as const;
 

@@ -31,43 +31,9 @@ const KEY = 144;
 /** Rough text width (px) at font-size 1 for bold UI text; conservative on purpose. */
 const charW = 0.58;
 
-export interface LabelLayout {
-  lines: string[];
-  size: number;
-}
-
-/** Fit a label into `width` px: try one line at 22→14 px, then wrap on spaces onto two lines. */
-export function layoutLabel(label: string, width = 128): LabelLayout {
-  const text = label.trim();
-  const fits = (s: string, size: number): boolean => s.length * size * charW <= width;
-  for (const size of [22, 20, 18, 16]) if (fits(text, size)) return { lines: [text], size };
-  const words = text.split(/\s+/);
-  if (words.length > 1) {
-    for (const size of [20, 18, 16, 14]) {
-      let best: string[] | undefined;
-      for (let i = 1; i < words.length; i++) {
-        const a = words.slice(0, i).join(" ");
-        const b = words.slice(i).join(" ");
-        if (fits(a, size) && fits(b, size)) {
-          if (!best || Math.abs(a.length - b.length) < Math.abs(best[0].length - best[1].length)) best = [a, b];
-        }
-      }
-      if (best) return { lines: best, size };
-    }
-  }
-  const size = 14;
-  const max = Math.floor(width / (size * charW));
-  if (words.length > 1) {
-    const a = words.slice(0, Math.ceil(words.length / 2)).join(" ");
-    const b = words.slice(Math.ceil(words.length / 2)).join(" ");
-    const cut = (s: string): string => (s.length > max ? s.slice(0, max - 1) + "…" : s);
-    return { lines: [cut(a), cut(b)], size };
-  }
-  return { lines: [text.length > max ? text.slice(0, max - 1) + "…" : text], size };
-}
-
 export interface KeyOptions {
   icon: string;
+  /** The key's name: shown by Stream Deck as the key's title text (`setTitle`), NOT drawn into the image. */
   label: string;
   tone?: Tone;
   /** 35 % opacity (disabled command / offline). */
@@ -85,25 +51,18 @@ export function keySvg(o: KeyOptions): string {
   const tone = o.tone ?? "normal";
   const fg = tone === "red" ? COLORS.red : tone === "accent" ? COLORS.accent : COLORS.text;
   const inner = ICONS[o.icon] ?? ICONS.command;
-  const { lines, size } = layoutLabel(o.label);
-  const ty = lines.length === 1 ? 124 : 110;
-  const text = lines
-    .map(
-      (l, i) =>
-        `<text x="72" y="${ty + i * (size + 2)}" text-anchor="middle" font-family="${FONT}" font-size="${size}" font-weight="600" fill="${fg}">${esc(l)}</text>`,
-    )
-    .join("");
-  const iconY = lines.length === 1 ? 18 : 12;
+  // v0.5: the label is the key's Stream Deck title (see actions/util.ts draw()); the image holds the icon (or the big flash text) only.
+  const iconY = 18;
   const bigSize = o.big ? Math.max(14, Math.min(30, Math.floor(128 / (o.big.length * charW)))) : 0;
   const body = o.big
-    ? `<text x="72" y="${lines.length === 1 ? 68 : 60}" text-anchor="middle" font-family="${FONT}" font-size="${bigSize}" font-weight="700" fill="${fg}">${esc(o.big)}</text>`
+    ? `<text x="72" y="68" text-anchor="middle" font-family="${FONT}" font-size="${bigSize}" font-weight="700" fill="${fg}">${esc(o.big)}</text>`
     : `<g transform="translate(${72 - 32} ${iconY}) scale(${64 / 24})" fill="none" stroke="${fg}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${inner}</g>`;
   const ring = o.active ? `<rect x="5" y="5" width="134" height="134" rx="14" fill="none" stroke="${COLORS.accent}" stroke-width="4"/>` : "";
   const badge = o.badge
     ? `<text x="134" y="24" text-anchor="end" font-family="${FONT}" font-size="20" font-weight="700" fill="${COLORS.accent}">${esc(o.badge)}</text>`
     : "";
   const g = o.dim ? ` opacity="${DIM_ALPHA}"` : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${KEY}" height="${KEY}" viewBox="0 0 ${KEY} ${KEY}"><rect width="${KEY}" height="${KEY}" fill="${COLORS.bg}"/><g${g}>${ring}${body}${text}${badge}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${KEY}" height="${KEY}" viewBox="0 0 ${KEY} ${KEY}"><rect width="${KEY}" height="${KEY}" fill="${COLORS.bg}"/><g${g}>${ring}${body}${badge}</g></svg>`;
 }
 
 export const svgDataUrl = (svg: string): string => `data:image/svg+xml;charset=utf8,${encodeURIComponent(svg)}`;
@@ -199,13 +158,13 @@ export interface FixtureStripState {
   /** 0..1, or null → "—" (the fixture lacks the attribute / nothing selected). */
   value: number | null;
   fine: boolean;
-  /** Acting on every fixture of the selected type. */
-  all: boolean;
+  /** How many selected fixtures the dial drives (> 1 shows ×N; the value is the first fixture's). */
+  multi: number;
   /** The value shown is the starting value; nothing has been sent for this fixture yet. */
   untouched: boolean;
 }
 
-/** Feedback for layouts/dial.json on the fixture attribute dials: name, value in %, bar, marks ALL / FINE / ~. */
+/** Feedback for layouts/dial.json on the fixture attribute dials: name, value in %, bar, marks ×N / FINE / ~. */
 export function fixtureStripFeedback(s: FixtureStripState): Record<string, unknown> {
   const grey = mix(COLORS.text, COLORS.bg, 0.5);
   if (s.value === null) {
@@ -215,11 +174,11 @@ export function fixtureStripFeedback(s: FixtureStripState): Record<string, unkno
       value: { value: "—", color: dim },
       unit: { value: "", color: dim },
       bar: { value: 0, bar_fill_c: mix(COLORS.accent, COLORS.bg, DIM_ALPHA) },
-      mark: { value: s.all ? "ALL" : "", color: COLORS.accent },
+      mark: { value: s.multi > 1 ? `×${s.multi}` : "", color: COLORS.accent },
     };
   }
   const pct = (Math.round(s.value * 1000) / 10).toFixed(1);
-  const marks = [s.all ? "ALL" : "", s.fine ? "FINE" : "", s.untouched && !s.all && !s.fine ? "~" : ""].filter(Boolean).join(" ");
+  const marks = [s.multi > 1 ? `×${s.multi}` : "", s.fine ? "FINE" : "", s.untouched && s.multi <= 1 && !s.fine ? "~" : ""].filter(Boolean).join(" ");
   return {
     name: { value: s.name, color: COLORS.accent },
     value: { value: s.untouched ? `~${pct}` : pct, color: s.untouched ? grey : COLORS.text },
@@ -230,19 +189,20 @@ export function fixtureStripFeedback(s: FixtureStripState): Record<string, unkno
 }
 
 /** Feedback for layouts/select.json. */
-export function selectStripFeedback(s: { line1: string; line2: string; mode: "single" | "type"; index: number; count: number }): Record<string, unknown> {
+export function selectStripFeedback(s: { line1: string; line2: string; note: string; mark: string; count: number }): Record<string, unknown> {
   const grey = mix(COLORS.text, COLORS.bg, 0.5);
   const none = s.count === 0;
   return {
     name: { value: "FIXTURE", color: COLORS.accent },
-    mark: { value: none ? "" : `${s.mode === "type" ? "ALL · " : ""}${s.index + 1}/${s.count}`, color: COLORS.accent },
+    mark: { value: s.mark, color: COLORS.accent },
     line1: { value: s.line1, color: none ? grey : COLORS.text },
     line2: { value: s.line2, color: grey },
+    note: { value: s.note, color: grey },
   };
 }
 
 export interface FixtureStatusView {
-  /** "ok" once a show was read; "syncing" while reading; "error" / "idle" otherwise. */
+  /** "ok" once a show list arrived; "syncing" while waiting for one; "error" when Capture is not reachable; "idle" before the first try. */
   sync: "idle" | "syncing" | "ok" | "error";
   showName: string | null;
   controllable: number;

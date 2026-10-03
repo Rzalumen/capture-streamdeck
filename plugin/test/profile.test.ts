@@ -318,7 +318,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.4.1.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.5.0.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }
@@ -339,19 +339,34 @@ test("every catalog command except Edit › Model (none catalogued) has a key in
   for (const p of NUMBER_PROPERTIES) assert.ok(dials.has(dialUuid(p)), p.id);
 });
 
-test("our actions draw their own label (ShowTitle false); folder / Back / More keys show their title", () => {
+test("every key in the profile shows its name as title text (ShowTitle true) and says it; dials do not", () => {
+  let keys = 0;
   for (const pm of pageManifests().values())
     for (const c of pm.Controllers)
       for (const a of Object.values(c.Actions)) {
-        const builtin = a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID;
         for (const s of a.States) {
-          assert.equal(s.ShowTitle, builtin, a.UUID);
+          assert.equal(s.ShowTitle, c.Type === "Keypad", `${a.UUID} on ${c.Type}`);
+          if (c.Type === "Keypad") keys++;
           assert.equal(s.TitleAlignment, "bottom");
           assert.ok(s.Title.length > 0);
         }
         if (a.UUID === OPEN_CHILD_UUID) assert.equal(a.Name, "Create Folder");
         if (a.UUID === BACK_UUID) assert.equal(a.Name, "Parent Folder");
       }
+  assert.ok(keys >= 150, `${keys} keys checked`);
+});
+
+test("the profile checker refuses a key that hides its title", () => {
+  const files = readZip(zip);
+  const bad = new Map(files);
+  let changed = false;
+  for (const [n, buf] of bad) {
+    if (changed || !buf || !/\/manifest\.json$/.test(n) || !buf.toString("utf8").includes('"ShowTitle":true')) continue;
+    bad.set(n, Buffer.from(buf.toString("utf8").replace('"ShowTitle":true', '"ShowTitle":false')));
+    changed = true;
+  }
+  assert.ok(changed);
+  assert.ok(checkProfile(bad, manifest).some((e) => /does not show its title/.test(e)));
 });
 
 test("images are our own art: every PNG in the zip is byte-identical to a file in profile-art/, named by its content hash", () => {

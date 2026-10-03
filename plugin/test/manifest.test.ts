@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.4.1.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.5.0.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.4.1.0");
+  assert.equal(built.Version, "0.5.0.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -143,12 +143,12 @@ test("named keys ask for nothing except Hold to fire / Dim when disabled (catalo
   }
 });
 
-test("Show Position keys are Keypad actions with one state, no title drawn by Stream Deck (the plugin draws the label)", () => {
+test("Show Position keys are Keypad actions with one state; their title (the position name) is shown by Stream Deck", () => {
   for (let k = 1; k <= 8; k++) {
     const a = built.Actions.find((x) => x.UUID === `com.rezabehjat.capture.showpos.${k}`)!;
     assert.deepEqual(a.Controllers, ["Keypad"]);
     assert.equal(a.States.length, 1);
-    assert.equal(a.States[0].ShowTitle, false);
+    assert.equal(a.States[0].ShowTitle, true);
   }
 });
 
@@ -160,11 +160,15 @@ test("v0.4 fixture actions: the dials are Encoder actions with the dial/select l
   for (const a of dials) {
     assert.equal((a.Encoder as { layout: string }).layout, "layouts/dial.json");
     assert.equal(a.PropertyInspectorPath, undefined, a.UUID);
-    assert.equal((a.Encoder as { TriggerDescription: { LongTouch: string } }).TriggerDescription.LongTouch, "Home");
+    const td = (a.Encoder as { TriggerDescription: Record<string, string | undefined> }).TriggerDescription;
+    assert.deepEqual([td.Push, td.Touch, td.LongTouch], ["Home attribute", "Fine mode", undefined], "push homes the attribute, tap = fine, no long touch");
   }
   const keys = built.Actions.filter((a) => a.UUID.startsWith("com.rezabehjat.capture.fixtures."));
   assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status"]);
-  for (const a of keys) assert.deepEqual(a.Controllers, ["Keypad"]);
+  for (const a of keys) {
+    assert.deepEqual(a.Controllers, ["Keypad"]);
+    assert.equal(a.States[0].ShowTitle, true);
+  }
   for (const f of ["layouts/select.json", "layouts/dial.json", "ui/fixtures.html", "ui/fixtures.js"]) assert.ok(fs.existsSync(path.join(sd, f)), f);
 });
 

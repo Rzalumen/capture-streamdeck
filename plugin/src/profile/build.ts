@@ -101,8 +101,8 @@ function buildPage(page: Page, o: BuildOptions, plugin: { Name: string; UUID: st
     }
     const m = actionOf(k.uuid);
     const image = put("key", k.icon);
-    // The plugin draws the label into the key image itself (like every key it renders), so Stream Deck must not draw the title on top.
-    const states = m.States.map(() => state(image, k.title, false));
+    // v0.5: the key shows its name as Stream Deck title text; the plugin no longer draws labels into the key images.
+    const states = m.States.map(() => state(image, k.title, true));
     return { ActionID: seed(pos, k.uuid), LinkedTitle: true, Name: m.Name, Plugin: plugin, Resources: null, Settings: {}, State: 0, States: states, UUID: k.uuid };
   };
 

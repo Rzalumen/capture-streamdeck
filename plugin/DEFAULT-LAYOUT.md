@@ -17,8 +17,8 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 - **Dials** — every page has its own four. HOME and every folder: Exposure · Ambient · Bloom · White Balance. The View
   pages: Contrast · Saturation · Fill · Hue Clamp. The Look folder: Flare · Flare Streaks · Flare Angle · Flare Size.
   The **Fixtures** folder has its own sets (below).
-- Keys are drawn by the plugin (label, dimming, “Stored”, position names), so Stream Deck's own title is off on them; folder,
-  *Back* and *More ▸* keys show their title.
+- **Every key shows its name as Stream Deck title text** (v0.5, `ShowTitle: true`), including folder, *Back* and *More ▸*. The plugin draws only the icon,
+  dimming, flash text (“Stored”, “Hold”) and badges into the key image, and sets dynamic names (“Store 1”, position names) as the key's title.
 
 ## What is where
 

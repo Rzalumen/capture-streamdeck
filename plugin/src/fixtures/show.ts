@@ -1,10 +1,10 @@
 /**
- * The show model: what Capture's CITP FixtureList says (read-only, once per sync) plus, per fixture TYPE (model + mode), the channel
- * list parsed from the Capture library with all the safety rules of modes.ts. A fixture is "controllable" only when its type parsed
- * safely AND the setup gives it an address (see service.ts).
+ * The show model (v0.5): what Capture's CITP FixtureLists say (kept merged: Type 0 replaces, Type 1/2 add or replace single fixtures,
+ * FixtureRemove removes) plus, per fixture TYPE (model + mode), the channel list parsed from the Capture library with all the safety
+ * rules of modes.ts. A fixture is "controllable" only when its type parsed safely AND the setup gives it an address (see service.ts).
+ * The CITP connection itself lives in citpSession.ts; link.ts feeds this model.
  */
-import type { CaexFixture } from "./citp.js";
-import { readShow, type SyncResult } from "./citpSync.js";
+import { UNIDENTIFIED, type CaexFixture } from "./citp.js";
 import { defaultLibraryPath, openLibrary, type Library } from "./library.js";
 import { loadChannels, type Channel } from "./modes.js";
 import { drivenSignature, mapChannels, type ChannelMap } from "./attrs.js";
@@ -40,26 +40,27 @@ export interface TypeInfo {
 export type SyncStatus = "idle" | "syncing" | "ok" | "error";
 
 export interface ShowOptions {
-  sync?: () => Promise<SyncResult>;
+  /** Asks the session for a fresh FixtureList (true when a request went out). */
+  request?: () => boolean;
+  /** Skips the session's back-off wait. */
+  reconnect?: () => void;
   libraryPath?: string;
   open?: (path: string) => Library;
   log?: (line: string) => void;
+  /** How long `sync()` waits for the next list (default 8 s). */
+  syncWaitMs?: number;
 }
-
-const instanceKey = (f: CaexFixture, used: Set<string>): string => {
-  const inst = f.ids.find((d) => d.type === 0x04);
-  let k = inst ? (inst.guidRaw ?? inst.guid ?? inst.value ?? inst.hex) : `fixture-${f.identifier}`;
-  if (!k) k = `fixture-${f.identifier}`;
-  while (used.has(k)) k += `#${f.index}`;
-  used.add(k);
-  return k;
-};
 
 /** Stage left/right from X, up/down stage from Z, height from Y (right-handed, Z downstage, Y up as CAEX describes it; NOT verified against a real show). */
 export function positionHint(p: [number, number, number]): string {
   const [x, y, z] = p;
   const r = (n: number): string => (Math.round(Math.abs(n) * 10) / 10).toFixed(1);
   return `${x >= 0 ? "SL" : "SR"} ${r(x)} · ${z >= 0 ? "DS" : "US"} ${r(z)} · H ${(Math.round(y * 10) / 10).toFixed(1)}`;
+}
+
+/** The position without the height, for the strip: `SL 1.3 · US 0.9`. */
+export function positionShort(p: [number, number, number]): string {
+  return positionHint(p).split(" · ").slice(0, 2).join(" · ");
 }
 
 export class ShowModel {
@@ -69,7 +70,13 @@ export class ShowModel {
   fixtures: ShowFixture[] = [];
   types = new Map<string, TypeInfo>();
   syncedAt: number | null = null;
-  private inflight: Promise<void> | undefined;
+  connected = false;
+  /** identifier -> key of numbers we just assigned (FixtureIdentify) that Capture's list does not show yet. */
+  pendingIds = new Map<number, string>();
+  private raw = new Map<string, CaexFixture>();
+  private byId = new Map<number, ShowFixture>();
+  private listWaiters: (() => void)[] = [];
+  private lastSig = "";
   private listeners: (() => void)[] = [];
 
   constructor(private opts: ShowOptions = {}) {}
@@ -84,37 +91,108 @@ export class ShowModel {
     this.opts.log?.(s);
   }
 
-  /** Runs one CITP sync (read-only). Concurrent calls share one run. */
-  sync(): Promise<void> {
-    if (this.inflight) return this.inflight;
-    this.status = "syncing";
-    this.emit();
-    this.inflight = this.run().finally(() => {
-      this.inflight = undefined;
-    });
-    return this.inflight;
+  /** Every fixture Capture has told us about, as Capture reported it (the merged set). */
+  rawFixtures(): CaexFixture[] {
+    return [...this.raw.values()];
   }
 
-  private async run(): Promise<void> {
-    let r: SyncResult;
-    try {
-      r = await (this.opts.sync ?? (() => readShow({ log: (l) => this.log(`CITP: ${l}`) })))();
-    } catch (e) {
-      r = { ok: false, error: `CITP error: ${(e as Error).message}`, fixtures: [], showName: null, log: [] };
+  /** The fixture behind a Capture FixtureIdentifier (including numbers we assigned and Capture has not echoed yet). */
+  resolve(identifier: number): ShowFixture | undefined {
+    if (identifier === UNIDENTIFIED) return undefined;
+    const f = this.byId.get(identifier >>> 0);
+    if (f) return f;
+    const key = this.pendingIds.get(identifier >>> 0);
+    return key ? this.fixtures.find((x) => x.key === key) : undefined;
+  }
+
+  // ------------------------------------------------------------------ session events
+
+  /** The session connected, lost the connection or failed to connect (`reason` says why). */
+  setConnected(connected: boolean, reason?: string): void {
+    const err = connected ? null : (reason ?? "not connected to Capture (retrying)");
+    if (this.connected === connected && (connected || this.error === err) && this.status !== "idle") return;
+    this.connected = connected;
+    this.status = connected ? "syncing" : "error";
+    this.error = err;
+    this.emit();
+  }
+
+  /** Capture entered a show. A different name than before clears the old show's fixtures. Returns true when the show changed. */
+  setShowName(name: string | null): boolean {
+    const changed = this.showName !== null && this.showName !== name;
+    if (changed) this.clear();
+    this.showName = name;
+    this.emit();
+    return changed;
+  }
+
+  /** LeaveShow, or a show change: forget the fixtures. */
+  clear(): void {
+    this.raw.clear();
+    this.byId.clear();
+    this.pendingIds = new Map();
+    this.fixtures = [];
+    this.lastSig = "";
+    this.status = this.connected ? "syncing" : "error";
+    if (!this.connected) this.error = "not connected to Capture (retrying)";
+    this.emit();
+  }
+
+  /** A FixtureList message. Type 0 (or unknown) replaces everything; Type 1 and 2 add or replace the fixtures they carry. */
+  applyList(type: number | null, list: CaexFixture[]): void {
+    const keyed = this.keyed(list);
+    if (type === 1 || type === 2) for (const [k, f] of keyed) this.raw.set(k, f);
+    else this.raw = new Map(keyed);
+    this.rebuild();
+    this.status = "ok";
+    this.error = null;
+    this.syncedAt = Date.now();
+    const sig = `${this.fixtures.length}|${this.fixtures.map((f) => f.identifier).join(",")}`;
+    if (sig !== this.lastSig || type === 1 || type === 2) {
+      const ok = [...this.types.values()].filter((t) => t.ok).length;
+      this.log(`show "${this.showName ?? "(unnamed)"}": ${this.fixtures.length} fixture(s)${type === 1 ? " (new fixtures added)" : type === 2 ? " (fixtures exchanged)" : ""}, ${ok}/${this.types.size} type(s) parsed safely`);
     }
-    if (!r.ok) {
-      this.status = "error";
-      this.error = r.error;
-      this.log(`show sync failed: ${r.error}`);
-      this.emit();
-      return;
+    this.lastSig = sig;
+    const waiters = this.listWaiters;
+    this.listWaiters = [];
+    for (const w of waiters) w();
+    this.emit();
+  }
+
+  /** FixtureRemove: drop fixtures by identifier. */
+  remove(ids: number[]): void {
+    let n = 0;
+    for (const [k, f] of [...this.raw]) {
+      if (ids.includes(f.identifier) && f.identifier !== UNIDENTIFIED) {
+        this.raw.delete(k);
+        n++;
+      }
     }
-    const used = new Set<string>();
-    const fixtures: ShowFixture[] = r.fixtures.map((f) => {
+    if (!n) return;
+    this.rebuild();
+    this.log(`Capture removed ${n} fixture(s)`);
+    this.emit();
+  }
+
+  private keyed(list: CaexFixture[]): Map<string, CaexFixture> {
+    const out = new Map<string, CaexFixture>();
+    for (const f of list) {
+      const inst = f.ids.find((d) => d.type === 0x04);
+      let k = inst ? (inst.guidRaw ?? inst.guid ?? inst.value ?? inst.hex) : `fixture-${f.identifier}`;
+      if (!k) k = `fixture-${f.identifier}`;
+      // a Type 1/2 fixture replaces the one with the same key; only two fixtures of ONE message sharing a key get a suffix
+      while (out.has(k)) k += `#${f.index}`;
+      out.set(k, f);
+    }
+    return out;
+  }
+
+  private rebuild(): void {
+    const fixtures: ShowFixture[] = [...this.raw].map(([key, f]) => {
       const fixtureGuid = f.ids.find((d) => d.type === 0x02)?.guidRaw ?? null;
       const modeGuid = f.ids.find((d) => d.type === 0x03)?.guidRaw ?? null;
       return {
-        key: instanceKey(f, used),
+        key,
         identifier: f.identifier,
         channel: f.channel,
         manufacturer: f.manufacturer,
@@ -127,22 +205,62 @@ export class ShowModel {
         position: f.position,
       };
     });
-    const types = this.parseTypes(fixtures);
-    this.showName = r.showName;
+    this.parseTypes(fixtures, false);
     this.fixtures = fixtures;
-    this.types = types;
-    this.status = "ok";
-    this.error = null;
-    this.syncedAt = Date.now();
-    this.log(`show "${r.showName ?? "(unnamed)"}": ${fixtures.length} fixture(s), ${[...types.values()].filter((t) => t.ok).length}/${types.size} type(s) parsed safely`);
-    this.emit();
+    this.byId = new Map(fixtures.filter((f) => f.identifier !== UNIDENTIFIED).map((f) => [f.identifier >>> 0, f]));
   }
 
-  /** Each type once. A library problem makes every type "not controllable" with the reason; it never throws. */
-  private parseTypes(fixtures: ShowFixture[]): Map<string, TypeInfo> {
-    const types = new Map<string, TypeInfo>();
+  // ------------------------------------------------------------------ asking for a list
+
+  /** Asks Capture for a fresh list without waiting. True when a request went out. */
+  requestRefresh(): boolean {
+    return this.opts.request?.() ?? false;
+  }
+
+  /**
+   * "Read the show again": reconnects now when not connected, re-reads the library types that failed, asks for a fresh list and waits
+   * for it (up to `syncWaitMs`). Never throws.
+   */
+  async sync(): Promise<void> {
+    this.parseTypes(this.fixtures, true);
+    if (!this.connected) {
+      this.status = "syncing";
+      this.emit();
+      this.opts.reconnect?.();
+    } else if (!this.requestRefresh()) {
+      // connected but Capture is not in a show: nothing to ask; the list arrives with EnterShow
+      this.emit();
+      return;
+    } else {
+      this.status = "syncing";
+      this.emit();
+    }
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(done, this.opts.syncWaitMs ?? 8000);
+      const self = this;
+      function done(): void {
+        clearTimeout(t);
+        self.listWaiters = self.listWaiters.filter((w) => w !== done);
+        resolve();
+      }
+      this.listWaiters.push(done);
+    });
+    if (this.status === "syncing") {
+      this.status = this.fixtures.length ? "ok" : "error";
+      if (!this.fixtures.length) this.error = this.connected ? "Capture sent no FixtureList (is a show open?)" : "not connected to Capture (retrying)";
+      this.emit();
+    }
+  }
+
+  /**
+   * Each type once, and only the ones not parsed yet (`retryFailed` also re-reads those that failed). A library problem makes the
+   * type "not controllable" with the reason; it never throws. The library is not even opened when nothing is new.
+   */
+  private parseTypes(fixtures: ShowFixture[], retryFailed: boolean): void {
+    const types = this.types;
     const reps = new Map<string, ShowFixture>();
-    for (const f of fixtures) if (!reps.has(f.typeKey)) reps.set(f.typeKey, f);
+    for (const f of fixtures) if (!reps.has(f.typeKey) && (!types.has(f.typeKey) || (retryFailed && !types.get(f.typeKey)?.ok))) reps.set(f.typeKey, f);
+    if (!reps.size) return;
     const libPath = this.opts.libraryPath ?? defaultLibraryPath();
     let lib: Library | undefined;
     let libError: string | undefined;
@@ -181,6 +299,5 @@ export class ShowModel {
     } finally {
       lib?.close();
     }
-    return types;
   }
 }

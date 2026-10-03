@@ -1,23 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COLORS, keySvg, layoutLabel, mix, stripFeedback } from "../src/lib/render.ts";
+import { COLORS, fixtureStripFeedback, keySvg, mix, selectStripFeedback, stripFeedback } from "../src/lib/render.ts";
 import { ICONS, iconForCommand, iconSvg } from "../src/lib/icons.ts";
 
 test("mix at 35 % over the background", () => {
   assert.equal(mix("#FFFFFF", "#000000", 0.35), "#595959");
   assert.equal(mix(COLORS.accent, COLORS.bg, 1), COLORS.accent);
   assert.equal(mix(COLORS.accent, COLORS.bg, 0), COLORS.bg);
-});
-
-test("label layout: short on one line, long wraps to two, never overflows", () => {
-  assert.deepEqual(layoutLabel("Plot"), { lines: ["Plot"], size: 22 });
-  const l = layoutLabel("Fixture Information");
-  assert.equal(l.lines.length, 2);
-  for (const t of ["Export Documentation…", "Swing to Selection", "Enter Full Screen", "P3 Fixture Number…", "Extraordinarilylongwordwithoutspaces"]) {
-    const r = layoutLabel(t);
-    assert.ok(r.lines.length <= 2);
-    for (const line of r.lines) assert.ok(line.length * r.size * 0.58 <= 128 + 1, `${t} → ${line}`);
-  }
 });
 
 test("key svg carries palette, dim opacity and is well-formed enough", () => {
@@ -27,8 +16,21 @@ test("key svg carries palette, dim opacity and is well-formed enough", () => {
   const d = keySvg({ icon: "plot", label: "Plot", dim: true });
   assert.ok(d.includes('opacity="0.35"'));
   assert.ok(keySvg({ icon: "plot", label: "Error", tone: "red" }).includes(COLORS.red));
-  assert.ok(keySvg({ icon: "x", label: 'A & <B> "q"' }).includes("A &amp; &lt;B&gt; &quot;q&quot;"));
-  assert.ok(keySvg({ icon: "plot", label: "Hold", big: "Hold" }).includes(">Hold<"));
+  // v0.5: the label is the key's Stream Deck title, never drawn into the image (it would be doubled); flash text still is
+  assert.ok(!keySvg({ icon: "plot", label: "Plot" }).includes("Plot"));
+  assert.ok(!keySvg({ icon: "x", label: 'A & <B> "q"' }).includes("A &amp;"));
+  assert.ok(!/<text/.test(keySvg({ icon: "plot", label: "Plot" })), "no text at all on a plain key");
+  assert.ok(keySvg({ icon: "plot", label: "Plot", big: "Hold" }).includes(">Hold<"));
+  assert.ok(keySvg({ icon: "plot", label: "Plot", badge: "3" }).includes(">3<"));
+});
+
+test("fixture strips: ×N mark for several fixtures; the select strip carries model, line, note and mark", () => {
+  const f = fixtureStripFeedback({ name: "Pan", value: 0.5, fine: true, multi: 3, untouched: false }) as any;
+  assert.equal(f.mark.value, "×3 FINE");
+  assert.equal((fixtureStripFeedback({ name: "Pan", value: 0.5, fine: false, multi: 1, untouched: true }) as any).mark.value, "~");
+  assert.equal((fixtureStripFeedback({ name: "Pan", value: null, fine: false, multi: 2, untouched: true }) as any).mark.value, "×2");
+  const s = selectStripFeedback({ line1: "ColorBlaze 72", line2: "SL 1.3 · US 0.9", note: "1/285 · (not selected in Capture)", mark: "2/5", count: 5 }) as any;
+  assert.deepEqual([s.line1.value, s.line2.value, s.note.value, s.mark.value], ["ColorBlaze 72", "SL 1.3 · US 0.9", "1/285 · (not selected in Capture)", "2/5"]);
 });
 
 test("every icon has content; command mapping covers the default layout", () => {

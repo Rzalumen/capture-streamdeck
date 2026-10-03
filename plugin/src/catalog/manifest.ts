@@ -46,8 +46,8 @@ function commandAction(e: CatalogEntry): ManifestAction {
     PropertyInspectorPath: PI,
     Controllers: ["Keypad"],
     States: [
-      { Image: keyPath(e.icon), ShowTitle: false },
-      { Image: keyPath(e.icon), ShowTitle: false },
+      { Image: keyPath(e.icon), ShowTitle: true },
+      { Image: keyPath(e.icon), ShowTitle: true },
     ],
   };
 }
@@ -59,7 +59,7 @@ function showPositionAction(k: number): ManifestAction {
     Icon: iconPath("position"),
     Tooltip: `Recalls camera position ${k} of catalog 1 in the open show over OSC. The key is titled with its name in Capture.`,
     Controllers: ["Keypad"],
-    States: [{ Image: keyPath("position"), ShowTitle: false }],
+    States: [{ Image: keyPath("position"), ShowTitle: true }],
   };
 }
 
@@ -102,8 +102,8 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     Tooltip: `Toggles ${p.label} in Capture's live view over OSC.`,
     Controllers: ["Keypad"],
     States: [
-      { Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: false },
-      { Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: false },
+      { Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: true },
+      { Image: keyPath(PROPERTY_ICON[p.id]), ShowTitle: true },
     ],
   }));
 
@@ -115,7 +115,7 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     Tooltip: k.tooltip,
     ...(k.pi ? { PropertyInspectorPath: FIXTURES_PI } : {}),
     Controllers: ["Keypad"],
-    States: [{ Image: keyPath(k.icon), ShowTitle: false }],
+    States: [{ Image: keyPath(k.icon), ShowTitle: true }],
   }));
   const fixtureSelect: ManifestAction = {
     Name: FIXTURE_SELECT.name,
@@ -126,7 +126,7 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     States: [{ Image: keyPath(FIXTURE_SELECT.icon), ShowTitle: false }],
     Encoder: {
       layout: "layouts/select.json",
-      TriggerDescription: { Rotate: "Select fixture", Push: "Single / all of type", Touch: "Single / all of type" },
+      TriggerDescription: { Rotate: "Select fixture" },
       background: "imgs/actions/dial/strip-background",
     },
   };
@@ -139,7 +139,7 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     States: [{ Image: keyPath(d.icon), ShowTitle: false }],
     Encoder: {
       layout: "layouts/dial.json",
-      TriggerDescription: { Rotate: "Adjust", Push: "Fine mode", Touch: "Fine mode", LongTouch: "Home" },
+      TriggerDescription: { Rotate: "Adjust", Push: "Home attribute", Touch: "Fine mode" },
       background: "imgs/actions/dial/strip-background",
     },
   }));

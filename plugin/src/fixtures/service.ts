@@ -1,10 +1,13 @@
 /**
- * Everything the actions and the Setup page use: show model + address setup + selection + DMX engine, wired together.
+ * Everything the actions and the Setup panel use: show model + address setup + selection + DMX engine, wired together.
  * A fixture is CONTROLLABLE when its type parsed safely, the setup gives it an address and that address has no problem (range,
- * past 512, overlap). Output is released whenever the setup changes or a different show is read, so no stale address stays live.
+ * past 512, overlap). Output is released on LeaveShow, a different show, and when the setup moves or removes the address of a fixture
+ * that is being driven, so no stale address stays live. Capture's own selection (FixtureSelection) and patch changes (FixtureModify,
+ * bit 0x01) arrive here through link.ts.
  */
 import { dialAttr, stepFraction, homeValue, type AttrId, type DialId } from "./attrs.js";
-import type { DmxEngine } from "./engine.js";
+import type { ModifyItem } from "./citp.js";
+import type { DmxEngine, Target } from "./engine.js";
 import { Selection, toTarget, type Controllable } from "./selection.js";
 import { autoFill, checkSetup, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
@@ -48,7 +51,8 @@ export interface DialReadout {
   value: number | null;
   /** True once the selected fixture has been touched (output is going out); false = the value shown is what a touch would start from. */
   touched: boolean;
-  all: boolean;
+  /** How many fixtures the dial drives (> 1: several selected; the value shown is the first one's). */
+  multi: number;
 }
 
 export interface StatusView {
@@ -67,7 +71,7 @@ const ATTR_LABEL: Record<AttrId, string> = { pan: "Pan", tilt: "Tilt", intensity
 export class FixtureService {
   readonly selection: Selection;
   private listeners: (() => void)[] = [];
-  private lastShow: string | null | undefined;
+  private lastRefresh = 0;
 
   constructor(
     readonly show: ShowModel,
@@ -75,20 +79,13 @@ export class FixtureService {
     readonly engine: DmxEngine,
     private log: (s: string) => void = () => undefined,
   ) {
-    this.selection = new Selection(() => this.controllables());
-    show.onChange(() => {
-      if (show.status === "ok" && this.lastShow !== undefined && this.lastShow !== show.showName && this.engine.active) {
-        this.log(`a different show was read ("${show.showName ?? ""}"): releasing output`);
-        void this.engine.release();
-      }
-      if (show.status === "ok") this.lastShow = show.showName;
-      this.emit();
-    });
+    this.selection = new Selection(
+      () => this.show.fixtures,
+      () => this.controllables(),
+    );
+    show.onChange(() => this.emit());
     setup.onChange(() => {
-      if (this.engine.active) {
-        this.log("the address setup changed: releasing output");
-        void this.engine.release();
-      }
+      this.reconcile();
       this.emit();
     });
     engine.onChange(() => this.emit());
@@ -202,56 +199,165 @@ export class FixtureService {
     return err;
   }
 
+  // ------------------------------------------------------------------ Capture events (via link.ts)
+
+  /** A different show was entered, or Capture left the show: nothing is selected any more and output stops. */
+  onShowGone(why: string): void {
+    this.selection.clear();
+    if (this.engine.active) {
+      this.log(`${why}: releasing output`);
+      void this.engine.release();
+    }
+    this.emit();
+  }
+
+  /** FixtureSelection from Capture: the deck selection becomes exactly those fixtures (the controllable ones are driven). */
+  onSelectionEvent(ids: number[]): void {
+    const keys: string[] = [];
+    const missing: number[] = [];
+    for (const id of ids) {
+      const f = this.show.resolve(id);
+      if (f) keys.push(f.key);
+      else missing.push(id);
+    }
+    if (!ids.length) {
+      this.selection.onCapture([]);
+      this.log("Capture's selection is empty: keeping the last selection (marked not selected in Capture)");
+    } else {
+      if (missing.length) {
+        this.log(`Capture selected ${missing.length} fixture(s) not in the list (identifier ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ", …" : ""}): asking for a fresh list`);
+        if (Date.now() - this.lastRefresh > 2000) {
+          this.lastRefresh = Date.now();
+          this.show.requestRefresh();
+        }
+      }
+      if (keys.length) {
+        this.selection.onCapture(keys);
+        const v = this.selection.view();
+        const chans = keys.map((k) => this.show.fixtures.find((f) => f.key === k)).map((f) => (f ? (f.channel ? `Ch ${f.channel}` : f.name) : "?"));
+        this.log(`Capture selected ${chans.slice(0, 6).join(", ")}${chans.length > 6 ? ", …" : ""}: ${v.targets.length} controllable${v.uncontrollable ? `, ${v.uncontrollable} without address` : ""}`);
+      }
+    }
+    this.emit();
+  }
+
+  /** FixtureRemove: Capture deleted fixtures. */
+  onRemoved(): void {
+    this.emit();
+  }
+
+  /**
+   * FixtureModify. Only the patch bit (0x01) is used: the fixture's universe and address (converted to 1-based) go into the setup when
+   * they fit and do not overlap another fixture; Patched=0 clears the entry. Nothing is ever sent back to Capture.
+   */
+  async onModify(items: ModifyItem[]): Promise<void> {
+    for (const it of items) {
+      if (!(it.changed & 0x01)) continue;
+      const f = this.show.resolve(it.identifier);
+      if (!f) {
+        this.log(`patch change for fixture identifier ${it.identifier >>> 0 === 0xffffffff ? "0xffffffff (unidentified)" : it.identifier} which is not in the list: asking for a fresh list`);
+        if (Date.now() - this.lastRefresh > 2000) {
+          this.lastRefresh = Date.now();
+          this.show.requestRefresh();
+        }
+        continue;
+      }
+      const what = f.channel ? `Ch ${f.channel}` : f.name;
+      const saved = this.setup.get(this.show.showName, f.key);
+      if (!it.patched) {
+        if (saved) {
+          const err = await this.setup.set(this.show.showName, f.key, null);
+          this.log(err ? `address of ${what} not cleared: ${err}` : `address from Capture ${what} -> unpatched (cleared ${saved.universe}/${saved.address})`);
+        }
+        continue;
+      }
+      const addr: Address = { universe: it.universe + 1, address: it.universeChannel + 1 };
+      if (saved && saved.universe === addr.universe && saved.address === addr.address) continue;
+      const bad = validateAddress(addr.universe, addr.address, f.channelCount);
+      if (bad) {
+        this.log(`address from Capture ${what} -> ${addr.universe}/${addr.address} refused: ${bad}`);
+        continue;
+      }
+      const all = this.setup.forShow(this.show.showName);
+      const entries: SetupEntry[] = [];
+      for (const x of this.show.fixtures) {
+        const a = x.key === f.key ? addr : all[x.key];
+        if (a) entries.push({ key: x.key, label: `${x.name} Ch ${x.channel}`, channelCount: x.channelCount, addr: a });
+      }
+      const problem = checkSetup(entries).get(f.key);
+      if (problem) {
+        this.log(`address from Capture ${what} -> ${addr.universe}/${addr.address} refused: ${problem.join("; ")}`);
+        continue;
+      }
+      const err = await this.setup.set(this.show.showName, f.key, addr);
+      this.log(err ? `address from Capture ${what} not saved: ${err}` : `address from Capture ${what} -> ${addr.universe}/${addr.address}`);
+    }
+  }
+
+  /** The setup moved or removed the address of a fixture we are driving (or made it invalid): stop output. */
+  private reconcile(): void {
+    const touched = this.engine.touchedAddresses();
+    if (!touched.size) return;
+    const saved = this.setup.forShow(this.show.showName);
+    const issues = this.issues();
+    for (const [key, a] of touched) {
+      const s = saved[key];
+      if (!s || s.universe !== a.universe || s.address !== a.address || issues.has(key)) {
+        this.log("the address of a fixture that is being driven changed: releasing output");
+        void this.engine.release();
+        return;
+      }
+    }
+  }
+
   // ------------------------------------------------------------------ dials and keys
 
-  /** Rotate the Select dial. */
+  /** Rotate the Select dial: choose one controllable fixture by hand (Capture's next click overrides it). */
   rotateSelect(ticks: number): void {
     this.selection.step(ticks);
     this.emit();
   }
-  /** Push on the Select dial: single ↔ all of this type. */
-  toggleSelectMode(): void {
-    this.selection.toggle();
-    this.emit();
+
+  /** The targets of a dial, grouped by the attribute each fixture resolves the dial to (an RGB and a CMY fixture can be selected together). */
+  private groups(dial: DialId): Map<AttrId, Target[]> {
+    const out = new Map<AttrId, Target[]>();
+    for (const c of this.selection.view().targets) {
+      const attr = dialAttr(c.map, dial);
+      if (attr) out.set(attr, [...(out.get(attr) ?? []), toTarget(c)]);
+    }
+    return out;
   }
 
   readout(dial: DialId): DialReadout {
     const v = this.selection.view();
-    const all = v.mode === "type";
-    if (!v.primary) return { attr: null, label: DIAL_LABEL[dial], value: null, touched: false, all };
+    const none = (): DialReadout => ({ attr: null, label: DIAL_LABEL[dial], value: null, touched: false, multi: v.targets.length });
+    if (!v.primary) return none();
     const attr = dialAttr(v.primary.map, dial);
-    if (!attr) return { attr: null, label: DIAL_LABEL[dial], value: null, touched: false, all };
-    return { attr, label: ATTR_LABEL[attr], value: this.engine.value(toTarget(v.primary), attr) ?? null, touched: this.engine.isTouched(v.primary.fixture.key), all };
+    if (!attr) return none();
+    return { attr, label: ATTR_LABEL[attr], value: this.engine.value(toTarget(v.primary), attr) ?? null, touched: this.engine.isTouched(v.primary.fixture.key), multi: v.targets.length };
   }
 
-  /** Rotate an attribute dial: ±1 % per tick (0.1 % fine). The value of the selected fixture is the reference; "all of type" sets them all to it. */
+  /** Rotate an attribute dial: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value. */
   rotate(dial: DialId, ticks: number, fine: boolean): boolean {
-    const v = this.selection.view();
-    if (!v.primary || !ticks) return false;
-    const attr = dialAttr(v.primary.map, dial);
-    if (!attr) return false;
-    const cur = this.engine.value(toTarget(v.primary), attr) ?? homeValue(attr);
-    this.engine.set(v.targets.map(toTarget), attr, stepFraction(cur, ticks, fine));
-    return true;
+    if (!ticks) return false;
+    const g = this.groups(dial);
+    for (const [attr, ts] of g) this.engine.setEach(ts, attr, (cur) => stepFraction(cur, ticks, fine));
+    return g.size > 0;
   }
 
-  /** Long touch: the attribute's home value. */
+  /** Knob press: this attribute goes to its home value on every selected fixture (all cells of a colour). */
   home(dial: DialId): boolean {
-    const v = this.selection.view();
-    if (!v.primary) return false;
-    const attr = dialAttr(v.primary.map, dial);
-    if (!attr) return false;
-    this.engine.set(v.targets.map(toTarget), attr, homeValue(attr));
-    return true;
+    const g = this.groups(dial);
+    for (const [attr, ts] of g) this.engine.set(ts, attr, homeValue(attr));
+    return g.size > 0;
   }
 
-  /** Home Selected key: pan/tilt 50 %, intensity 100 % on the selection. */
+  /** Home key: the selected fixtures (only) at full home, the same defaults as at first touch. */
   homeSelected(): boolean {
     const v = this.selection.view();
-    if (!v.primary) return false;
-    const before = this.engine.active;
-    this.engine.setMany(v.targets.map(toTarget), { pan: homeValue("pan"), tilt: homeValue("tilt"), intensity: homeValue("intensity") });
-    return this.engine.active || before;
+    if (!v.targets.length) return false;
+    this.engine.home(v.targets.map(toTarget));
+    return true;
   }
 
   async release(): Promise<void> {

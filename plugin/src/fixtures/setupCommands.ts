@@ -1,5 +1,5 @@
 /**
- * The Setup commands, shared by the Property Inspector and the browser page: one code path for reading, saving and validating
+ * The Setup commands, used by the Property Inspector: one code path for reading, saving and validating
  * addresses (FixtureService does the checking, the storage and the logging).
  */
 import type { FixtureService } from "./service.js";

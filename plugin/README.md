@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.4.1 (beta)
+# Capture for Stream Deck+ — plugin v0.5.0 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -64,27 +64,46 @@ resolved against Capture's cached live menu tree before it is used (`src/lib/res
 case) and the *exact live title* is what is clicked, polled and reported at startup, so "found" in the log means
 "clickable". A command Capture doesn't have shows `?` and is not clicked; the log names the closest live titles.
 
-## Fixture control (v0.4)
+## Fixture control (v0.4, v0.5)
 
 Turn a fixture's pan, tilt, intensity, zoom, focus, iris and colour with the dials, from the Fixtures folder. **This sends DMX (sACN E1.31) to
-Capture's sACN input, not OSC.** Everything in Capture itself stays read-only: nothing is patched, selected or modified there.
+Capture's sACN input, not OSC.** Everything in Capture itself stays read-only apart from one thing: the plugin gives each fixture that has no
+identifier yet a number (see 2).
 
-1. **Show read** (CITP, read-only, at start and when you press *Fixtures: Setup / Status*): the plugin connects to Capture's CITP port, sends only
-   `PNam`, `LaserFeedList`, `EnterShow`, `FixtureListRequest`, `LeaveShow` and `NACK` (an allowlist, checked on every send) and reads the FixtureList: model, mode,
-   channel count, Capture Channel, CaptureInstanceId and position. Capture never sends its patch over CITP (Patched=0), so addresses are entered by you.
-2. **Channel lists** come from the fixture's own object in `~/Library/Application Support/Capture 2026/Library.c2z` (read-only), parsed once per type with the
+1. **CITP session (v0.5)**: the plugin stays connected to Capture's CITP port (reconnecting with back-off 2 s → 30 s) and sends only
+   `PNam`, `LaserFeedList` (empty), its own `EnterShow`, `FixtureListRequest` (on EnterShow, after 5 s if no list came, every 30 s, and when asked),
+   `LeaveShow`, `NACK` and — for unidentified fixtures only — `FixtureIdentify` (an allowlist, checked on every send; never FixtureList, FixtureModify,
+   FixtureRemove, FixtureSelection, FixtureConsoleStatus or SetFixtureTransformationSpace). It reads the FixtureList (model, mode, channel count,
+   Capture Channel, CaptureInstanceId, position; Type 0 replaces the list, Type 1/2 add or replace fixtures), FixtureSelection, FixtureModify and
+   FixtureRemove. LeaveShow or a different show clears the selection and releases DMX.
+2. **Identification**: Capture reports identifier `0xffffffff` for a fixture nobody identified, and then sends no selection or patch events for it. On every
+   list the plugin sends one FixtureIdentify for the fixtures still at `0xffffffff` only: the next unused number from 100001 upward, keyed by the
+   CaptureInstanceId bytes as received. A fixture that already has an identifier keeps it. Log: `Fixtures: identify: 98 of 101 fixture(s) already have an identifier; sending 3 new (100102–100104)`.
+3. **The deck follows Capture's selection**: click a fixture in Capture and the knobs drive it (several selected: they move together, each relative to its own value).
+   **Fixture: Select** shows what is selected (model, `Ch 203 · 1/285`; for a fixture with Capture Channel 0 the position hint, `SL 1.3 · US 0.9`, and the
+   address on the small line below). A selected fixture with no address shows `No address — Setup`. When you deselect in Capture the last selection stays,
+   marked `(not selected in Capture)`. Turning the Select dial picks one controllable fixture by hand until Capture's next click.
+4. **Channel lists** come from the fixture's own object in `~/Library/Application Support/Capture 2026/Library.c2z` (read-only), parsed once per type with the
    safety rules of `research/` (exact counts must match Capture's ChannelCount, ambiguous parses are refused unless every candidate agrees on every channel the plugin writes).
-   A type that does not parse safely is **never controllable**; the reason is on the Setup page.
-3. **Fixtures: Setup** — **press the key and the Setup page opens in your default browser** (v0.4.1). It is a local page served by the plugin on `127.0.0.1` only, on a random port, with a random token in the address (`/?t=…`); every request needs the token, otherwise it is refused (403). Nothing listens until the first press. The same table is also in the key's Property Inspector (same commands, same storage, same checks; the plugin log says `Fixtures: setup inspector opened` when it appears). The page lists fixtures with pan or tilt (tick *Show all fixtures* for the rest) with Capture Channel, model, mode and a position hint
-   (`SL`/`SR` = stage left/right from X, `DS`/`US` = down/upstage from Z, `H` = height from Y; orientation not yet verified against a real show), universe 1–16 and
-   address 1–512, **saved as soon as you change a field** (inline error under the row if refused), per show name keyed by CaptureInstanceId; every change is logged (`Fixtures: set Ch 203 Rogue R2X Wash -> 1/285`). While nothing is configured the key says `Setup ▸ press` and the Select strip `Press Setup`; when exactly one fixture becomes controllable it is selected automatically. *Re-read show* reads the show again. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
-4. **Dials** act on the selection of **Fixture: Select** (rotate = next controllable fixture; push or touch = single ↔ all of this type). Attribute dials: rotate ±1 % per tick
-   (16-bit aware), push or touch = fine (0.1 %), long touch = home. A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
+   A type that does not parse safely is **never controllable**; the reason is in the Setup panel.
+5. **Fixtures: Setup** — the address table is in this key's panel in the Stream Deck app (Property Inspector); **there is no browser page any more** (the v0.4.1 local
+   web server is gone). Pressing the key only reads the show again. The table lists fixtures with pan or tilt (tick *Show all fixtures* for the rest) with
+   Capture Channel, model, mode and a position hint (`SL`/`SR` = stage left/right from X, `DS`/`US` = down/upstage from Z, `H` = height from Y; orientation not yet verified against a real show),
+   universe 1–16 and address 1–512, **saved as soon as you change a field**, per show name keyed by CaptureInstanceId. **Re-patching a fixture in Capture is picked up
+   automatically** (FixtureModify with the patch bit): its universe and address (1-based) are stored if they fit and overlap nothing (`Fixtures: address from Capture Ch 203 -> 1/285`);
+   Patched=0 clears the entry; a refused one is logged with the reason. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
+6. **Dials** act on the fixtures selected in Capture. Attribute dials: rotate ±1 % per tick (16-bit aware), **push = home that attribute** on the selected fixture(s),
+   **tap the touch strip = fine (0.1 %)**; a long touch does nothing. **Fixtures: Home Selected** puts the selected fixture(s) — only — at full home (pan/tilt 50 %, intensity 100 %,
+   additive colours full, the rest 0, as at first touch). A colour with several cells (`Red 1`…`Red 5`) is one knob: it moves every cell together and pressing it homes them all.
+   A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
    Attribute names are matched generically (whole words; speed/mode/macro/curve… channels are never the value).
-5. **DMX engine**: nothing is sent until you touch a fixture. A touched fixture starts from its defaults (pan/tilt 50 %, intensity 100 %, shutter 255, additive colours full, everything else 0). The
-   universe is then sent at 40 fps — **all 512 slots; every slot not set by a touched fixture is 0, which blacks out anything else on that universe** (the Setup page and the Status key say so) — until
-   **Fixtures: Release** or plugin exit, which send Stream_Terminated (3 frames) on every universe in use. Changing the setup, or reading a different show, releases output first.
-   sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
+7. **DMX engine**: nothing is sent until you touch a fixture. A touched fixture starts from its defaults. The
+   universe is then sent at 40 fps — **all 512 slots; every slot not set by a touched fixture is 0, which blacks out anything else on that universe** (the Setup panel and the Status key say so) — until
+   **Fixtures: Release**, LeaveShow, a different show, or plugin exit, which send Stream_Terminated (3 frames) on every universe in use. Moving or clearing the address of a fixture that is being driven
+   also releases output first. sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
+   A dropped CITP connection does not stop output (it reconnects).
+
+**Key titles (v0.5).** Every key shows its name as Stream Deck title text; the plugin no longer draws labels into the key images (so the text is not doubled).
 
 ## OSC properties
 

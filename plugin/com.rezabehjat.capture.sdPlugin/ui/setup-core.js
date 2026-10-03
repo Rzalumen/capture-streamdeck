@@ -1,4 +1,4 @@
-/* Setup table (plain JS): shared by the Property Inspector (fixtures.js) and the browser page (setup-web.js).
+/* Setup table (plain JS) for the Property Inspector (fixtures.js).
  * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill, ...}) goes to the plugin; the plugin's
  * answer is handed to the returned object's receive(view, error) (error: text, null = none, undefined = leave the shown error alone). */
 (function () {

@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.4.1.0",
+  "Version": "0.5.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -15,11 +15,11 @@
       "States": [
         {
           "Image": "imgs/keys/wireframe",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/wireframe",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -35,11 +35,11 @@
       "States": [
         {
           "Image": "imgs/keys/plot",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/plot",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -55,11 +55,11 @@
       "States": [
         {
           "Image": "imgs/keys/live",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/live",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -75,11 +75,11 @@
       "States": [
         {
           "Image": "imgs/keys/custom",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/custom",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -95,11 +95,11 @@
       "States": [
         {
           "Image": "imgs/keys/grid",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/grid",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -115,11 +115,11 @@
       "States": [
         {
           "Image": "imgs/keys/widgets",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/widgets",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -135,11 +135,11 @@
       "States": [
         {
           "Image": "imgs/keys/hidden",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/hidden",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -155,11 +155,11 @@
       "States": [
         {
           "Image": "imgs/keys/info",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/info",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -175,11 +175,11 @@
       "States": [
         {
           "Image": "imgs/keys/info",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/info",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -195,11 +195,11 @@
       "States": [
         {
           "Image": "imgs/keys/navigator",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/navigator",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -215,11 +215,11 @@
       "States": [
         {
           "Image": "imgs/keys/navigator",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/navigator",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -235,11 +235,11 @@
       "States": [
         {
           "Image": "imgs/keys/dim",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/dim",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -255,11 +255,11 @@
       "States": [
         {
           "Image": "imgs/keys/fullscreen",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/fullscreen",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -275,11 +275,11 @@
       "States": [
         {
           "Image": "imgs/keys/image",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/image",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -295,11 +295,11 @@
       "States": [
         {
           "Image": "imgs/keys/render",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/render",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -315,11 +315,11 @@
       "States": [
         {
           "Image": "imgs/keys/swing-top",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/swing-top",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -335,11 +335,11 @@
       "States": [
         {
           "Image": "imgs/keys/swing-front",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/swing-front",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -355,11 +355,11 @@
       "States": [
         {
           "Image": "imgs/keys/swing-right",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/swing-right",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -375,11 +375,11 @@
       "States": [
         {
           "Image": "imgs/keys/swing-left",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/swing-left",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -395,11 +395,11 @@
       "States": [
         {
           "Image": "imgs/keys/swing-selection",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/swing-selection",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -415,11 +415,11 @@
       "States": [
         {
           "Image": "imgs/keys/focus-selection",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/focus-selection",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -435,11 +435,11 @@
       "States": [
         {
           "Image": "imgs/keys/focus-all",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/focus-all",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -455,11 +455,11 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -475,11 +475,11 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -495,11 +495,11 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -515,11 +515,11 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -535,11 +535,11 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -555,11 +555,11 @@
       "States": [
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -575,11 +575,11 @@
       "States": [
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -595,11 +595,11 @@
       "States": [
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -615,11 +615,11 @@
       "States": [
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -635,11 +635,11 @@
       "States": [
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/store",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -654,7 +654,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -669,7 +669,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -684,7 +684,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -699,7 +699,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -714,7 +714,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -729,7 +729,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -744,7 +744,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -759,7 +759,7 @@
       "States": [
         {
           "Image": "imgs/keys/position",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -794,11 +794,11 @@
       "States": [
         {
           "Image": "imgs/keys/select-all",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select-all",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -814,11 +814,11 @@
       "States": [
         {
           "Image": "imgs/keys/deselect",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/deselect",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -834,11 +834,11 @@
       "States": [
         {
           "Image": "imgs/keys/layer",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/layer",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -854,11 +854,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -874,11 +874,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -894,11 +894,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -914,11 +914,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -934,11 +934,11 @@
       "States": [
         {
           "Image": "imgs/keys/truss",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/truss",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -954,11 +954,11 @@
       "States": [
         {
           "Image": "imgs/keys/truss",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/truss",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -974,11 +974,11 @@
       "States": [
         {
           "Image": "imgs/keys/select-type",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select-type",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -994,11 +994,11 @@
       "States": [
         {
           "Image": "imgs/keys/select-group",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select-group",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1014,11 +1014,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1034,11 +1034,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1054,11 +1054,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1074,11 +1074,11 @@
       "States": [
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/select",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1094,11 +1094,11 @@
       "States": [
         {
           "Image": "imgs/keys/undo",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/undo",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1114,11 +1114,11 @@
       "States": [
         {
           "Image": "imgs/keys/redo",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/redo",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1134,11 +1134,11 @@
       "States": [
         {
           "Image": "imgs/keys/cut",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cut",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1154,11 +1154,11 @@
       "States": [
         {
           "Image": "imgs/keys/copy",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/copy",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1174,11 +1174,11 @@
       "States": [
         {
           "Image": "imgs/keys/paste",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/paste",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1194,11 +1194,11 @@
       "States": [
         {
           "Image": "imgs/keys/duplicate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/duplicate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1214,11 +1214,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1234,11 +1234,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1254,11 +1254,11 @@
       "States": [
         {
           "Image": "imgs/keys/delete",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/delete",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1274,11 +1274,11 @@
       "States": [
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1294,11 +1294,11 @@
       "States": [
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1314,11 +1314,11 @@
       "States": [
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/group",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1334,11 +1334,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1354,11 +1354,11 @@
       "States": [
         {
           "Image": "imgs/keys/align",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/align",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1374,11 +1374,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1394,11 +1394,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1414,11 +1414,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1434,11 +1434,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1454,11 +1454,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1474,11 +1474,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1494,11 +1494,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1514,11 +1514,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1534,11 +1534,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1554,11 +1554,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1574,11 +1574,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-edit",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1594,11 +1594,11 @@
       "States": [
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1614,11 +1614,11 @@
       "States": [
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1634,11 +1634,11 @@
       "States": [
         {
           "Image": "imgs/keys/patch",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/patch",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1654,11 +1654,11 @@
       "States": [
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1674,11 +1674,11 @@
       "States": [
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/sequential",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1694,11 +1694,11 @@
       "States": [
         {
           "Image": "imgs/keys/fixture-details",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/fixture-details",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1714,11 +1714,11 @@
       "States": [
         {
           "Image": "imgs/keys/focus",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/focus",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1734,11 +1734,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-patch",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-patch",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1754,11 +1754,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-patch",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-patch",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1774,11 +1774,11 @@
       "States": [
         {
           "Image": "imgs/keys/unpatch",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/unpatch",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1794,11 +1794,11 @@
       "States": [
         {
           "Image": "imgs/keys/alpha",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/alpha",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1814,11 +1814,11 @@
       "States": [
         {
           "Image": "imgs/keys/beta",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/beta",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1834,11 +1834,11 @@
       "States": [
         {
           "Image": "imgs/keys/gamma",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/gamma",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1854,11 +1854,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1874,11 +1874,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1894,11 +1894,11 @@
       "States": [
         {
           "Image": "imgs/keys/layer",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/layer",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1914,11 +1914,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1934,11 +1934,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1954,11 +1954,11 @@
       "States": [
         {
           "Image": "imgs/keys/positions",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/positions",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1974,11 +1974,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -1994,11 +1994,11 @@
       "States": [
         {
           "Image": "imgs/keys/fixture-details",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/fixture-details",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2014,11 +2014,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-navigate",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2034,11 +2034,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2054,11 +2054,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2074,11 +2074,11 @@
       "States": [
         {
           "Image": "imgs/keys/arrange",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/arrange",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2094,11 +2094,11 @@
       "States": [
         {
           "Image": "imgs/keys/arrange",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/arrange",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2114,11 +2114,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2134,11 +2134,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2154,11 +2154,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2174,11 +2174,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2194,11 +2194,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2214,11 +2214,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2234,11 +2234,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2254,11 +2254,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-window",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2274,11 +2274,11 @@
       "States": [
         {
           "Image": "imgs/keys/save",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/save",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2294,11 +2294,11 @@
       "States": [
         {
           "Image": "imgs/keys/save-as",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/save-as",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2314,11 +2314,11 @@
       "States": [
         {
           "Image": "imgs/keys/cat-file",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/cat-file",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2334,11 +2334,11 @@
       "States": [
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2354,11 +2354,11 @@
       "States": [
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2374,11 +2374,11 @@
       "States": [
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/import",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2394,11 +2394,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2414,11 +2414,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2434,11 +2434,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2454,11 +2454,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2474,11 +2474,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2494,11 +2494,11 @@
       "States": [
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/export",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2514,11 +2514,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-design",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-design",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2534,11 +2534,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-fixtures",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-fixtures",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2554,11 +2554,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-universes",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-universes",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2574,11 +2574,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-media",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-media",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2594,11 +2594,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-snapshots",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-snapshots",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2614,11 +2614,11 @@
       "States": [
         {
           "Image": "imgs/keys/tab-library",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/tab-library",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2633,11 +2633,11 @@
       "States": [
         {
           "Image": "imgs/keys/autoexposure",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/autoexposure",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2652,11 +2652,11 @@
       "States": [
         {
           "Image": "imgs/keys/laser",
-          "ShowTitle": false
+          "ShowTitle": true
         },
         {
           "Image": "imgs/keys/laser",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2664,7 +2664,7 @@
       "Name": "Fixtures: Setup",
       "UUID": "com.rezabehjat.capture.fixtures.setup",
       "Icon": "imgs/icons/fx-setup",
-      "Tooltip": "Press to open the Setup page in your browser: the show read from Capture (read-only) and the universe and DMX address of each fixture. Saved as you type. (The same table is in this key's inspector.)",
+      "Tooltip": "Press to read the show from Capture again. The universe and DMX address of each fixture are in this key's inspector panel (addresses re-patched in Capture are picked up automatically).",
       "PropertyInspectorPath": "ui/fixtures.html",
       "Controllers": [
         "Keypad"
@@ -2672,7 +2672,7 @@
       "States": [
         {
           "Image": "imgs/keys/fx-setup",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2687,7 +2687,7 @@
       "States": [
         {
           "Image": "imgs/keys/fx-release",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2695,14 +2695,14 @@
       "Name": "Fixtures: Home Selected",
       "UUID": "com.rezabehjat.capture.fixtures.home",
       "Icon": "imgs/icons/fx-home",
-      "Tooltip": "Pan and tilt 50 %, intensity 100 % on the selected fixture(s).",
+      "Tooltip": "Puts the selected fixture(s) (only) at full home: pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0.",
       "Controllers": [
         "Keypad"
       ],
       "States": [
         {
           "Image": "imgs/keys/fx-home",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2717,7 +2717,7 @@
       "States": [
         {
           "Image": "imgs/keys/fx-status",
-          "ShowTitle": false
+          "ShowTitle": true
         }
       ]
     },
@@ -2725,7 +2725,7 @@
       "Name": "Fixture: Select",
       "UUID": "com.rezabehjat.capture.fixture.select",
       "Icon": "imgs/icons/fx-select",
-      "Tooltip": "Turn to step through the fixtures that are set up (Fixtures: Setup) and parsed safely. Push or touch: single fixture ↔ all of this type.",
+      "Tooltip": "Shows the fixture(s) selected in Capture (the deck follows Capture's selection). Turn to pick one fixture by hand; Capture's next click overrides it.",
       "Controllers": [
         "Encoder"
       ],
@@ -2738,9 +2738,7 @@
       "Encoder": {
         "layout": "layouts/select.json",
         "TriggerDescription": {
-          "Rotate": "Select fixture",
-          "Push": "Single / all of type",
-          "Touch": "Single / all of type"
+          "Rotate": "Select fixture"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2749,7 +2747,7 @@
       "Name": "Fixture: Pan",
       "UUID": "com.rezabehjat.capture.fixture.pan",
       "Icon": "imgs/icons/fx-pan",
-      "Tooltip": "Turn to change Pan of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Pan of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2763,9 +2761,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2774,7 +2771,7 @@
       "Name": "Fixture: Tilt",
       "UUID": "com.rezabehjat.capture.fixture.tilt",
       "Icon": "imgs/icons/fx-tilt",
-      "Tooltip": "Turn to change Tilt of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Tilt of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2788,9 +2785,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2799,7 +2795,7 @@
       "Name": "Fixture: Intensity",
       "UUID": "com.rezabehjat.capture.fixture.intensity",
       "Icon": "imgs/icons/fx-intensity",
-      "Tooltip": "Turn to change Intensity of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Intensity of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2813,9 +2809,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2824,7 +2819,7 @@
       "Name": "Fixture: Zoom",
       "UUID": "com.rezabehjat.capture.fixture.zoom",
       "Icon": "imgs/icons/fx-zoom",
-      "Tooltip": "Turn to change Zoom of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Zoom of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2838,9 +2833,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2849,7 +2843,7 @@
       "Name": "Fixture: Focus",
       "UUID": "com.rezabehjat.capture.fixture.focus",
       "Icon": "imgs/icons/fx-focus",
-      "Tooltip": "Turn to change Focus of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Focus of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2863,9 +2857,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2874,7 +2867,7 @@
       "Name": "Fixture: Iris",
       "UUID": "com.rezabehjat.capture.fixture.iris",
       "Icon": "imgs/icons/fx-iris",
-      "Tooltip": "Turn to change Iris of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Iris of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2888,9 +2881,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2899,7 +2891,7 @@
       "Name": "Fixture: Red|Cyan",
       "UUID": "com.rezabehjat.capture.fixture.red-cyan",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "Turn to change Red (additive) or, on a fixture without it, Cyan (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Red (additive) or, on a fixture without it, Cyan (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2913,9 +2905,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2924,7 +2915,7 @@
       "Name": "Fixture: Green|Magenta",
       "UUID": "com.rezabehjat.capture.fixture.green-magenta",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "Turn to change Green (additive) or, on a fixture without it, Magenta (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Green (additive) or, on a fixture without it, Magenta (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2938,9 +2929,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2949,7 +2939,7 @@
       "Name": "Fixture: Blue|Yellow",
       "UUID": "com.rezabehjat.capture.fixture.blue-yellow",
       "Icon": "imgs/icons/fx-colour",
-      "Tooltip": "Turn to change Blue (additive) or, on a fixture without it, Yellow (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change Blue (additive) or, on a fixture without it, Yellow (subtractive) of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2963,9 +2953,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }
@@ -2974,7 +2963,7 @@
       "Name": "Fixture: White",
       "UUID": "com.rezabehjat.capture.fixture.white",
       "Icon": "imgs/icons/fx-white",
-      "Tooltip": "Turn to change White of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push or touch: fine (0.1 %). Long touch: home value. The first touch starts DMX output for that fixture's universe.",
+      "Tooltip": "Turn to change White of the selected fixture(s) (Fixture: Select) by 1 % per tick, 16-bit aware. Push: home this attribute on the selected fixture(s). Tap the strip: fine (0.1 %). The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],
@@ -2988,9 +2977,8 @@
         "layout": "layouts/dial.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
-          "Push": "Fine mode",
-          "Touch": "Fine mode",
-          "LongTouch": "Home"
+          "Push": "Home attribute",
+          "Touch": "Fine mode"
         },
         "background": "imgs/actions/dial/strip-background"
       }

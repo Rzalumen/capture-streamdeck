@@ -1,9 +1,11 @@
 /**
  * CITP / CAEX wire helpers for the READ-ONLY show sync (ported from research/lib/citp.mjs; the research copy is unchanged).
  *
- * The ONLY messages this plugin may ever put on the TCP connection are PINF/PNam and the CAEX codes in ALLOWED_OUTGOING_CAEX
- * (LaserFeedList, EnterShow, LeaveShow, FixtureListRequest, NACK). `isAllowedOutgoing` is checked on every send; anything
- * else (FixtureModify, FixtureRemove, FixtureIdentify, FixtureSelection, ...) is refused. All integers little-endian.
+ * The ONLY messages this plugin may ever put on the TCP connection are PINF/PNam, the CAEX codes in ALLOWED_OUTGOING_CAEX
+ * (LaserFeedList, EnterShow, LeaveShow, FixtureListRequest, NACK) and a well-formed FixtureIdentify (v0.5: sent by the session only
+ * for fixtures whose identifier is still 0xffffffff). `isAllowedOutgoing` is checked on every send; anything else (FixtureList,
+ * FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace, ...) is refused.
+ * All integers little-endian.
  *
  * Sources: CITP 1.0 base header and PINF layers (jwarwick/citp-lib, puremediaserver CITPDefines.h; PLoc confirmed against real
  * Capture 2026 packets); CAEX layer from "CITP CAEX Specification F" (Capture, 2020-07-03).
@@ -69,7 +71,10 @@ export const CAEX = {
   LeaveShow: 0x00020101,
   FixtureListRequest: 0x00020200,
   FixtureList: 0x00020201,
+  FixtureModify: 0x00020202,
+  FixtureRemove: 0x00020203,
   FixtureIdentify: 0x00020204,
+  FixtureSelection: 0x00020300,
   GetLaserFeedList: 0x00030100,
   LaserFeedList: 0x00030101,
 } as const;
@@ -109,11 +114,50 @@ export function buildNack(reason: number): Buffer {
 /** The ONLY CAEX codes that may ever be sent. */
 export const ALLOWED_OUTGOING_CAEX: ReadonlySet<number> = new Set([CAEX.LaserFeedList, CAEX.EnterShow, CAEX.LeaveShow, CAEX.FixtureListRequest, CAEX.NACK]);
 
+/**
+ * CAEX FixtureIdentify (5.6, 0x00020204): u16 FixtureCount, then per fixture the 16 bytes of its CaptureInstanceId (identifier type
+ * 0x04) EXACTLY as Capture sent them in the FixtureList and u32 FixtureIdentifier. Proven on a real Capture (research --identify).
+ */
+export function buildFixtureIdentify(items: { guid: Buffer; identifier: number }[]): Buffer {
+  if (items.length < 1 || items.length > 0xffff) throw new RangeError(`FixtureIdentify needs 1..65535 fixtures, got ${items.length}`);
+  const head = Buffer.alloc(6);
+  head.writeUInt32LE(CAEX.FixtureIdentify, 0);
+  head.writeUInt16LE(items.length, 4);
+  const parts: Buffer[] = [head];
+  for (const it of items) {
+    if (it.guid.length !== 16) throw new RangeError("FixtureIdentify: the CaptureInstanceId must be exactly 16 bytes");
+    const id = Buffer.alloc(4);
+    id.writeUInt32LE(it.identifier >>> 0, 0);
+    parts.push(Buffer.from(it.guid), id);
+  }
+  const body = Buffer.concat(parts);
+  return Buffer.concat([buildHeader(HEADER_SIZE + body.length, "CAEX"), body]);
+}
+
+export const UNIDENTIFIED = 0xffffffff;
+
+/** Entries of a FixtureIdentify we built (for the session's own check before it sends one). null when the message is not a well-formed FixtureIdentify. */
+export function parseFixtureIdentify(msg: Buffer): { guidRaw: string; identifier: number }[] | null {
+  if (msg.length < HEADER_SIZE + 6 || msg.toString("latin1", 16, 20) !== "CAEX" || msg.readUInt32LE(20) !== CAEX.FixtureIdentify || msg.readUInt32LE(8) !== msg.length) return null;
+  const n = msg.readUInt16LE(HEADER_SIZE + 4);
+  if (n < 1 || msg.length !== HEADER_SIZE + 6 + n * 20) return null;
+  const out: { guidRaw: string; identifier: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    const o = HEADER_SIZE + 6 + i * 20;
+    out.push({ guidRaw: guidRawStr(msg.subarray(o, o + 16)) as string, identifier: msg.readUInt32LE(o + 16) });
+  }
+  return out;
+}
+
 export function isAllowedOutgoing(msg: Buffer): boolean {
   if (msg.length < HEADER_SIZE + 4 || msg.toString("latin1", 0, 4) !== "CITP") return false;
   const layer = msg.toString("latin1", 16, 20);
   if (layer === "PINF") return msg.toString("latin1", 20, 24) === "PNam";
-  if (layer === "CAEX") return ALLOWED_OUTGOING_CAEX.has(msg.readUInt32LE(20));
+  if (layer === "CAEX") {
+    const code = msg.readUInt32LE(20);
+    if (code === CAEX.FixtureIdentify) return parseFixtureIdentify(msg) !== null; // only a well-formed one (the session decides which fixtures)
+    return ALLOWED_OUTGOING_CAEX.has(code);
+  }
   return false;
 }
 
@@ -265,9 +309,64 @@ export function decodeFixtureList(msg: Buffer): FixtureListResult {
   return { type, count, fixtures, error };
 }
 
+/** One entry of a FixtureModify (spec F 5.7): every field is present; ChangedFields says which changed (0x01 patch, 0x02 unit, 0x04 channel, 0x08 circuit, 0x10 note, 0x20 position+angles). */
+export interface ModifyItem {
+  identifier: number;
+  changed: number;
+  patched: number;
+  /** 0-based, as sent. */
+  universe: number;
+  /** 0-based, as sent. */
+  universeChannel: number;
+  unit?: string;
+  channel?: number;
+  circuit?: string;
+  note?: string;
+  position?: [number, number, number];
+  angles?: [number, number, number];
+}
+export interface ModifyResult {
+  items: ModifyItem[];
+  error: string | null;
+}
+
+/**
+ * FixtureModify (0x00020202): u16 count, then per fixture u32 FixtureIdentifier, u8 ChangedFields, u8 Patched, u8 Universe (0-based),
+ * u16 UniverseChannel (0-based), ucs2 Unit, u16 Channel, ucs2 Circuit, ucs2 Note, float[3] Position, float[3] Angles.
+ * If the bytes run out part-way, the items decoded so far are returned (with the patch fields of the one that broke off, when read) and `error` says so.
+ */
+export function decodeFixtureModify(msg: Buffer): ModifyResult {
+  const items: ModifyItem[] = [];
+  let error: string | null = null;
+  const c = new Cur(msg, HEADER_SIZE + 4);
+  try {
+    const n = c.u16();
+    for (let i = 0; i < n; i++) {
+      const it = { identifier: c.u32(), changed: c.u8() } as ModifyItem;
+      it.patched = c.u8();
+      it.universe = c.u8();
+      it.universeChannel = c.u16();
+      items.push(it); // the patch fields are in; the rest may still fail
+      it.unit = c.ucs2();
+      it.channel = c.u16();
+      it.circuit = c.ucs2();
+      it.note = c.ucs2();
+      it.position = [c.f32(), c.f32(), c.f32()];
+      it.angles = [c.f32(), c.f32(), c.f32()];
+    }
+  } catch (e) {
+    error = (e as Error).message;
+  }
+  return { items, error };
+}
+
 export interface DecodedMessage {
   layer: string | null;
   code: number | null;
+  /** FixtureSelection: the selected fixtures' identifiers, in selection order (empty = nothing selected). */
+  selection?: number[];
+  modify?: ModifyResult;
+  remove?: number[];
   /** PLoc announcement (UDP) */
   ploc?: { port: number; type: string | null; name: string | null; state: string | null };
   showName?: string;
@@ -292,6 +391,14 @@ export function decodeMessage(msg: Buffer): DecodedMessage {
     try {
       if (r.code === CAEX.FixtureList) r.fixtures = decodeFixtureList(msg);
       else if (r.code === CAEX.EnterShow) r.showName = new Cur(msg, HEADER_SIZE + 4).ucs2();
+      else if (r.code === CAEX.FixtureSelection || r.code === CAEX.FixtureRemove) {
+        const c = new Cur(msg, HEADER_SIZE + 4);
+        const n = c.u16();
+        const ids: number[] = [];
+        for (let i = 0; i < n; i++) ids.push(c.u32());
+        if (r.code === CAEX.FixtureSelection) r.selection = ids;
+        else r.remove = ids;
+      } else if (r.code === CAEX.FixtureModify) r.modify = decodeFixtureModify(msg);
     } catch {
       /* undecodable body: the code alone is still returned */
     }

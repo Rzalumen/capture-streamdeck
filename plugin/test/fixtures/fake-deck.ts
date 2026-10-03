@@ -147,9 +147,20 @@ export class FakeDeck {
   sent(context: string, event: string): Sent[] {
     return this.received.filter((m) => m.context === context && m.event === event);
   }
-  lastImage(context: string): string {
+  /** The SVG of the newest setImage, as drawn by the plugin (no label text: v0.5 labels are Stream Deck titles). */
+  lastImageRaw(context: string): string {
     const m = this.sent(context, "setImage").at(-1);
     return m ? decodeURIComponent(String(m.payload.image).split(",")[1] ?? "") : "";
+  }
+  /** The newest title the plugin set on the key (the key's name as the user sees it), or "". */
+  lastTitle(context: string): string {
+    return String(this.sent(context, "setTitle").at(-1)?.payload.title ?? "");
+  }
+  /** What the user sees on a key: the image SVG followed by `<t>title</t>` (so `includes(">Plot<")` finds a title as well as drawn text). */
+  lastImage(context: string): string {
+    const img = this.lastImageRaw(context);
+    const t = this.lastTitle(context);
+    return img || t ? `${img}${t ? `<t>${t}</t>` : ""}` : "";
   }
   lastFeedback(context: string): any {
     return this.sent(context, "setFeedback").at(-1)?.payload;

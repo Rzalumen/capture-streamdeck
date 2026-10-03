@@ -15,8 +15,16 @@ export const optNum = (v: unknown): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/** Last title set per key, so an unchanged title is not sent again on every redraw. */
+const titles = new Map<string, string>();
+
+/** The key's image (icon, flash text, ring, badge) and its name as Stream Deck title text (v0.5: labels are not drawn into images). */
 export function draw(action: KeyAction, o: KeyOptions): void {
   action.setImage(keyImage(o)).catch((e) => rt.log.warn("setImage failed", e));
+  if (titles.get(action.id) !== o.label) {
+    titles.set(action.id, o.label);
+    action.setTitle(o.label).catch((e) => rt.log.warn("setTitle failed", e));
+  }
 }
 
 /** Per-key temporary message ("Hold", "Stored", "Error"…). */
