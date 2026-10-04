@@ -3,13 +3,13 @@
  * one page, from its NAME only (whole words, case-insensitive, camelCase split; a trailing number/letter on a word is ignored:
  * "Frost2" = frost, "Shutter1A" = shutter + "1a"). No fixture type is known here.
  *
- *   Main             dial 2 = the first pan, dial 3 = the first tilt, dial 4 = the first dimmer / intensity / dim ("—" when missing)
+ *   Main             dial 1 = the first pan, 2 = the first tilt, 3 = the first dimmer / intensity / dim, 4 = the first zoom ("—" when missing)
  *   Colour           red green blue white amber lime uv cyan magenta yellow cto ctb ctc, colour/color (wheel)
- *   Beam             zoom, focus, iris, frost, diffusion, edge
+ *   Beam             zoom, focus, iris, frost, diffusion, edge; and shutter / strobe (not framing) — v0.7.1 merged Strobe/Shutter in
  *   Shutters         blade, framing / frame, "shutter" + a number or letter ("Shutter 1A"), shutter rotation
  *   Gobo/FX          gobo, prism, animation, effect, fx, rotation, index
- *   Strobe/Shutter   shutter, strobe (not a framing shutter)
- *   Other            everything else, so nothing is unreachable (also a second pan, tilt or dimmer channel)
+ *   Other            everything else, so nothing is unreachable (also a second pan, tilt, dimmer or zoom channel)
+ *   (hidden)         function / functions / control / auto (whole words): on no page, always sent at 0 (Handoff 22)
  *
  * A name that also has a speed/time/mode/macro/control ... word (NOT_THE_VALUE) is never the value of a group: it goes to Other.
  * Fine channels (role 2) are never parameters of their own: they ride with their coarse channel (16-bit).
@@ -21,16 +21,18 @@
 import { isAdditiveColourName, type Slot } from "./attrs.js";
 import { NOT_THE_VALUE, tokens, type Channel } from "./modes.js";
 
-export type GroupId = "main" | "colour" | "beam" | "shutters" | "gobo" | "strobe" | "other";
-export const GROUP_ORDER: readonly GroupId[] = ["main", "colour", "beam", "shutters", "gobo", "strobe", "other"];
-export const GROUP_LABEL: Record<GroupId, string> = { main: "Main", colour: "Colour", beam: "Beam", shutters: "Shutters", gobo: "Gobo/FX", strobe: "Strobe/Shutter", other: "Other" };
-/** What a channel name is (before the Main page takes the first pan, tilt and dimmer). */
-export type Kind = "pan" | "tilt" | "dimmer" | "strobe" | "colour" | "beam" | "shutters" | "gobo" | "other";
-/** The Main page's dials 2–4, and what each shows when the fixture has no such channel. */
-export const MAIN_KINDS = ["pan", "tilt", "dimmer"] as const;
-export const MAIN_LABELS = ["Pan", "Tilt", "Intensity"] as const;
-/** Knobs per page (dials 2–4). */
-export const PER_PAGE = 3;
+export type GroupId = "main" | "colour" | "beam" | "shutters" | "gobo" | "other";
+export const GROUP_ORDER: readonly GroupId[] = ["main", "colour", "beam", "shutters", "gobo", "other"];
+export const GROUP_LABEL: Record<GroupId, string> = { main: "Main", colour: "Colour", beam: "Beam", shutters: "Shutters", gobo: "Gobo/FX", other: "Other" };
+/** What a channel name is (before the Main page takes the first pan, tilt, dimmer and zoom). */
+export type Kind = "pan" | "tilt" | "dimmer" | "zoom" | "strobe" | "colour" | "beam" | "shutters" | "gobo" | "other";
+/** The Main page's dials 1–4 (v0.7.1), and what each shows when the fixture has no such channel. */
+export const MAIN_KINDS = ["pan", "tilt", "dimmer", "zoom"] as const;
+export const MAIN_LABELS = ["Pan", "Tilt", "Intensity", "Zoom"] as const;
+/** Knobs per page (v0.7.1: all four dials are Attribute dials). */
+export const PER_PAGE = 4;
+/** Whole words that hide a channel from every page (Handoff 22): it is still sent, always at 0. */
+const HIDDEN_WORDS = ["function", "functions", "control", "auto"];
 
 export interface Param {
   /** Unique within the type: `ch<offset of the first coarse channel>`. */
@@ -66,6 +68,8 @@ export interface FixtureModel {
   byOffset: Map<number, Param>;
   /** Channels on no page (candidate parses disagree there), never driven. */
   excluded: number[];
+  /** Hidden channels (function / control / auto, Handoff 22): on no page, always sent at 0, never stored. Offsets incl. fine partners. */
+  hidden: number[];
   /** No dimmer/intensity channel: Main shows "—" on dial 4. */
   noIntensity: boolean;
 }
@@ -97,6 +101,18 @@ const mergeable = (name: string): boolean => {
   return has(base, ...MIX_WORDS) && !has(base, "colour", "color", "colours", "colors", "wheel");
 };
 
+/** Handoff 22: a channel whose name has the whole word function / functions / control / auto is never on a page (always 0). */
+export function isHiddenName(name: string): boolean {
+  const { raw, base } = words(name);
+  return [...raw, ...base].some((t) => HIDDEN_WORDS.includes(t));
+}
+
+/** Handoff 22 migration: a shutter or strobe channel (not a framing blade), whose stored value may be the old bad 255. */
+export function isShutterStrobeName(name: string): boolean {
+  const { raw, base } = words(name);
+  return starts(base, "shutter", "strobe") && !isFramingShutter(raw, base);
+}
+
 /** What one channel name is (first rule that matches). */
 export function kindOf(name: string): Kind {
   const { raw, base } = words(name);
@@ -107,14 +123,15 @@ export function kindOf(name: string): Kind {
   const framing = isFramingShutter(raw, base);
   if (!framing && starts(base, "shutter", "strobe")) return "strobe";
   if (has(base, ...COLOUR_WORDS)) return "colour";
-  if (has(base, "zoom", "focus", "iris", "frost", "diffusion", "diffuser", "edge")) return "beam";
+  if (has(base, "zoom")) return "zoom";
+  if (has(base, "focus", "iris", "frost", "diffusion", "diffuser", "edge")) return "beam";
   if (framing) return "shutters";
   if (has(base, "gobo", "gobos", "prism", "prisms", "animation", "anim", "effect", "effects", "fx", "rotation", "rot", "index")) return "gobo";
   return "other";
 }
 
-/** The group a channel of this kind goes to when it is NOT the first pan / tilt / dimmer (those are on Main). */
-const GROUP_OF_KIND: Record<Kind, GroupId> = { pan: "other", tilt: "other", dimmer: "other", strobe: "strobe", colour: "colour", beam: "beam", shutters: "shutters", gobo: "gobo", other: "other" };
+/** The group a channel of this kind goes to when it is NOT the first pan / tilt / dimmer / zoom (those are on Main). Strobe/shutter is part of Beam (v0.7.1). */
+const GROUP_OF_KIND: Record<Kind, GroupId> = { pan: "other", tilt: "other", dimmer: "other", zoom: "beam", strobe: "beam", colour: "colour", beam: "beam", shutters: "shutters", gobo: "gobo", other: "other" };
 
 /** Colour cells merge on the name without its numbers ("Red 3" → "red", "Cell 2 Red" → "cell red"). */
 const cellKey = (name: string): string =>
@@ -130,11 +147,17 @@ const cellTitle = (name: string): string =>
     .trim() || name;
 
 /**
- * Home values (Handoff 20 §4): pan/tilt 50 %; dimmer/intensity 100 %; the FIRST shutter/strobe channel at 255 (as in v0.5: open), other
- * shutter/strobe channels 0; additive colour 100 %, subtractive / CTO / wheels 0; zoom, focus, iris, frost 0 (their v0.5 default);
- * framing shutters 0 (blades out); everything else 0.
+ * Home values (Handoff 22, Reza's table; first touch, Home Selected, strip-tap home). 16-bit channels: the same %, coarse and fine both set.
+ *   pan, tilt 50 % · dimmer / intensity / dim 100 %
+ *   shutter value channels ("Shutter", "Shutter/LED", "Shutter/Strobe": a shutter word, not a function/mode/control/speed channel and
+ *     not a framing blade) 100 % (open) · strobe-only channels ("Strobe") 0 · shutter function/mode/control channels 0
+ *   zoom, iris, focus 50 % · frost, diffusion (and edge) 0
+ *   framing blades (insertion) 0 = fully out · blade angle, frame rotation, shutter rotation 50 % — but a blade name with an END letter
+ *     ("Blade 1 Angle A", "Blade 1A") is an insertion end: 0
+ *   additive colour 100 % · subtractive, CTO, CTB, colour wheel 0 · gobo, prism, animation, effect and their rotate/index 0 · the rest 0
  */
-function homeOf(kind: Kind, name: string, firstShutter: boolean, sixteen: boolean): number {
+export function homeFor(name: string, kind: Kind = kindOf(name)): number {
+  const { base } = words(name);
   switch (kind) {
     case "pan":
     case "tilt":
@@ -142,8 +165,18 @@ function homeOf(kind: Kind, name: string, firstShutter: boolean, sixteen: boolea
     case "dimmer":
       return 1;
     case "strobe":
-      if (!firstShutter) return 0;
-      return sixteen ? 0xff00 / 0xffff : 1; // coarse 255, fine 0 (the v0.5 shutter value)
+      return starts(base, "shutter") ? 1 : 0;
+    case "zoom":
+      return 0.5;
+    case "beam":
+      return has(base, "focus", "iris") ? 0.5 : 0;
+    case "shutters": {
+      // blade angle / frame rotation / shutter rotation 50 %; insertion 0. A name that also names a blade END ("Blade 1 Angle A",
+      // "Blade 1A") is an insertion end (its depth sets the angle): 0, so a default never cuts into the beam.
+      const { raw } = words(name);
+      const end = raw.some((t) => /^[a-d]$/.test(t) || /^\d+[a-d]$/.test(t));
+      return has(base, "angle", "rotation", "rot", "rotate") && !end ? 0.5 : 0;
+    }
     case "colour":
       return isAdditiveColourName(name) ? 1 : 0;
     default:
@@ -164,13 +197,17 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
   const params: Param[] = [];
   const colourByKey = new Map<string, Param>();
   const excluded: number[] = [];
-  let shutterSeen = false;
-  const main: (Param | null)[] = [null, null, null];
+  const hidden: number[] = [];
+  const main: (Param | null)[] = [null, null, null, null];
   for (const c of channels) {
     if (c.role === 2 && claimed.has(c.offset)) continue; // a fine half: it rides with its coarse channel
     const s = slotOf(c);
     if (bad.has(c.offset) || (s.fine && bad.has(s.fine.offset))) {
       excluded.push(c.offset, ...(s.fine ? [s.fine.offset] : []));
+      continue;
+    }
+    if (isHiddenName(c.name)) {
+      hidden.push(c.offset, ...(s.fine ? [s.fine.offset] : []));
       continue;
     }
     const kind = kindOf(c.name);
@@ -187,9 +224,7 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
         continue;
       }
     }
-    const isShutter = kind === "strobe";
-    const p: Param = { id: `ch${c.offset}`, name: c.name, group, slots: [s], home: homeOf(kind, c.name, isShutter && !shutterSeen, sixteen), sixteen };
-    if (isShutter) shutterSeen = true;
+    const p: Param = { id: `ch${c.offset}`, name: c.name, group, slots: [s], home: homeFor(c.name, kind), sixteen };
     if (onMain) main[mainSlot] = p;
     if (group === "colour" && mergeable(c.name)) colourByKey.set(cellKey(c.name), p);
     params.push(p);
@@ -230,7 +265,7 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
     byOffset.set(s.coarse.offset, p);
     if (s.fine) byOffset.set(s.fine.offset, p);
   }
-  return { params, pages, byName, byOffset, excluded: excluded.sort((a, b) => a - b), noIntensity: !main[2] };
+  return { params, pages, byName, byOffset, excluded: excluded.sort((a, b) => a - b), hidden: hidden.sort((a, b) => a - b), noIntensity: !main[2] };
 }
 
 /** "Shutters 1/3", "Colour". */

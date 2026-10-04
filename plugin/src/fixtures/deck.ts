@@ -18,6 +18,8 @@ import { showKey } from "./setup.js";
 // ------------------------------------------------------------------ remembered values
 
 export const VALUES_KEY = "fixtureValues";
+/** Handoff 22 one-time migration: { version: 1, pending: { show: [fixture keys whose stored shutter/strobe values must go] } }. */
+export const MIGRATION_KEY = "fixtureValuesMigration";
 export const DECK_KEY = "fixtureDeck";
 export const DEFAULT_IDLE_SECONDS = 120;
 export const MAX_IDLE_SECONDS = 3600;
@@ -27,17 +29,22 @@ type ValueData = Record<string, Record<string, Record<string, number>>>;
 
 export class ValueMemory {
   private data: ValueData = {};
+  /** show -> fixture keys still waiting for the v0.7.1 shutter/strobe clean-up (their type was not known yet). */
+  private pending: Record<string, string[]> = {};
   private timer: NodeJS.Timeout | undefined;
   private dirty = false;
+  private saving: Promise<void> = Promise.resolve();
   constructor(
     private globals: GlobalSettings,
     private saveDelayMs = 1000,
+    private log: (s: string) => void = () => undefined,
   ) {}
 
   /** Reads what was stored (malformed entries are ignored). Never throws. */
   async load(): Promise<void> {
     try {
-      const raw = (await this.globals.read())[VALUES_KEY];
+      const g = await this.globals.read();
+      const raw = g[VALUES_KEY];
       const data: ValueData = {};
       if (raw && typeof raw === "object") {
         for (const [show, fx] of Object.entries(raw as Record<string, unknown>)) {
@@ -51,14 +58,47 @@ export class ValueMemory {
         }
       }
       this.data = data;
+      // Handoff 22: on the first start of v0.7.1 every stored fixture is marked; its shutter/strobe values are deleted the first time its
+      // channel names are known (get() with `isShutterStrobe`), so the old "first shutter = 255" never comes back.
+      const mig = g[MIGRATION_KEY] as { version?: unknown; pending?: unknown } | undefined;
+      if (mig && mig.version === 1) {
+        const pend: Record<string, string[]> = {};
+        for (const [show, keys] of Object.entries((mig.pending ?? {}) as Record<string, unknown>)) if (Array.isArray(keys)) pend[show] = keys.filter((k): k is string => typeof k === "string" && !!data[show]?.[k]);
+        this.pending = pend;
+      } else {
+        this.pending = Object.fromEntries(Object.entries(data).map(([show, fx]) => [show, Object.keys(fx)]));
+        const n = Object.values(this.pending).reduce((a, k) => a + k.length, 0);
+        this.log(`values migration (v0.7.1): ${n} stored fixture(s) will lose their stored shutter/strobe values when their channel list is next read`);
+        await this.globals.update({ [MIGRATION_KEY]: { version: 1, pending: this.pending } });
+      }
     } catch {
       /* keep what we have */
     }
   }
 
-  /** The stored values of one fixture in one show (undefined: never touched there). */
-  get(showName: string | null, key: string): ReadonlyMap<string, number> | undefined {
-    const v = this.data[showKey(showName)]?.[key];
+  /** True while this fixture's stored values still wait for the shutter/strobe clean-up. */
+  isPending(showName: string | null, key: string): boolean {
+    return !!this.pending[showKey(showName)]?.includes(key);
+  }
+
+  /**
+   * The stored values of one fixture in one show (undefined: never touched there). `isShutterStrobe(id)` (from the fixture's channel
+   * names) runs the one-time clean-up first; a fixture still waiting for it returns nothing (home values) until its names are known.
+   */
+  get(showName: string | null, key: string, isShutterStrobe?: (id: string) => boolean): ReadonlyMap<string, number> | undefined {
+    const s = showKey(showName);
+    if (this.isPending(showName, key)) {
+      if (!isShutterStrobe) return undefined;
+      const v = this.data[s]?.[key] ?? {};
+      const gone = Object.keys(v).filter(isShutterStrobe);
+      for (const id of gone) delete v[id];
+      this.pending[s] = (this.pending[s] ?? []).filter((k) => k !== key);
+      if (!this.pending[s].length) delete this.pending[s];
+      this.log(`values migration (v0.7.1): ${gone.length ? `removed the stored shutter/strobe value(s) of channel(s) ${gone.map((id) => Number(id.slice(2)) + 1).join(", ")}` : "no stored shutter/strobe values"} for fixture ${key} in show "${s}"`);
+      this.dirty = true;
+      void this.flush();
+    }
+    const v = this.data[s]?.[key];
     return v ? new Map(Object.entries(v)) : undefined;
   }
 
@@ -73,17 +113,22 @@ export class ValueMemory {
     this.timer.unref?.();
   }
 
-  /** Write now (Deck Control OFF, exit). */
+  /** Write now (Deck Control OFF, exit). Resolves when everything changed so far is written (or failed). */
   async flush(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
-    if (!this.dirty) return;
-    this.dirty = false;
-    try {
-      await this.globals.update({ [VALUES_KEY]: this.data });
-    } catch {
-      this.dirty = true; // try again next time
+    if (this.dirty) {
+      this.dirty = false;
+      const snapshot = JSON.parse(JSON.stringify({ [VALUES_KEY]: this.data, [MIGRATION_KEY]: { version: 1, pending: this.pending } })) as Record<string, unknown>;
+      this.saving = this.saving.then(async () => {
+        try {
+          await this.globals.update(snapshot);
+        } catch {
+          this.dirty = true; // try again next time
+        }
+      });
     }
+    await this.saving;
   }
 }
 

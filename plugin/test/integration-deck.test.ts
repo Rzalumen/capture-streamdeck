@@ -232,6 +232,9 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
 
 test("resume after a plugin restart: a new plugin process starts OFF and the first turn continues from the stored 75 %", async () => {
   const globals = JSON.parse(JSON.stringify(deck.globals));
+  // Handoff 22 migration check: pretend these values were written by v0.7 (no migration mark) with the old bad shutter value
+  delete globals.fixtureValuesMigration;
+  globals.fixtureValues["DECK SHOW"][INST].ch6 = 0.3; // channel 7 "Shutter"
   await deck.stop();
   await sleep(500);
   deck = new FakeDeck();
@@ -244,6 +247,9 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   deck.dialRotate(A.a1, "a1", -5);
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.7 * 65535), "70 %: resumed from 75 %");
   assert.equal(slot(p, 6), 255, "dimmer: last value sent before the restart was 100 % (Home Selected)");
+  assert.equal(slot(p, 7), 255, "the stored v0.7 Shutter value (30 %) was deleted by the migration: home 100 % (open)");
+  assert.match(deck.logText(), /values migration \(v0\.7\.1\): 1 stored fixture\(s\) will lose their stored shutter\/strobe values/);
+  assert.match(deck.logText(), /values migration \(v0\.7\.1\): removed the stored shutter\/strobe value\(s\) of channel\(s\) 7 for fixture/);
   deck.willAppear(A.deck, "deckkey2", {});
   await waitTitle("deckkey2", "Deck ON");
   await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "ON after the restart");

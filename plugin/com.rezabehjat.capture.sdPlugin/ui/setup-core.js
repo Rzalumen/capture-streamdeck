@@ -135,7 +135,7 @@
     for (const h of ["#", "Name", "Bits", "Page"]) head.appendChild(el("th", "", h));
     tbl.appendChild(head);
     for (const c of t.channels) {
-      const tr = el("tr", c.bits === "16-bit fine" ? "fine" : "");
+      const tr = el("tr", [c.bits === "16-bit fine" ? "fine" : "", c.hidden ? "hid" : ""].filter(Boolean).join(" "));
       tr.appendChild(el("td", "n", String(c.n)));
       tr.appendChild(el("td", "", c.name));
       tr.appendChild(el("td", "b", c.bits === "8-bit" ? "8-bit" : c.bits === "16-bit" ? "16-bit (fine " + c.pair + ")" : "fine of " + c.pair));

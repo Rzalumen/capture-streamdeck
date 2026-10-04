@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.7.0 (beta)
+# Capture for Stream Deck+ — plugin v0.7.1 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -120,9 +120,24 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
   tap store the home values.
 - **Knob gestures**: **push = fine mode (0.1 %) on/off; tap the strip = home that channel**. (Before v0.7 it was the other way round.)
 
+### Home values, hidden channels, fewer pages (v0.7.1, Handoff 22)
+
+- **Home values** (first touch, Home Selected, strip-tap home), by name: pan/tilt 50 %; dimmer/intensity/dim 100 %; **shutter value channels**
+  ("Shutter", "Shutter/LED", "Shutter/Strobe") **100 % (open)**; strobe-only channels ("Strobe") 0; shutter function/mode channels 0; zoom, iris,
+  focus 50 %; frost/diffusion 0; framing blades (insertion) 0 = out; blade angle, frame rotation, shutter rotation 50 % (a blade name with an end
+  letter, "Blade 1 Angle A" / "Blade 1A", counts as an insertion end: 0); additive colour 100 %; subtractive, CTO, CTB, colour wheel 0; gobo, prism,
+  animation, effect and their rotate/index 0; everything else 0. 16-bit: the same % on coarse and fine.
+- **Hidden channels**: a name with the whole word *function(s)*, *control* or *auto* is on no page and always sent at 0 (never stored, never homed).
+  The Setup Channels list shows it greyed out as "hidden (0)".
+- **All four dials are Attribute dials** (Attribute 1–4, 4 channels per page); **Main = Pan · Tilt · Intensity · Zoom**; Strobe/Shutter is part of
+  **Beam**. The Select dial left the profile (still in the action list); the **Fixtures: Next Fixture** key cycles the controllable fixtures and shows
+  the one selected ("Next / Ch 207").
+- One-time migration on the first start of v0.7.1: stored shutter/strobe values (the old 255) are deleted from the remembered values the first time
+  each fixture's channel names are read (logged: `values migration (v0.7.1): …`).
+
 ### Attribute pages (v0.6, Handoff 20; Main page v0.7)
 
-The Fixtures folder is one page: **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶**, dials **Select · Attribute 1 · 2 · 3**.
+The Fixtures folder is one page: **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture**, dials **Attribute 1 · 2 · 3 · 4** (v0.7.1).
 
 - **Every channel of the selected fixture is on exactly one page**, built from the channel names of its library mode (whole words, case-insensitive, no fixture
   type is known): **Main** (Attribute 1 = the first pan, 2 = the first tilt, 3 = the first dimmer/intensity/dim; `—` when missing) · **Colour** (red … uv, cyan,

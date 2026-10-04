@@ -43,8 +43,10 @@ export interface SetupChannelView {
   /** "8-bit", "16-bit" (the coarse half; `pair` = its fine channel) or "16-bit fine" (`pair` = its coarse channel). */
   bits: "8-bit" | "16-bit" | "16-bit fine";
   pair: number | null;
-  /** The knob page it is on ("Shutters 1/3"), "" for a fine half, or a reason it is on none. */
+  /** The knob page it is on ("Shutters 1/3"), "" for a fine half, or a reason it is on none ("hidden (0)"). */
   page: string;
+  /** Handoff 22: a hidden channel (function / control / auto): on no page, always sent at 0. Shown greyed out. Absent otherwise. */
+  hidden?: true;
 }
 export interface SetupTypeView {
   channels: SetupChannelView[];
@@ -108,7 +110,10 @@ export function channelList(channels: { offset: number; name: string; role: numb
   const pageOf = new Map<string, string>();
   for (const pg of model.pages) for (const p of pg.params) if (p) pageOf.set(p.id, pageTitle(pg));
   const excluded = new Set(model.excluded);
+  const hidden = new Set(model.hidden);
   return channels.map((c) => {
+    const bitsH: SetupChannelView["bits"] = c.role === 2 ? "16-bit fine" : c.role === 1 ? "16-bit" : "8-bit";
+    if (hidden.has(c.offset)) return { n: c.offset + 1, name: c.name, bits: bitsH, pair: bitsH === "8-bit" ? null : c.pair + 1, page: "hidden (0)", hidden: true as const };
     const p = model.byOffset.get(c.offset);
     const fineOfP = !!p && p.slots.some((s) => s.fine?.offset === c.offset);
     const bits: SetupChannelView["bits"] = c.role === 2 ? "16-bit fine" : c.role === 1 ? "16-bit" : "8-bit";
@@ -387,6 +392,15 @@ export class FixtureService {
   }
 
   // ------------------------------------------------------------------ dials and keys
+
+  /** Fixtures: Next Fixture key (v0.7.1): the next controllable fixture, like one tick of the Select dial. */
+  nextFixture(): boolean {
+    this.deck?.activity("Next Fixture key");
+    const before = this.selection.view().primary?.fixture.key;
+    this.selection.step(1);
+    this.emit();
+    return this.selection.view().primary?.fixture.key !== before || this.controllables().length === 1;
+  }
 
   /** Rotate the Select dial: choose one controllable fixture by hand (Capture's next click overrides it). */
   rotateSelect(ticks: number): void {

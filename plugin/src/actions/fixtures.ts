@@ -363,3 +363,23 @@ export class FixturesDeck extends FixtureKey {
     await rt.deck.toggle("Deck Control key");
   }
 }
+
+/** Fixtures: Next Fixture (v0.7.1) — the next controllable fixture (the Select dial left the profile). Title: "Next" + the fixture selected now. */
+export class FixturesNext extends FixtureKey {
+  constructor() {
+    super(FIXTURE_KEY_UUIDS.next, fixtureKey(FIXTURE_KEY_UUIDS.next));
+  }
+  protected view(c: KeyCtx): void {
+    const p = svc().selection.view().primary;
+    const f = c.flasher.flash;
+    const what = p ? (p.fixture.channel ? `Ch ${p.fixture.channel}` : p.fixture.name.slice(0, 10)) : "";
+    draw(c.action, { icon: this.def.icon, label: what ? `Next\n${what}` : "Next\nFixture", big: f?.text, tone: f?.tone, dim: !f && !p });
+  }
+  override onKeyDown(ev: KeyDownEvent): void {
+    const n = svc().controllables().length;
+    svc().nextFixture();
+    const v = svc().selection.view();
+    logEvent("Key press", this.manifestId, undefined, n ? `next fixture → ${v.line1} · ${v.line2}` : "no controllable fixture");
+    if (!n) this.ctxs.get(ev.action.id)?.flasher.show({ text: "None", tone: "red" }, 1200);
+  }
+}

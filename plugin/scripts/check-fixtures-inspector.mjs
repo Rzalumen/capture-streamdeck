@@ -78,6 +78,9 @@ assert.equal(await page.locator(".fx[data-key=s1] .chtbl tr").count(), 38, "head
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(29) td").allTextContents(), ["28", "Shutter 1B", "8-bit", "Shutters 1/3"]);
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(8) td").allTextContents(), ["7", "Dimmer", "16-bit (fine 8)", "Main"]);
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(9) td").allTextContents(), ["8", "Dimmer Fine", "fine of 7", ""]);
+// Handoff 22: a hidden channel (Control, 36) is listed greyed out as "hidden (0)"
+assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(37) td").allTextContents(), ["36", "Control", "8-bit", "hidden (0)"]);
+assert.equal(await page.getAttribute(".fx[data-key=s1] .chtbl tr:nth-child(37)", "class"), "hid");
 // a re-sent view keeps the list open
 sock.send(JSON.stringify({ event: "sendToPropertyInspector", payload: { event: "setup", view, error: null } }));
 await page.waitForTimeout(100);

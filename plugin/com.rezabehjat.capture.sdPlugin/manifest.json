@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.7.0.0",
+  "Version": "0.7.1.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2740,7 +2740,7 @@
       "Name": "Fixtures: ◀ Page",
       "UUID": "com.rezabehjat.capture.fixtures.page-prev",
       "Icon": "imgs/icons/fx-page-prev",
-      "Tooltip": "Previous attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Strobe/Shutter, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Previous attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],
@@ -2752,10 +2752,25 @@
       ]
     },
     {
+      "Name": "Fixtures: Next Fixture",
+      "UUID": "com.rezabehjat.capture.fixtures.next",
+      "Icon": "imgs/icons/fx-next",
+      "Tooltip": "Selects the next controllable fixture (like turning the Select dial); Capture's next click overrides it. The title shows the fixture now selected.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-next",
+          "ShowTitle": true
+        }
+      ]
+    },
+    {
       "Name": "Fixtures: Page ▶",
       "UUID": "com.rezabehjat.capture.fixtures.page-next",
       "Icon": "imgs/icons/fx-page-next",
-      "Tooltip": "Next attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Strobe/Shutter, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Next attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],
@@ -2841,6 +2856,30 @@
       "UUID": "com.rezabehjat.capture.fixture.attr3",
       "Icon": "imgs/icons/fx-attr",
       "Tooltip": "Shows and drives channel 3 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = fine mode (0.1 %) on/off, tap the strip = home that channel. With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-attr",
+          "ShowTitle": false
+        }
+      ],
+      "Encoder": {
+        "layout": "layouts/dial.json",
+        "TriggerDescription": {
+          "Rotate": "Adjust",
+          "Push": "Fine mode",
+          "Touch": "Home channel"
+        },
+        "background": "imgs/actions/dial/strip-background"
+      }
+    },
+    {
+      "Name": "Fixture: Attribute 4",
+      "UUID": "com.rezabehjat.capture.fixture.attr4",
+      "Icon": "imgs/icons/fx-attr",
+      "Tooltip": "Shows and drives channel 4 of the current attribute page (◀ Page / Page ▶) of the selected fixture(s): turn ±1 % per tick (16-bit aware), push = fine mode (0.1 %) on/off, tap the strip = home that channel. With several fixtures selected, each one's channel of the same name moves relative to its own value. The first touch starts DMX output for that fixture's universe.",
       "Controllers": [
         "Encoder"
       ],

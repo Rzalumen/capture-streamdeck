@@ -22,6 +22,7 @@ import { FixtureService } from "./fixtures/service.js";
 import { SetupStore } from "./fixtures/setup.js";
 import { ShowModel } from "./fixtures/show.js";
 import { DeckControl, ValueMemory } from "./fixtures/deck.js";
+import { isShutterStrobeName } from "./fixtures/pages.js";
 import type { JsonObject } from "@elgato/utils";
 
 const log: Logger = streamDeck.logger;
@@ -71,7 +72,17 @@ class Runtime {
     log: (l) => log.info(`CITP: ${l}`),
   });
   /** The last value the deck sent for every channel of every fixture, per show (resume instead of snapping to home). */
-  readonly memory = new ValueMemory(this.globals);
+  readonly memory = new ValueMemory(this.globals, 1000, (l) => log.info(`Fixtures: ${l}`));
+  /** Handoff 22 migration: which stored parameter ids of this fixture are shutter/strobe channels (undefined until its type is parsed). */
+  private shutterIds(key: string): ((id: string) => boolean) | undefined {
+    const f = this.fixtures.show.fixtures.find((x) => x.key === key);
+    const t = f && this.fixtures.show.types.get(f.typeKey);
+    if (!t?.ok) return undefined;
+    return (id) => {
+      const c = t.channels[Number(id.slice(2))];
+      return !!c && isShutterStrobeName(c.name);
+    };
+  }
   readonly fixtures: FixtureService = new FixtureService(
     new ShowModel({
       request: () => this.link.requestList("read the show"),
@@ -83,7 +94,7 @@ class Runtime {
     new DmxEngine({
       transport: () => new UdpTransport(Number(process.env.CAPTURE_TEST_SACN_PORT) || SACN_PORT, "127.0.0.1", process.env.CAPTURE_TEST_SACN_NO_MULTICAST !== "1"),
       allowed: () => this.deck.on,
-      resume: (key) => this.memory.get(this.fixtures.show.showName, key),
+      resume: (key) => this.memory.get(this.fixtures.show.showName, key, this.shutterIds(key)),
       remember: (key, values) => this.memory.set(this.fixtures.show.showName, key, values),
     }),
     (l) => log.info(`Fixtures: ${l}`),

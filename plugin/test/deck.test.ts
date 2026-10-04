@@ -9,7 +9,7 @@ import { DeckControl, DECK_KEY, VALUES_KEY, ValueMemory } from "../src/fixtures/
 import { DmxEngine, type Target, type Transport } from "../src/fixtures/engine.ts";
 import { CitpLink } from "../src/fixtures/link.ts";
 import { loadChannels } from "../src/fixtures/modes.ts";
-import { buildModel } from "../src/fixtures/pages.ts";
+import { buildModel, isShutterStrobeName } from "../src/fixtures/pages.ts";
 import { FixtureService } from "../src/fixtures/service.ts";
 import { SetupStore } from "../src/fixtures/setup.ts";
 import { ShowModel } from "../src/fixtures/show.ts";
@@ -144,7 +144,7 @@ test("deck: switching OFF stops the DMX synchronously, before the CITP stop; a k
 // ------------------------------------------------------------------ remembered values
 
 test("values: remembered per show and fixture, written to the global settings (debounced, flush), loaded after a restart; malformed entries ignored", async () => {
-  const { g, state } = memGlobals({ keep: true, [VALUES_KEY]: { "Old Show": { k1: { ch0: 0.25, bad: 3, ch1: 7 } } } });
+  const { g, state } = memGlobals({ keep: true, fixtureValuesMigration: { version: 1, pending: {} }, [VALUES_KEY]: { "Old Show": { k1: { ch0: 0.25, bad: 3, ch1: 7 } } } });
   const m = new ValueMemory(g, 10);
   await m.load();
   assert.deepEqual([...m.get("Old Show", "k1")!], [["ch0", 0.25]], "out-of-range and non-channel ids dropped");
@@ -153,7 +153,7 @@ test("values: remembered per show and fixture, written to the global settings (d
   assert.deepEqual([...m.get("My Show", "k1")!], [["ch0", 0.6], ["ch5", 0.5]], "merged");
   assert.equal(m.get("My Show", "k2"), undefined);
   assert.equal(m.get("Other Show", "k1"), undefined, "per show");
-  assert.equal(state.sets, 0, "not written on every tick");
+  assert.equal(state.sets, 0, "not written on every tick (and no migration write: already migrated)");
   await sleep(40);
   assert.equal(state.sets, 1, "written once, shortly after");
   assert.deepEqual((state.obj[VALUES_KEY] as any)["My Show"], { k1: { ch0: 0.6, ch5: 0.5 } });
@@ -164,6 +164,37 @@ test("values: remembered per show and fixture, written to the global settings (d
   const again = new ValueMemory(g);
   await again.load();
   assert.deepEqual([...again.get("My Show", "k2")!], [["ch2", 1]]);
+});
+
+test("values migration (v0.7.1, once): stored shutter/strobe values are deleted when the fixture's channel names are known; nothing else; logged; not repeated", async () => {
+  const stored = { "Show A": { solaframe: { ch0: 0.7, ch38: 1, ch39: 0, ch40: 0.8, ch16: 0.3 }, rogue: { ch6: 1, ch0: 0.2 } }, "Show B": { solaframe: { ch38: 1 } } };
+  const { g, state } = memGlobals({ [VALUES_KEY]: stored });
+  const logs: string[] = [];
+  const m = new ValueMemory(g, 10, (l) => logs.push(l));
+  await m.load();
+  assert.match(logs[0], /values migration \(v0\.7\.1\): 3 stored fixture\(s\) will lose their stored shutter\/strobe values/);
+  assert.deepEqual((state.obj.fixtureValuesMigration as any).pending, { "Show A": ["solaframe", "rogue"], "Show B": ["solaframe"] }, "the marks are saved at once");
+  assert.equal(m.get("Show A", "solaframe"), undefined, "until its channel names are known the fixture starts from home, never from the old 255");
+  // names of the SolaFrame's channels: 39 "Shutter/LED Functions", 40 "Shutter/LED", 17 "Blade 1 Angle A", 41 "Dim Coarse"
+  const names: Record<number, string> = { 0: "Pan", 38: "Shutter/LED Functions", 39: "Shutter/LED", 40: "Dim Coarse", 16: "Blade 1 Angle A", 6: "Shutter" };
+  const isSS = (id: string) => isShutterStrobeName(names[Number(id.slice(2))] ?? "");
+  assert.deepEqual([...m.get("Show A", "solaframe", isSS)!], [["ch0", 0.7], ["ch40", 0.8], ["ch16", 0.3]], "only Shutter/LED Functions and Shutter/LED removed; pan, dim and the blade kept");
+  assert.match(logs.at(-1)!, /removed the stored shutter\/strobe value\(s\) of channel\(s\) 39, 40 for fixture solaframe in show "Show A"/);
+  assert.deepEqual([...m.get("Show A", "rogue", isSS)!], [["ch0", 0.2]], "the Rogue's Shutter (7) removed");
+  await m.flush();
+  assert.deepEqual((state.obj.fixtureValuesMigration as any).pending, { "Show B": ["solaframe"] });
+  assert.deepEqual((state.obj[VALUES_KEY] as any)["Show A"].solaframe, { ch0: 0.7, ch40: 0.8, ch16: 0.3 });
+  // a restart: the migration does not start again; Show B is still pending until its fixture is read
+  const again = new ValueMemory(g, 10, (l) => logs.push(l));
+  const before = logs.length;
+  await again.load();
+  assert.equal(logs.length, before, "no second migration");
+  assert.deepEqual([...again.get("Show A", "solaframe")!], [["ch0", 0.7], ["ch40", 0.8], ["ch16", 0.3]]);
+  assert.equal(again.isPending("Show B", "solaframe"), true);
+  assert.equal(again.isPending("Show A", "solaframe"), false);
+  // a values change on an already migrated fixture keeps everything
+  again.set("Show A", "solaframe", new Map([["ch39", 1]]));
+  assert.equal(again.get("Show A", "solaframe")!.get("ch39"), 1, "a value sent by v0.7.1 is kept");
 });
 
 test("engine: nothing is touched or sent while not allowed (Deck Control OFF); resume starts from the stored values, home only for channels never touched", async () => {

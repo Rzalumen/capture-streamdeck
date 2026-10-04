@@ -187,23 +187,21 @@ test("dials: every page has its own four; standard set everywhere, View set on V
   for (const p of layout.pages) if (!isFixturesPage(p)) for (const d of p.dials.values()) assert.ok(NUMBER_PROPERTIES.some((n) => dialUuid(n) === d.uuid));
 });
 
-test("Fixtures folder (v0.7): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶; dials Select · Attribute 1 · 2 · 3", () => {
+test("Fixtures folder (v0.7.1): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture; dials Attribute 1 · 2 · 3 · 4", () => {
   const { pages } = chain(folder("Fixtures"));
-  assert.equal(pages.length, 1, "the four fixed-dial pages are gone");
+  assert.equal(pages.length, 1);
   const p = pages[0];
   const U = "com.rezabehjat.capture";
   assert.equal(p.keys.get("0,0")?.type, "back");
-  const keyUuids = ["fixtures.setup", "fixtures.deck", "fixtures.home", "fixtures.status", "fixtures.page-prev", "fixtures.page-next"].map((k) => `${U}.${k}`);
-  assert.deepEqual(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1"].map((pos) => (p.keys.get(pos) as { uuid: string }).uuid), keyUuids);
-  assert.deepEqual(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1"].map((pos) => titleOf(p.keys.get(pos))), ["Setup", "Deck OFF", "Home Selected", "Status", "◀ Page", "Page ▶"]);
-  assert.ok(!layout.pages.some((x) => [...x.keys.values()].some((k) => k.type === "action" && k.uuid === `${U}.fixtures.release`)), "Release is not in the profile any more");
-  assert.equal(p.keys.get(MORE_SLOT), undefined, "no More ▸");
-  assert.equal(p.keys.size, 7);
+  const pos = ["1,0", "2,0", "3,0", "0,1", "1,1", "2,1", "3,1"];
+  assert.deepEqual(pos.map((x) => (p.keys.get(x) as { uuid: string }).uuid), ["fixtures.setup", "fixtures.deck", "fixtures.home", "fixtures.status", "fixtures.page-prev", "fixtures.page-next", "fixtures.next"].map((k) => `${U}.${k}`));
+  assert.deepEqual(pos.map((x) => titleOf(p.keys.get(x))), ["Setup", "Deck OFF", "Home Selected", "Status", "◀ Page", "Page ▶", "Next Fixture"]);
+  assert.equal(p.keys.size, 8, "every key slot used");
   assert.equal(p.parent, layout.home);
-  const dialIds = DIAL_POSITIONS.map((pos) => p.dials.get(pos)!.uuid.slice(`${U}.fixture.`.length));
-  assert.deepEqual(dialIds, ["select", "attr1", "attr2", "attr3"]);
-  assert.deepEqual(DIAL_POSITIONS.map((pos) => p.dials.get(pos)!.title), ["Select", "Attribute 1", "Attribute 2", "Attribute 3"]);
-  assert.ok(!layout.pages.some((x) => x.path.startsWith("fixtures/")), "no fixtures/2 … pages");
+  assert.deepEqual(DIAL_POSITIONS.map((x) => p.dials.get(x)!.uuid.slice(`${U}.fixture.`.length)), ["attr1", "attr2", "attr3", "attr4"], "the Select dial left the page");
+  assert.deepEqual(DIAL_POSITIONS.map((x) => p.dials.get(x)!.title), ["Attribute 1", "Attribute 2", "Attribute 3", "Attribute 4"]);
+  assert.ok(!layout.pages.some((x) => [...x.keys.values()].some((k) => k.type === "action" && k.uuid === `${U}.fixtures.release`)), "Release is not in the profile");
+  assert.ok(!layout.pages.some((x) => x.path.startsWith("fixtures/")));
 });
 
 test("page UUIDs are unique, and the same on every build", () => {
@@ -314,7 +312,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.7.0.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.7.1.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }

@@ -301,7 +301,7 @@ const clickScripts = (from: number) => deck.axCalls().slice(from).map((c) => c.l
 
 test("every action in the manifest is handled by the plugin (named commands, dials, toggles and generic ones)", async () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, "manifest.json"), "utf8"));
-  assert.equal(manifest.Actions.length, 175);
+  assert.equal(manifest.Actions.length, 177);
   let i = 0;
   const ctxs: [string, string, boolean][] = [];
   for (const a of manifest.Actions) {
