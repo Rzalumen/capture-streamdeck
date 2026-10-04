@@ -1,6 +1,8 @@
 # Run notes: plugin v0.7.1 (Handoff 22: home values, hidden channels, fewer pages)
 
-**Base:** I ran `git pull` first, both in my working clone and in your `~/capture-streamdeck`. Both are at **`7ee6218`** (v0.7 + the SolaFrame addendum, which you pushed). This work is one new commit, delivered as **`capture-streamdeck-0022.bundle`**.
+**Base:** I ran `git pull` first, both in my working clone and in your `~/capture-streamdeck`. GitHub is at **`7ee6218`** (v0.7 + the SolaFrame addendum, which you pushed). Bundle 0022 (my first v0.7.1) was not pushed.
+
+**This delivery follows your revised Handoff 22.** It's two commits on top of `7ee6218`: the first v0.7.1, plus the change that fills pages across groups to reach **at most 8 pages**. **Use `capture-streamdeck-0023.bundle`**: it holds both commits and replaces 0022.
 
 **Restart brief sections 1–4 were followed:**
 - no push;
@@ -40,7 +42,9 @@ I built and tested everything in a Linux sandbox. **Nothing here has run on your
    - **all four dials are Attribute dials** (Attribute 1–4), with 4 channels per page;
    - **Main = Pan · Tilt · Intensity · Zoom** ("—" when missing);
    - Strobe/Shutter is merged into **Beam**;
-   - the order is Main · Colour · Beam · Shutters · Gobo/FX · Other.
+   - after Main, the channels run in group order **Colour · Beam · Shutters · Gobo/FX · Other**, and **every page is filled with 4** (revised in this delivery). The end of one group shares a page with the start of the next.
+   - A page is titled by the groups on it ("Colour · Beam"; on the key it's two lines). A title that repeats is numbered ("Shutters 1/2").
+   - The page keys show that title.
 4. **The Select dial has left the profile** (it's still in the action list). A new **`Fixtures: Next Fixture`** key is in the last free slot. It cycles the controllable fixtures, like one tick of the old dial, and it switches Deck Control ON like any fixture key. **Its title shows the fixture selected now ("Next / Ch 207")**, because the Select strip that used to show it is gone. The profile's Fixtures page now uses all 8 key slots.
 5. **One-time migration:**
    - On the first start of v0.7.1 every stored fixture in `fixtureValues` is marked (logged: `values migration (v0.7.1): N stored fixture(s) will lose…`).
@@ -48,31 +52,31 @@ I built and tested everything in a Linux sandbox. **Nothing here has run on your
    - Until then that fixture starts from home, so the old 255 can't come back.
    - The marks are kept in the global settings key `fixtureValuesMigration`, so the migration never runs twice.
 
-## Two places where your handoff and the result don't match (please decide)
-1. **Page count: 10, not "at most 8".** With 4 per page and every group on its own pages, the synthetic SolaFrame needs 10 pages:
+## What I did about the two open points from the first v0.7.1
+1. **Page count: now 7 for the synthetic SolaFrame (at most 8, as the revised handoff asks again).** With every group on its own pages it was 10. The only way to reach 8 or fewer, with 4 channels per page and the group order kept, is to let pages run across groups, so that's what I did:
    ```
    Main: Pan · Tilt · Dim · Zoom
-   Colour 1/2: Red · Green · Blue · CTO
-   Colour 2/2: Static Color Position
-   Beam: Frost · Focus · Iris · Shutter/LED
-   Shutters 1/3: Blade 1 Angle A · Blade 1 Angle B · Blade 2 Angle A · Blade 2 Angle B
-   Shutters 2/3: Blade 3 Angle A · Blade 3 Angle B · Blade 4 Angle A · Blade 4 Angle B
-   Shutters 3/3: Frame Rotation
-   Gobo/FX 1/2: Gobo 1 Position · Gobo 1 Rotate · Prism Rotate · LED Animation Position
-   Gobo/FX 2/2: LED Animation Rotate
-   Other: Mspeed
+   Colour: Red · Green · Blue · CTO
+   Colour · Beam: Static Color Position · Frost · Focus · Iris
+   Beam · Shutters: Shutter/LED · Blade 1 Angle A · Blade 1 Angle B · Blade 2 Angle A
+   Shutters: Blade 2 Angle B · Blade 3 Angle A · Blade 3 Angle B · Blade 4 Angle A
+   Shutters · Gobo/FX: Blade 4 Angle B · Frame Rotation · Gobo 1 Position · Gobo 1 Rotate
+   Gobo/FX · Other: Prism Rotate · LED Animation Position · LED Animation Rotate · Mspeed
    ```
-   The overflow is 5 colour, 9 shutter and 5 gobo/FX channels, each needing one more page for a single channel. The test prints this list and asserts **10**, so the number is honest.
-   - **If you want 8 or fewer**, one rule change would do it: let small groups share pages (fill every page with 4, groups in order, a page title like "Colour · Beam"). That gives 7 pages here.
-   - I didn't do that, because the handoff says to keep the groups.
-2. **The SolaFrame's blades.** Your table says "blade angle → 50 %", but your SolaFrame check says "blades 0". Capture truncates those 8 names to "Blade 1 Angle…" twice per blade, so they're probably the A/B **ends** of each blade, whose depths make the angle. At 50 % they'd cut half the beam. I made one generic rule that satisfies both:
-   - a blade name with an **end letter** ("Blade 1 Angle A", "Blade 1A") counts as an insertion end and gets **0**;
-   - "Blade 1 Angle", "Frame Rotation" and "Shutter Rotation" get **50 %**.
+   - The test prints this list and asserts at most 8 (it's 7).
+   - The other made-up spot (37 channels) has 8 pages, and the Rogue-like wash has 3.
+   - **The trade-off:** a group no longer always starts on a fresh page. For example, Shutter/LED shares a page with the first blades.
+2. **The SolaFrame's blades (unchanged from the first v0.7.1).** Your table says "blade angle → 50 %", and your SolaFrame check says "blades 0". A blade name with an **end letter** ("Blade 1 Angle A", "Blade 1A") is treated as an insertion end and gets **0**. "Blade 1 Angle", "Frame Rotation" and "Shutter Rotation" get **50 %**. Both of your checks pass with that rule.
+   - **Please read the full names of channels 17–24 in Setup → Channels.** If they're actually angle channels with separate insertion channels elsewhere, this rule needs changing.
 
-   **Please read the full names of channels 17–24 in Setup → Channels** and tell me if they're different.
+**One small difference from the revised table:** it no longer lists "shutter mode/function channels → 0".
+- "Shutter … Function(s)" names are hidden (0) anyway.
+- **I kept "Shutter Mode" / "Shutter Speed"-style names at 0**, as "not the value" channels in Other, rather than 100 %. Opening a mode channel to full could select an odd mode.
+- Tell me if you want them at 100 %.
 
 ## Verified (sandbox)
-- **312 plugin tests pass** (I replaced the "v0.5 frame identical" test, because the defaults changed on purpose, and added the migration test). **73 research tests pass.**
+- **313 plugin tests pass** (I replaced the "v0.5 frame identical" test, because the defaults changed on purpose; added the migration test and a page-numbering test). **73 research tests pass.**
+- Under the load of the full run, a few older AX/menu integration tests failed once on timing. They passed on two separate reruns and on a second full run (313/313). They don't touch anything changed here.
 - **Home values per row** on synthetic names: "Shutter/LED" 100 %, "Shutter/LED Functions" hidden (0), "Shutter/Strobe" 100 %, "Strobe" 0, "Strobe Rate" 0, "Blade 1 Angle" 50 %, "Blade 1A" 0, "Frame Rotation" 50 %, "Focus Coarse" 50 %, "Iris" 50 %, "Zoom Coarse" 50 %, and every other row of the table. 16-bit bytes are checked too.
 - **SolaFrame layout (from the addendum), first-touch frame:**
   - 39 = 0 and 40 = 255;
@@ -88,9 +92,14 @@ I built and tested everything in a Linux sandbox. **Nothing here has run on your
   - it's logged, saved, and not repeated after a restart.
   - End to end: a plugin restart with a v0.7-style stored Shutter value of 30 % comes up open at 255, and logs the removal of channel 7.
 - **Next Fixture end to end:** the title reads "Next / Ch 207"; a press moves to Ch 203 (the wash); a second press goes back.
-- **Pages end to end:** Attribute 1–4 on Main show Pan · Tilt · Dimmer · Zoom (zoom `~50.0`); a blade turn changes only its own slot; Shutter Rotation is 128 and Control is 0.
+- **Pages end to end:**
+  - Attribute 1–4 on Main show Pan · Tilt · Dimmer · Zoom (zoom `~50.0`);
+  - Page ▶ ×3 gives the title "Beam / Shutters", with Focus · Shutter 1A · Shutter 1B · Shutter 2A;
+  - a blade turn changes only its own slot; the next page "Shutters" works the same;
+  - Shutter Rotation is 128 and Control is 0.
+- **Pages unit tests:** pages fill across groups; a repeated title is numbered (12 blades → "Shutters 1/3 … 3/3"; 9 blades → "Shutters 1/2", "Shutters 2/2", "Shutters · Gobo/FX").
 - Setup panel in Chromium: hidden rows read "hidden (0)" and are greyed out.
-- **Mutation checks** (each made the tests fail, then I restored it): the shutter home at 0; hidden channels shown; the migration removing nothing; the end-letter rule off; 3 per page.
+- **Mutation checks** (each made the tests fail, then I restored it, on the first v0.7.1): the shutter home at 0; hidden channels shown; the migration removing nothing; the end-letter rule off; 3 per page.
 - Typecheck, `streamdeck validate`, `npm run pack`.
 
 ## NOT verified
@@ -100,7 +109,7 @@ I built and tested everything in a Linux sandbox. **Nothing here has run on your
 ## Your test
 1. Get the code (this pushes v0.7.1 to GitHub):
    ```
-   cd ~/capture-streamdeck && git pull && git pull "Claude outputs/capture-streamdeck-0022.bundle" main && git push origin main
+   cd ~/capture-streamdeck && git pull && git pull "Claude outputs/capture-streamdeck-0023.bundle" main && git push origin main
    ```
 2. Install the plugin:
    ```
@@ -111,6 +120,7 @@ I built and tested everything in a Linux sandbox. **Nothing here has run on your
    open ~/capture-streamdeck/plugin/com.rezabehjat.capture.sdPlugin/profiles/Capture.streamDeckProfile
    ```
 4. Select the SolaFrame. Turn on Deck Control (any knob does it), then click the SolaFrame in Capture. Press **Home Selected**. It should be lit, white, with the blades open and zoom/iris/focus at half.
+4b. Page through with **Page ▶**. There should be at most 8 pages (7 expected), and no Function, Control or Auto Focus knobs.
 5. Setup → expand the SolaFrame's **Channels**. Check the names of 17–24 and which rows say "hidden (0)".
 6. Send me the log lines (including the `values migration` ones):
    ```

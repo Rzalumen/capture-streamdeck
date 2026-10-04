@@ -49,7 +49,10 @@ export interface Param {
 }
 
 export interface Page {
+  /** The first group on the page (Main pages: "main"). */
   group: GroupId;
+  /** Every group with a channel on this page, in group order (v0.7.1: pages are filled across groups). */
+  groups?: GroupId[];
   /** "Colour", or "Shutters" with part "1/3". */
   label: string;
   part: string;
@@ -252,13 +255,27 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
 
   const pages: Page[] = [];
   if (main.some(Boolean)) pages.push({ group: "main", label: GROUP_LABEL.main, part: "", params: main, placeholders: [...MAIN_LABELS] });
-  for (const g of GROUP_ORDER) {
-    if (g === "main") continue;
-    const ps = params.filter((p) => p.group === g);
-    if (!ps.length) continue;
-    const n = Math.ceil(ps.length / PER_PAGE);
-    for (let i = 0; i < n; i++) pages.push({ group: g, label: GROUP_LABEL[g], part: n > 1 ? `${i + 1}/${n}` : "", params: ps.slice(i * PER_PAGE, (i + 1) * PER_PAGE) });
+  // v0.7.1 (Handoff 22, "at most 8 pages"): after Main, the channels run in group order (Colour · Beam · Shutters · Gobo/FX · Other) and
+  // fill every page with 4, so a small remainder of one group shares a page with the start of the next. A page is titled by the groups
+  // on it ("Colour · Beam"); a title that repeats is numbered ("Shutters 1/2").
+  const rest = GROUP_ORDER.filter((g) => g !== "main").flatMap((g) => params.filter((p) => p.group === g));
+  const packed: Page[] = [];
+  for (let i = 0; i < rest.length; i += PER_PAGE) {
+    const ps = rest.slice(i, i + PER_PAGE);
+    const groups = GROUP_ORDER.filter((g) => ps.some((p) => p.group === g));
+    packed.push({ group: groups[0], groups, label: groups.map((g) => GROUP_LABEL[g]).join(" · "), part: "", params: ps });
   }
+  const count = new Map<string, number>();
+  for (const pg of packed) count.set(pg.label, (count.get(pg.label) ?? 0) + 1);
+  const seenLabel = new Map<string, number>();
+  for (const pg of packed) {
+    const n = count.get(pg.label)!;
+    if (n < 2) continue;
+    const k = (seenLabel.get(pg.label) ?? 0) + 1;
+    seenLabel.set(pg.label, k);
+    pg.part = `${k}/${n}`;
+  }
+  pages.push(...packed);
   const byName = new Map(params.map((p) => [p.name.toLowerCase(), p]));
   const byOffset = new Map<number, Param>();
   for (const p of params) for (const s of p.slots) {

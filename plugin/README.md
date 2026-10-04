@@ -130,7 +130,8 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
 - **Hidden channels**: a name with the whole word *function(s)*, *control* or *auto* is on no page and always sent at 0 (never stored, never homed).
   The Setup Channels list shows it greyed out as "hidden (0)".
 - **All four dials are Attribute dials** (Attribute 1–4, 4 channels per page); **Main = Pan · Tilt · Intensity · Zoom**; Strobe/Shutter is part of
-  **Beam**. The Select dial left the profile (still in the action list); the **Fixtures: Next Fixture** key cycles the controllable fixtures and shows
+  **Beam**. After Main the channels run in group order (Colour · Beam · Shutters · Gobo/FX · Other) and **every page is filled with 4**, so the
+  end of one group shares a page with the start of the next; a page is titled by its groups ("Colour · Beam"), a repeated title is numbered. The Select dial left the profile (still in the action list); the **Fixtures: Next Fixture** key cycles the controllable fixtures and shows
   the one selected ("Next / Ch 207").
 - One-time migration on the first start of v0.7.1: stored shutter/strobe values (the old 255) are deleted from the remembered values the first time
   each fixture's channel names are read (logged: `values migration (v0.7.1): …`).
@@ -142,8 +143,8 @@ The Fixtures folder is one page: **Setup · Deck Control · Home Selected · Sta
 - **Every channel of the selected fixture is on exactly one page**, built from the channel names of its library mode (whole words, case-insensitive, no fixture
   type is known): **Main** (Attribute 1 = the first pan, 2 = the first tilt, 3 = the first dimmer/intensity/dim; `—` when missing) · **Colour** (red … uv, cyan,
   magenta, yellow, CTO, CTB, colour wheel) · **Beam** (zoom, focus, iris, frost, diffusion, edge) · **Shutters** (blade, framing/frame, "Shutter" +
-  number/letter such as "Shutter 1A", shutter rotation) · **Gobo/FX** (gobo, prism, animation, effect, rotation, index) · **Strobe/Shutter** (shutter,
-  strobe) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a speed/time/mode/macro/control … word always goes here —
+  number/letter such as "Shutter 1A", shutter rotation) · **Gobo/FX** (gobo, prism, animation, effect, rotation, index) · (v0.7.1: shutter and
+  strobe are part of **Beam**) · **Other** (everything else, e.g. speed, control, macro, mode channels — a name with a speed/time/mode/macro/control … word always goes here —
   and a second pan, tilt or dimmer channel). Only non-empty groups are pages; more than 3 channels continue on further pages (`Shutters 1/3`).
   Fine channels are never knobs of their own: they ride with their coarse channel (16-bit; the pairing comes from the library's records). A 16-bit knob
   whose name ends in "Coarse" is labelled without it ("Focus Coarse" → "Focus"). Colour cells (`Red 1` … `Red 5`) are one knob.

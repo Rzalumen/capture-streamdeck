@@ -85,34 +85,34 @@ test("home values (Handoff 22, Reza's table) on synthetic names", () => {
   assert.deepEqual([...t], [0x80, 0x00, 0xff, 0xff], "zoom 50 % = 0x8000; a 16-bit shutter 100 % = 0xFFFF");
 });
 
-test("pages: a Rogue-like wash — Main (Pan · Tilt · Dimmer · Zoom) · Colour 1/2 · Colour 2/2 · Beam (Shutter) · Other; 4 per page; every channel once, fine channels paired", () => {
+test("pages: a Rogue-like wash — Main (Pan · Tilt · Dimmer · Zoom), then 4 per page in group order across groups; every channel once, fine channels paired", () => {
   const ch = channelsOf(movingHead());
   const m = buildModel(ch);
   assertComplete(ch, m);
-  assert.deepEqual(titles(m), ["Main", "Colour 1/2", "Colour 2/2", "Beam", "Other"]);
-  assert.deepEqual(names(m), [["Pan", "Tilt", "Dimmer", "Zoom"], ["Red", "Green", "Blue", "White"], ["Amber"], ["Shutter"], ["Pan/Tilt Speed"]]);
+  assert.deepEqual(titles(m), ["Main", "Colour", "Colour · Beam · Other"]);
+  assert.deepEqual(names(m), [["Pan", "Tilt", "Dimmer", "Zoom"], ["Red", "Green", "Blue", "White"], ["Amber", "Shutter", "Pan/Tilt Speed"]]);
+  assert.deepEqual(m.pages[2].groups, ["colour", "beam", "other"]);
   assert.equal(m.byName.get("pan")!.slots[0].fine!.name, "Pan Fine");
   assert.equal(m.byName.get("zoom")!.sixteen, true);
   assert.equal(m.noIntensity, false);
 });
 
-test("pages: a SolaFrame-like spot — Strobe/Shutter merged into Beam, Control hidden, 4 per page: 10 pages", () => {
+test("pages: a SolaFrame-like spot — Strobe/Shutter merged into Beam, Control hidden, 4 per page filled across groups: 8 pages", () => {
   const ch = channelsOf(framingHead());
   const m = buildModel(ch);
   assertComplete(ch, m);
-  assert.deepEqual(titles(m), ["Main", "Colour 1/2", "Colour 2/2", "Beam", "Shutters 1/3", "Shutters 2/3", "Shutters 3/3", "Gobo/FX 1/2", "Gobo/FX 2/2", "Other"]);
+  assert.deepEqual(titles(m), ["Main", "Colour", "Colour · Beam", "Beam · Shutters", "Shutters", "Shutters · Gobo/FX", "Gobo/FX", "Gobo/FX · Other"]);
   assert.deepEqual(names(m), [
     ["Pan", "Tilt", "Dimmer", "Zoom"],
     ["Cyan", "Magenta", "Yellow", "CTO"],
-    ["Colour Wheel"],
-    ["Shutter/Strobe", "Frost", "Iris", "Focus"],
-    ["Shutter 1A", "Shutter 1B", "Shutter 2A", "Shutter 2B"],
-    ["Shutter 3A", "Shutter 3B", "Shutter 4A", "Shutter 4B"],
-    ["Shutter Rotation"],
-    ["Gobo Wheel 1", "Gobo 1 Rotation", "Gobo Wheel 2", "Prism"],
-    ["Prism Rotation", "Animation Wheel", "Animation Rotation"],
-    ["Pan/Tilt Speed", "Effects Speed"],
+    ["Colour Wheel", "Shutter/Strobe", "Frost", "Iris"],
+    ["Focus", "Shutter 1A", "Shutter 1B", "Shutter 2A"],
+    ["Shutter 2B", "Shutter 3A", "Shutter 3B", "Shutter 4A"],
+    ["Shutter 4B", "Shutter Rotation", "Gobo Wheel 1", "Gobo 1 Rotation"],
+    ["Gobo Wheel 2", "Prism", "Prism Rotation", "Animation Wheel"],
+    ["Animation Rotation", "Pan/Tilt Speed", "Effects Speed"],
   ]);
+  assert.ok(m.pages.slice(1, -1).every((p) => p.params.length === 4), "every page but the last is full");
   assert.deepEqual(m.hidden, [35], "Control");
 });
 
@@ -122,18 +122,21 @@ test("pages: Main keeps its positions — a conventional shows — · — · Int
   assert.deepEqual(names(conv), [["—", "—", "Intensity", "—"]]);
   assert.deepEqual(conv.pages[0].placeholders, ["Pan", "Tilt", "Intensity", "Zoom"]);
   const nod = buildModel(channelsOf([{ name: "Pan" }, { name: "Tilt" }, { name: "Red" }, { name: "Shutter" }]));
-  assert.deepEqual(names(nod), [["Pan", "Tilt", "—", "—"], ["Red"], ["Shutter"]]);
+  assert.deepEqual(names(nod), [["Pan", "Tilt", "—", "—"], ["Red", "Shutter"]]);
+  assert.deepEqual(titles(nod), ["Main", "Colour · Beam"]);
   assert.equal(nod.noIntensity, true);
   const two = channelsOf([{ name: "Intensity" }, { name: "Dimmer 2" }, { name: "Tilt" }, { name: "Zoom" }, { name: "Zoom 2" }]);
   const t = buildModel(two);
   assertComplete(two, t);
-  assert.deepEqual(names(t), [["—", "Tilt", "Intensity", "Zoom"], ["Zoom 2"], ["Dimmer 2"]]);
+  assert.deepEqual(names(t), [["—", "Tilt", "Intensity", "Zoom"], ["Zoom 2", "Dimmer 2"]]);
+  assert.deepEqual(titles(t), ["Main", "Beam · Other"]);
   assert.equal(t.byName.get("dimmer 2")!.home, 1);
   assert.deepEqual(titles(buildModel(channelsOf([{ name: "Red" }, { name: "Green" }]))), ["Colour"], "no Main page when it would be all —");
   const cmy = channelsOf(cmyHead());
   const m = buildModel(cmy);
   assertComplete(cmy, m);
-  assert.deepEqual(names(m), [["Pan", "Tilt", "Dimmer", "—"], ["Cyan", "Magenta", "Yellow"], ["Focus", "Iris"]], "Main is Pan · Tilt · Intensity · Zoom whatever the channel order");
+  assert.deepEqual(names(m), [["Pan", "Tilt", "Dimmer", "—"], ["Cyan", "Magenta", "Yellow", "Focus"], ["Iris"]], "Main is Pan · Tilt · Intensity · Zoom whatever the channel order");
+  assert.deepEqual(titles(m), ["Main", "Colour · Beam", "Beam"]);
 });
 
 test("pages: multi-cell colour stays ONE knob per colour (all cells together); two colour wheels stay two knobs; duplicate names get #2", () => {
@@ -143,7 +146,16 @@ test("pages: multi-cell colour stays ONE knob per colour (all cells together); t
   assert.deepEqual(names(m), [["—", "—", "Dimmer", "—"], ["Red", "Green", "Blue"]]);
   assert.deepEqual(m.byName.get("red")!.slots.map((s) => s.coarse.name), ["Red 1", "Red 2", "Red 3", "Red 4", "Red 5"]);
   const wheels = buildModel(channelsOf([{ name: "Colour Wheel 1" }, { name: "Colour Wheel 2" }, { name: "Gobo" }, { name: "Gobo" }]));
-  assert.deepEqual(names(wheels), [["Colour Wheel 1", "Colour Wheel 2"], ["Gobo", "Gobo #2"]]);
+  assert.deepEqual(names(wheels), [["Colour Wheel 1", "Colour Wheel 2", "Gobo", "Gobo #2"]]);
+});
+
+test("pages: a title that repeats is numbered — 12 blades fill Shutters 1/3 … 3/3; a remainder shares the next page", () => {
+  const ch = channelsOf([{ name: "Dimmer" }, ...Array.from({ length: 12 }, (_, i) => ({ name: `Blade ${i + 1}` })), { name: "Gobo" }]);
+  const m = buildModel(ch);
+  assertComplete(ch, m);
+  assert.deepEqual(titles(m), ["Main", "Shutters 1/3", "Shutters 2/3", "Shutters 3/3", "Gobo/FX"]);
+  const ch2 = channelsOf([{ name: "Dimmer" }, ...Array.from({ length: 9 }, (_, i) => ({ name: `Blade ${i + 1}` })), { name: "Gobo" }]);
+  assert.deepEqual(titles(buildModel(ch2)), ["Main", "Shutters 1/2", "Shutters 2/2", "Shutters · Gobo/FX"]);
 });
 
 test("pages: channels where candidate parses disagree are on no page and never written", () => {
@@ -151,7 +163,7 @@ test("pages: channels where candidate parses disagree are on no page and never w
   const m = buildModel(ch, [13, 4]); // Zoom Fine (so Zoom too) and Pan/Tilt Speed
   assert.deepEqual(m.excluded, [4, 12, 13]);
   assert.ok(!m.byName.has("zoom") && !m.byName.has("pan/tilt speed"));
-  assert.deepEqual(titles(m), ["Main", "Colour 1/2", "Colour 2/2", "Beam"]);
+  assert.deepEqual(titles(m), ["Main", "Colour", "Colour · Beam"]);
   assert.deepEqual(names(m)[0], ["Pan", "Tilt", "Dimmer", "—"]);
   const s = new Uint8Array(512);
   renderModel(s, 0, m, new Map(m.params.map((p) => [p.id, 1])));
@@ -200,19 +212,19 @@ test("service: page keys cycle (wrapping) the first selected fixture's pages; th
   const { svc, select, f } = await makeService();
   select(f.s1);
   assert.equal(svc.pageName(), "Main");
-  assert.equal(svc.pages().pages.length, 10);
+  assert.equal(svc.pages().pages.length, 8);
   for (let i = 0; i < 4; i++) svc.stepPage(1);
-  assert.equal(svc.pageName(), "Shutters 1/3");
+  assert.equal(svc.pageName(), "Shutters");
   select(f.s2); // same type: page kept
-  assert.equal(svc.pageName(), "Shutters 1/3");
+  assert.equal(svc.pageName(), "Shutters");
   svc.stepPage(-5);
-  assert.equal(svc.pageName(), "Other", "wraps backwards past Main");
+  assert.equal(svc.pageName(), "Gobo/FX · Other", "wraps backwards past Main");
   svc.stepPage(1);
   assert.equal(svc.pageName(), "Main", "wraps forwards");
   svc.stepPage(4);
   select(f.w); // a different type: back to Main
   assert.equal(svc.pageName(), "Main");
-  assert.equal(svc.pages().pages.length, 5);
+  assert.equal(svc.pages().pages.length, 3);
   select(f.s1);
   assert.equal(svc.pageName(), "Main", "and again when coming back");
   svc.onShowGone("test");
@@ -224,22 +236,22 @@ test("service: Attribute dials show the page's channel name and value; turn = ±
   select(f.s1);
   assert.deepEqual([0, 1, 2, 3].map((i) => svc.attrReadout(i).label), ["Pan", "Tilt", "Dimmer", "Zoom"]);
   assert.deepEqual([0, 1, 2, 3].map((i) => svc.attrReadout(i).value), [0.5, 0.5, 1, 0.5]);
-  goTo(svc, "Colour 2/2");
-  assert.deepEqual([svc.attrReadout(1).label, svc.attrReadout(1).value], ["Colour", null]);
-  assert.equal(svc.attrRotate(1, 3, false), false, "nothing on dial 2 on this page: no output");
+  goTo(svc, "Gobo/FX · Other");
+  assert.deepEqual([svc.attrReadout(3).label, svc.attrReadout(3).value], ["Gobo/FX", null]);
+  assert.equal(svc.attrRotate(3, 3, false), false, "nothing on dial 4 on this page: no output");
   assert.equal(engine.active, false);
-  goTo(svc, "Shutters 1/3");
-  assert.deepEqual([0, 1, 2, 3].map((i) => svc.attrReadout(i).label), ["Shutter 1A", "Shutter 1B", "Shutter 2A", "Shutter 2B"]);
-  assert.equal(svc.attrRotate(1, 25, false), true);
-  assert.equal(svc.attrReadout(1).value, 0.25);
+  goTo(svc, "Beam · Shutters");
+  assert.deepEqual([0, 1, 2, 3].map((i) => svc.attrReadout(i).label), ["Focus", "Shutter 1A", "Shutter 1B", "Shutter 2A"]);
+  assert.equal(svc.attrRotate(2, 25, false), true);
+  assert.equal(svc.attrReadout(2).value, 0.25);
   const s = engine.slots(1);
   assert.equal(s[27], Math.round(0.25 * 255), "Shutter 1B is channel 28 of the fixture at 1/1");
   assert.equal(s[26], 0, "Shutter 1A stays out");
   assert.equal(s[101 - 1 + 27], 0, "the other spot is not selected");
-  svc.attrRotate(1, 1, true);
-  assert.equal(svc.attrReadout(1).value, 0.251);
-  assert.equal(svc.attrHome(1), true);
-  assert.equal(svc.attrReadout(1).value, 0, "blade home = out");
+  svc.attrRotate(2, 1, true);
+  assert.equal(svc.attrReadout(2).value, 0.251);
+  assert.equal(svc.attrHome(2), true);
+  assert.equal(svc.attrReadout(2).value, 0, "blade home = out");
   goTo(svc, "Main");
   svc.attrRotate(0, 1, true); // pan 50.1 %: 16-bit
   const p = engine.slots(1);
@@ -250,9 +262,9 @@ test("service: Attribute dials show the page's channel name and value; turn = ±
 test("service: several selected — same type each relative to its own value; different types drive the channel of the same name, others skipped", async () => {
   const { svc, engine, select, f } = await makeService();
   select(f.s1);
-  goTo(svc, "Shutters 1/3");
+  goTo(svc, "Shutters");
   select(f.s1, f.s2);
-  assert.equal(svc.pageName(), "Shutters 1/3", "same type: page kept");
+  assert.equal(svc.pageName(), "Shutters", "same type: page kept");
   goTo(svc, "Main");
   svc.attrRotate(2, -20, false); // s1 and s2 dimmer 80 %
   select(f.s2);
@@ -270,14 +282,14 @@ test("service: several selected — same type each relative to its own value; di
   const t = engine.slots(1);
   assert.equal(t[200 + 5], Math.round(0.5 * 255), "wash Dimmer 100 → 50 %");
   assert.equal(t[300], Math.round(0.5 * 255), "CMY Dimmer 100 → 50 %");
-  goTo(svc, "Beam");
-  svc.attrRotate(0, -10, false); // Shutter/Strobe: the wash has "Shutter", not "Shutter/Strobe"; the CMY head has none
+  goTo(svc, "Colour · Beam");
+  svc.attrRotate(1, -10, false); // Shutter/Strobe: the wash has "Shutter", not "Shutter/Strobe"; the CMY head has none
   const u = engine.slots(1);
   assert.equal(u[5], 230, "spot Shutter/Strobe 255 → 90 %");
   assert.equal(u[200 + 6], 255, "the wash's Shutter is a different name: skipped");
   // pages come from the FIRST selected fixture's type
   select(f.c, f.s1);
-  assert.deepEqual(svc.pages().pages.map(pageTitle), ["Main", "Colour", "Beam"]);
+  assert.deepEqual(svc.pages().pages.map(pageTitle), ["Main", "Colour · Beam", "Beam"]);
 });
 
 test("Setup panel: each type's channel list (1-based number, name, 8/16-bit, page); a type whose uniqueness is unproven is marked", async () => {
@@ -286,10 +298,10 @@ test("Setup panel: each type's channel list (1-based number, name, 8/16-bit, pag
   assert.equal(list.length, 37);
   assert.deepEqual(list[0], { n: 1, name: "Pan", bits: "16-bit", pair: 2, page: "Main" });
   assert.deepEqual(list[1], { n: 2, name: "Pan Fine", bits: "16-bit fine", pair: 1, page: "" });
-  assert.deepEqual(list[5], { n: 6, name: "Shutter/Strobe", bits: "8-bit", pair: null, page: "Beam" });
+  assert.deepEqual(list[5], { n: 6, name: "Shutter/Strobe", bits: "8-bit", pair: null, page: "Colour · Beam" });
   assert.deepEqual(list[35], { n: 36, name: "Control", bits: "8-bit", pair: null, page: "hidden (0)", hidden: true });
   assert.deepEqual(list[6], { n: 7, name: "Dimmer", bits: "16-bit", pair: 8, page: "Main" });
-  assert.deepEqual(list[27], { n: 28, name: "Shutter 1B", bits: "8-bit", pair: null, page: "Shutters 1/3" });
+  assert.deepEqual(list[27], { n: 28, name: "Shutter 1B", bits: "8-bit", pair: null, page: "Beam · Shutters" });
   const m = buildModel(channelsOf(movingHead()), [13]);
   assert.match(channelList(channelsOf(movingHead()), m)[13].page, /no page/);
 
@@ -358,7 +370,8 @@ test("SolaFrame 750 (real layout): Main = Pan · Tilt · Dim · Zoom; hidden fun
   // the page list (printed for the run notes) and its count
   const list = m.pages.map((p) => `${pageTitle(p)}: ${p.params.map((x) => x?.name ?? "—").join(" · ")}`);
   console.log(`SolaFrame 750 (synthetic, guessed full names) — ${list.length} pages:\n  ${list.join("\n  ")}`);
-  assert.deepEqual(m.pages.map(pageTitle), ["Main", "Colour 1/2", "Colour 2/2", "Beam", "Shutters 1/3", "Shutters 2/3", "Shutters 3/3", "Gobo/FX 1/2", "Gobo/FX 2/2", "Other"]);
-  assert.equal(m.pages.length, 10, "10, not the handoff's 8 or fewer: with 4 per page and every group on its own pages, 5 colour + 9 shutter + 5 gobo/FX channels need 2 + 3 + 2 pages (see the run notes)");
+  assert.deepEqual(m.pages.map(pageTitle), ["Main", "Colour", "Colour · Beam", "Beam · Shutters", "Shutters", "Shutters · Gobo/FX", "Gobo/FX · Other"]);
+  assert.ok(m.pages.length <= 8, `at most 8 pages (Handoff 22): ${m.pages.length}`);
+  assert.equal(m.pages.length, 7);
   assert.equal(mapChannels(ch).attrs.intensity![0].coarse.name, "Dim Coarse");
 });

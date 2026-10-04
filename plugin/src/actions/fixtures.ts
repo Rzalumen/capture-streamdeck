@@ -338,7 +338,7 @@ export class FixturesPage extends FixtureKey {
   protected view(c: KeyCtx): void {
     const name = svc().pageName();
     const f = c.flasher.flash;
-    draw(c.action, { icon: this.def.icon, label: name ? name.replace(/ (\d+\/\d+)$/, "\n$1") : this.def.title, big: f?.text, tone: f?.tone, dim: !f && !name });
+    draw(c.action, { icon: this.def.icon, label: name ? name.replace(/ (\d+\/\d+)$/, "\n$1").replace(/ · /g, "\n") : this.def.title, big: f?.text, tone: f?.tone, dim: !f && !name });
   }
   override onKeyDown(ev: KeyDownEvent): void {
     const ok = svc().stepPage(this.dir);

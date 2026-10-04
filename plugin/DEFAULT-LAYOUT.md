@@ -31,7 +31,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | Patch & Focus | the Patch & Focus category |
 | Windows | **Tabs** (6) first, then the Navigate and Window categories |
 | File | the File category |
-| Fixtures | one page (v0.7.1): **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture** (the Fixtures: keys; Release is no longer in the profile). Dials: **Attribute 1 · 2 · 3 · 4** (the Select dial left the page); the attribute pages (Main, Colour, Beam, Shutters, Gobo/FX, Other — built from the selected fixture's channels, 4 per page) are cycled with ◀ Page / Page ▶, not with profile pages |
+| Fixtures | one page (v0.7.1): **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture** (the Fixtures: keys; Release is no longer in the profile). Dials: **Attribute 1 · 2 · 3 · 4** (the Select dial left the page); the attribute pages (Main, then Colour · Beam · Shutters · Gobo/FX · Other in order, 4 channels on every page — built from the selected fixture's channels) are cycled with ◀ Page / Page ▶, not with profile pages |
 
 Camera Position 1–5 and Store Modifier share one page (Camera › Positions ▸), so holding Store Modifier while pressing a
 position works without changing page. Edit has four pages (25 commands, including the four *Edit › Model* items).
