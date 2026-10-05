@@ -7,6 +7,8 @@
  * ask the held session for a fresh list. Our own disconnect ("quiet", plugin exit) keeps the fixture list and ignores anything Capture
  * says while we close. FixtureLists are passed on to the service with whether they came after our declaration on this connection
  * (only those can carry Capture's patch).
+ * v0.11.0 (Handoff 30): every EnterShow tells the service (automatic wake when no output is running); after a declared list is
+ * applied the service may run that wake.
  */
 import { UNIDENTIFIED } from "./citp.js";
 import type { CitpSession } from "./citpSession.js";
@@ -61,6 +63,7 @@ export class CitpLink {
       if (this.quiet) return;
       const changed = show.setShowName(name);
       if (changed) svc.onShowGone(`a different show was entered ("${name ?? ""}")`);
+      svc.onShowEntered(); // v0.11.0: arms the automatic wake when no output is running
     });
     session.on("leave", () => {
       if (this.quiet) return;
@@ -71,7 +74,8 @@ export class CitpLink {
     session.on("list", (e) => {
       if (this.quiet) return;
       const keyed = show.applyList(e.type, e.fixtures);
-      void svc.onPatchList(e.type, keyed, e.declared);
+      // v0.11.0: a pending automatic wake runs once the declared list's addresses are applied
+      void svc.onPatchList(e.type, keyed, e.declared).then(() => svc.afterList(e.type, e.declared));
       this.identifying = this.identify();
     });
     session.on("selection", (ids) => {

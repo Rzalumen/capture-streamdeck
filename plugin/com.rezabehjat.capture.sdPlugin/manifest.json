@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.10.1.0",
+  "Version": "0.11.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2723,10 +2723,25 @@
       ]
     },
     {
+      "Name": "Fixtures: Wake",
+      "UUID": "com.rezabehjat.capture.fixtures.wake",
+      "Icon": "imgs/icons/fx-wake",
+      "Tooltip": "Puts every light the deck remembers back where it was, e.g. after reopening Capture. Lights the deck has no memory of, on the same universes, go to 0 when their universe starts (known limit).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/keys/fx-wake",
+          "ShowTitle": true
+        }
+      ]
+    },
+    {
       "Name": "Fixtures: Deck Control",
       "UUID": "com.rezabehjat.capture.fixtures.deck",
       "Icon": "imgs/icons/fx-deck",
-      "Tooltip": "Press to arm (ON) or disarm (OFF) the fixture knobs. The key's colour says the state: grey = OFF (knobs disarmed); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). The deck connects to Capture as a console when the plugin starts (no DMX until a fixture is touched) and stays connected: while OFF it keeps sending what Capture shows (changes made in Capture are kept), and only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it; it disarms after the idle time set in Setup.",
+      "Tooltip": "Press to arm (ON) or disarm (OFF) the fixture knobs. The key's colour says the state: grey = OFF (knobs disarmed); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). The deck connects to Capture as a console when the plugin starts (no DMX until a fixture is touched or woken: see Wake) and stays connected: while OFF it keeps sending what Capture shows (changes made in Capture are kept), and only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it; it disarms after the idle time set in Setup.",
       "Controllers": [
         "Keypad"
       ],

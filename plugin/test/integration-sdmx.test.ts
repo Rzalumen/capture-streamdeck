@@ -261,6 +261,10 @@ test("v0.9.0 Deck OFF = disarm: no termination, no LeaveShow, connection kept (/
 });
 
 test("v0.9.0: Capture's LeaveShow releases output and clears Capture's levels and the selection (ownership: see sdmx.test); plugin exit (SIGTERM) after a new touch: termination ×3, then LeaveShow", async () => {
+  // v0.11.0: the automatic wake would put the stored values back when the show is entered again (see integration-wake); this test is
+  // about Capture's levels being forgotten with the show, so it is switched off here
+  deck.sendToPlugin(A.setup, "setup", { cmd: "autowake", on: false });
+  await deck.waitFor(() => lastSetupView()?.view?.deck?.autoWake === false || undefined, 3000, "automatic wake off");
   const n0 = packets.length;
   citp.leaveShow();
   await waitLog(/Fixtures: Capture left the show: releasing output/, "released on LeaveShow");

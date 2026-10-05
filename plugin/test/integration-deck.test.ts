@@ -5,7 +5,7 @@
  *    no sACN and no sACN socket (/proc) until the first fixture touch; Setup / Status / the Setup panel are list requests on it (one
  *    connection for the whole run);
  *  - ON by the Deck Control key, by a knob turn, by a fixture key; idle auto-OFF disarms only (v0.9.0);
- *  - resume after OFF → ON and after a plugin restart; push = fine, tap = home.
+ *  - resume after OFF → ON and after a plugin restart (v0.11.0: the automatic wake sends the stored values at the restart); push = fine, tap = home.
  */
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
@@ -196,7 +196,7 @@ test("v0.10.0: Setup panel / Setup key / Status key are list requests on the hel
   await deck.waitFor(() => (lastSetupView()?.view?.fixtures?.length === 1 ? true : undefined), 6000, "the panel lists the show (read at start-up)");
   deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST, universe: 1, address: ADDR });
   const v = (await deck.waitFor(() => (lastSetupView()?.view?.controllable === 1 ? lastSetupView() : undefined), 3000, "address saved")).view;
-  assert.deepEqual(v.deck, { on: false, idleSeconds: 120 });
+  assert.deepEqual(v.deck, { on: false, idleSeconds: 120, autoWake: true }, "v0.11.0: the automatic wake is on by default");
   assert.equal(v.patch, null, "this stub sends Patched=0: typed addresses (fallback)");
   assert.equal(v.connected, true);
   deck.keyDown(A.setup, "setup");
@@ -215,7 +215,7 @@ test("v0.10.0: Setup panel / Setup key / Status key are list requests on the hel
   await deck.waitFor(() => /0 to 3600/.test(lastSetupView()?.error ?? "") || undefined, 3000, "range error");
   deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 1 });
   await deck.waitFor(() => (lastSetupView()?.view?.deck?.idleSeconds === 1 && !lastSetupView().error) || undefined, 3000, "idle 1 s saved");
-  assert.deepEqual((deck.globals as any).fixtureDeck, { idleSeconds: 1 });
+  assert.deepEqual((deck.globals as any).fixtureDeck, { idleSeconds: 1, autoWake: true });
 });
 
 test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Capture selects a light; then the knob drives it; v0.9.0: idle 1 s → OFF only disarms: no termination, no LeaveShow, no close (/proc), identical frames continue, selection kept", async () => {
@@ -295,7 +295,7 @@ test("v0.9.0: while disarmed a turn re-arms and moves the still-selected light a
   assert.equal(packets.filter((x) => x.terminated).length, 0, "never terminated");
 });
 
-test("resume after a plugin restart: a new plugin process starts OFF and the first turn continues from the stored 75 %", async () => {
+test("resume after a plugin restart: a new plugin process starts OFF; v0.11.0: the automatic wake sends the stored 75 % at once (not armed); the first turn continues from it", async () => {
   const globals = JSON.parse(JSON.stringify(deck.globals));
   // Handoff 22 migration check: pretend these values were written by v0.7 (no migration mark) with the old bad shutter value
   delete globals.fixtureValuesMigration;
@@ -312,14 +312,19 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   packets.length = 0;
   await deck.start({ oscPort: capture.port, pluginDir, fixtures: path.join(here, "fixtures"), env: env() });
   await deck.waitFor(() => (/CITP: declared sACN universes 1-16/.test(deck.logText()) && /show "DECK SHOW": 1 fixture/.test(deck.logText())) || undefined, 8000, "session and list after restart");
+  // v0.11.0 (Handoff 30): Capture is in the show and no output runs: the automatic wake (on by default) sends the stored values at once
+  await deck.waitFor(() => /Fixtures: Wake \(automatic\): 1 fixture\(s\) restored on universe\(s\) 1/.test(deck.logText()) || undefined, 5000, "automatic wake at start");
+  const w = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.75 * 65535), "woken: the stored 75 %");
+  assert.equal(slot(w, 6), 255, "woken dimmer: the stored 100 %");
+  assert.doesNotMatch(deck.logText(), /deck control ON/, "the automatic wake does not arm the knobs");
   deck.willAppear(A.select, "sel", {}, "Encoder");
   deck.willAppear(A.a1, "a1", {}, "Encoder");
   await noSelection("a new process: nothing selected");
   deck.dialRotate(A.a1, "a1", -5); // switches ON, moves nothing
   await deck.waitFor(() => /deck control ON \(Attribute 1 dial\)/.test(deck.logText()) || undefined, 3000, "ON");
   await selectInCapture();
-  assert.equal(packets.length, 0, "the turn before the selection sent nothing");
-  await waitStrip("a1", (f) => f.value.value === "~75.0", "the strip shows the stored value before any touch");
+  assert.ok(packets.every((x) => pan16(x) === Math.round(0.75 * 65535)), "the turn before the selection moved nothing");
+  await waitStrip("a1", (f) => f.value.value === "75.0", "the strip shows the woken value (touched: no ~)");
   deck.dialRotate(A.a1, "a1", -5);
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.7 * 65535), "70 %: resumed from 75 %");
   assert.equal(slot(p, 6), 255, "dimmer: last value sent before the restart was 100 % (Home Selected)");

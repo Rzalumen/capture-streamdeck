@@ -1,5 +1,5 @@
 /* Setup table (plain JS) for the Property Inspector (fixtures.js).
- * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill | idle, ...}) goes to the plugin; the plugin's
+ * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill | idle | autowake, ...}) goes to the plugin; the plugin's
  * answer is handed to the returned object's receive(view, error) (error: text, null = none, undefined = leave the shown error alone). */
 (function () {
   "use strict";
@@ -40,6 +40,7 @@
     if (view.deck) {
       $("deck-state").textContent = view.deck.on ? "Deck Control is ON: the knobs are armed." : "Deck Control is OFF: the knobs are disarmed (once connected, the deck keeps sending what Capture shows).";
       if (document.activeElement !== $("idle-s")) $("idle-s").value = String(view.deck.idleSeconds);
+      $("auto-wake").checked = view.deck.autoWake !== false; // v0.11.0
     }
     const st = view.status;
     // v0.10.0: Capture's patch is the source of the addresses: read-only cells, no auto-fill / Clear, one line at the top
@@ -189,6 +190,7 @@
       if (v === "") return;
       toPlugin({ cmd: "idle", seconds: Number(v) });
     };
+    $("auto-wake").onchange = () => toPlugin({ cmd: "autowake", on: $("auto-wake").checked }); // v0.11.0
     $("fill-go").onclick = () => {
       const t = $("fill-type")._types && $("fill-type")._types.get($("fill-type").value);
       if (!t) return showError("Choose a fixture type first.");

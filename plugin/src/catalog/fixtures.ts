@@ -1,6 +1,6 @@
 /**
  * The fixture actions: Select + the three generic Attribute dials (v0.6) + the named attribute dials of v0.4/v0.5 (kept for hand-placed
- * layouts), and the "Fixtures: …" keys (Setup, Release, Home Light, Status, ◀ Page, Page ▶, Deck Control, Next Fixture). UUIDs, names, icons.
+ * layouts), and the "Fixtures: …" keys (Setup, Release, Home Light, Status, ◀ Page, Page ▶, Deck Control, Next Fixture, Wake). UUIDs, names, icons.
  */
 import type { DialId } from "../fixtures/attrs.js";
 import { BASE_UUID } from "../lib/named.js";
@@ -71,13 +71,17 @@ export const FIXTURE_KEY_UUIDS = {
   pageNext: `${BASE_UUID}.fixtures.page-next`,
   deck: `${BASE_UUID}.fixtures.deck`,
   next: `${BASE_UUID}.fixtures.next`,
+  wake: `${BASE_UUID}.fixtures.wake`,
 } as const;
+/** v0.11.0 (Handoff 30): the Wake key's tooltip (also in the README). */
+export const WAKE_TOOLTIP = "Puts every light the deck remembers back where it was, e.g. after reopening Capture. Lights the deck has no memory of, on the same universes, go to 0 when their universe starts (known limit).";
 export const FIXTURE_KEYS = [
   { uuid: FIXTURE_KEY_UUIDS.setup, name: "Fixtures: Setup", title: "Setup", icon: "fx-setup", pi: true, tooltip: "Press to read the show from Capture again. The universe and DMX address of each fixture are in this key's inspector panel (addresses re-patched in Capture are picked up automatically)." },
   { uuid: FIXTURE_KEY_UUIDS.release, name: "Fixtures: Release", title: "Release", icon: "fx-release", pi: false, tooltip: "Kept for keys placed earlier: switches Deck Control OFF, i.e. disarms the knobs. The deck stays connected and keeps sending what Capture shows; only quitting the Stream Deck app (or Capture closing the show) lets go." },
   { uuid: FIXTURE_KEY_UUIDS.home, name: "Fixtures: Home Light", title: "Home Light", icon: "fx-home", pi: false, tooltip: "Puts the light selected in Capture back to its home values (pan/tilt 50 %, intensity 100 %, shutter open, additive colours full, the rest 0)." },
   { uuid: FIXTURE_KEY_UUIDS.status, name: "Fixtures: Status", title: "Status", icon: "fx-status", pi: false, hidden: true, tooltip: "Shows the show name, how many fixtures are controllable and whether DMX output is active. Press to read the show again." },
-  { uuid: FIXTURE_KEY_UUIDS.deck, name: "Fixtures: Deck Control", title: "Deck OFF", icon: "fx-deck", pi: false, showTitle: false, tooltip: "Press to arm (ON) or disarm (OFF) the fixture knobs. The key's colour says the state: grey = OFF (knobs disarmed); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). The deck connects to Capture as a console when the plugin starts (no DMX until a fixture is touched) and stays connected: while OFF it keeps sending what Capture shows (changes made in Capture are kept), and only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it; it disarms after the idle time set in Setup." },
+  { uuid: FIXTURE_KEY_UUIDS.wake, name: "Fixtures: Wake", title: "WAKE", icon: "fx-wake", pi: false, tooltip: WAKE_TOOLTIP },
+  { uuid: FIXTURE_KEY_UUIDS.deck, name: "Fixtures: Deck Control", title: "Deck OFF", icon: "fx-deck", pi: false, showTitle: false, tooltip: "Press to arm (ON) or disarm (OFF) the fixture knobs. The key's colour says the state: grey = OFF (knobs disarmed); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). The deck connects to Capture as a console when the plugin starts (no DMX until a fixture is touched or woken: see Wake) and stays connected: while OFF it keeps sending what Capture shows (changes made in Capture are kept), and only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it; it disarms after the idle time set in Setup." },
   { uuid: FIXTURE_KEY_UUIDS.pagePrev, name: "Fixtures: ◀ Page", title: "◀ Page", icon: "fx-page-prev", pi: false, tooltip: "Previous attribute page (Main, Shutters, Beam, Colour, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page." },
   { uuid: FIXTURE_KEY_UUIDS.next, name: "Fixtures: Next Fixture", title: "Next Fixture", icon: "fx-next", pi: false, hidden: true, tooltip: "Selects the next controllable fixture (like turning the Select dial); Capture's next click overrides it. The title shows the fixture now selected." },
   { uuid: FIXTURE_KEY_UUIDS.pageNext, name: "Fixtures: Page ▶", title: "Page ▶", icon: "fx-page-next", pi: false, tooltip: "Next attribute page (Main, Shutters, Beam, Colour, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page." },
@@ -91,11 +95,12 @@ export const fixtureKey = (uuid: string): FixtureKeyDef => {
   return k;
 };
 /**
- * The Fixtures page of the default profile (v0.7.3, Handoff 24): Setup, Deck Control, Home Light, ◀ Page, Page ▶ at fixed positions
+ * The Fixtures page of the default profile (v0.7.3, Handoff 24; v0.11.0 adds Wake between Setup and Deck Control): Setup, Wake, Deck Control, Home Light, ◀ Page, Page ▶ at fixed positions
  * (Status and Next Fixture left the profile and the actions list; their actions still work on keys placed by hand).
  */
 export const PROFILE_FIXTURE_KEY_POSITIONS: [string, string][] = [
   ["1,0", FIXTURE_KEY_UUIDS.setup],
+  ["2,0", FIXTURE_KEY_UUIDS.wake],
   ["3,0", FIXTURE_KEY_UUIDS.deck],
   ["0,1", FIXTURE_KEY_UUIDS.home],
   ["2,1", FIXTURE_KEY_UUIDS.pagePrev],

@@ -92,6 +92,7 @@ export const ICONS: Record<string, string> = {
   "fx-release": `<path d="M12 3.500v8"/><path d="M7 6.500a7.500 7.500 0 1 0 10 0"/>`,
   "fx-home": `<path d="M4 11.500l8-7 8 7"/><path d="M6 10.500v9h12v-9"/><path d="M10 19.500v-5h4v5"/>`,
   "fx-next": `<circle cx="9" cy="12" r="4.500"/><path d="M15 8.500l3.500 3.500L15 15.500M13.500 12h5"/>`,
+  "fx-wake": `<path d="M6.500 17a5.500 5.500 0 0 1 11 0"/><path d="M3 17h18M12 5v3M5.600 9.600l1.800 1.800M18.400 9.600l-1.800 1.800M8 20.500h8"/>`,
   "fx-deck": `<rect x="4" y="8" width="16" height="8" rx="4"/><circle cx="16" cy="12" r="2.200"/><path d="M8 4.500v2M12 4v2.500M16 4.500v2"/>`,
   "fx-attr": `<circle cx="12" cy="12" r="7.500"/><path d="M12 12l3.800-3.800"/><path d="M12 2.500v2M21.500 12h-2M12 21.500v-2M2.500 12h2"/>`,
   "fx-page-prev": `<rect x="3.500" y="5" width="17" height="14" rx="2"/><path d="M13.500 8.500L10 12l3.500 3.500"/>`,

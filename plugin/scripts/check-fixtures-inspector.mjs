@@ -37,7 +37,7 @@ const view = {
     fx("s1", 207, "Framing Spot", { channelCount: 37, typeKey: "T4", unproven: true, addr: { universe: 1, address: 420 } }),
   ],
   types: { T1: typeView(movingHead()), T4: typeView(framingHead()) },
-  deck: { on: false, idleSeconds: 120 },
+  deck: { on: false, idleSeconds: 120, autoWake: true },
 };
 assert.equal(view.types.T4.unproven, true, "the synthetic spot is the 'uniqueness not proven' case");
 const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
@@ -68,6 +68,14 @@ got.length = 0;
 await page.fill("#idle-s", "45");
 await page.dispatchEvent("#idle-s", "change");
 assert.deepEqual(got.at(-1).payload, { cmd: "idle", seconds: 45 });
+// v0.11.0 (Handoff 30): the automatic wake setting (on by default) and its hint
+assert.equal(await page.isChecked("#auto-wake"), true, "automatic wake on");
+assert.match(await page.textContent("label[for=auto-wake]"), /^Wake automatically when Capture opens the show$/);
+assert.equal(await page.textContent("#auto-wake-hint"), "Changes made in Capture while the Stream Deck app wasn't running are overwritten by the deck's memory when the show opens.");
+await page.uncheck("#auto-wake");
+assert.deepEqual(got.at(-1).payload, { cmd: "autowake", on: false });
+await page.check("#auto-wake");
+assert.deepEqual(got.at(-1).payload, { cmd: "autowake", on: true });
 // Handoff 20: the Channels list per row and the "check against Capture's patch view" note
 assert.equal(await page.isVisible(".fx[data-key=s1] .unproven"), true, "unproven note on the spot");
 assert.equal(await page.isVisible(".fx[data-key=a1] .unproven"), false, "no note on the wash");
@@ -75,7 +83,7 @@ assert.match(await page.textContent(".fx[data-key=s1] .chans summary"), /Channel
 assert.equal(await page.isVisible(".fx[data-key=s1] .chtbl"), false, "collapsed by default");
 await page.click(".fx[data-key=s1] .chans summary");
 assert.equal(await page.locator(".fx[data-key=s1] .chtbl tr").count(), 38, "header + 37 channels");
-assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(29) td").allTextContents(), ["28", "Shutter 1B", "8-bit", "Beam · Shutters"]);
+assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(29) td").allTextContents(), ["28", "Shutter 1B", "8-bit", "Shutters 1/2"]); // v0.10.1 page order (Shutters before Beam); the expectation was stale since H29
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(8) td").allTextContents(), ["7", "Dimmer", "16-bit (fine 8)", "Main"]);
 assert.deepEqual(await page.locator(".fx[data-key=s1] .chtbl tr:nth-child(9) td").allTextContents(), ["8", "Dimmer Fine", "fine of 7", ""]);
 // Handoff 22: a hidden channel (Control, 36) is listed greyed out as "hidden (0)"

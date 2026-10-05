@@ -47,7 +47,9 @@
     <span class="small">Disarm the knobs after</span><input id="idle-s" type="number" min="0" max="3600" step="1" value="120" />
     <span class="small">s without fixture activity (output keeps running; 0 = never)</span>
   </div>
-  <div class="hint full">Deck Control ON arms the knobs; OFF disarms them. The deck connects to Capture as a console when the plugin starts (it follows the selection; no DMX until a fixture knob or key is used) and stays connected: while OFF it keeps sending what Capture shows, and a change made in Capture (mouse, Control Pane) takes a channel back from the knob. Only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it.</div>
+  <div class="hint full">Deck Control ON arms the knobs; OFF disarms them. The deck connects to Capture as a console when the plugin starts (it follows the selection; no DMX until a fixture knob or key is used, or a Wake) and stays connected: while OFF it keeps sending what Capture shows, and a change made in Capture (mouse, Control Pane) takes a channel back from the knob. Only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it.</div>
+  <div class="cbx"><input id="auto-wake" type="checkbox" checked /><label for="auto-wake">Wake automatically when Capture opens the show</label></div>
+  <div id="auto-wake-hint" class="hint full">Changes made in Capture while the Stream Deck app wasn't running are overwritten by the deck's memory when the show opens.</div>
 
   <div class="sect">Fixtures</div>
   <div class="cbx"><input id="all" type="checkbox" /><label for="all">Show all fixtures (not only those with pan or tilt)</label></div>

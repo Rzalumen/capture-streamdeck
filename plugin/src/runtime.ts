@@ -61,7 +61,7 @@ class Runtime {
    * Fixture control: library channel lists, per-show address setup (v0.10.0: from Capture's patch when it sends it), DMX over sACN.
    * v0.10.0 (Handoff 28): the persistent session (selection, patch, levels; EnterShow + the SDMX declaration) is opened at plugin start
    * and held until plugin exit; Deck Control only arms the knobs (v0.9.0). Nothing is sent to DMX, and no sACN socket exists, until
-   * the user touches a fixture.
+   * the user touches a fixture or a Wake runs (v0.11.0: the Wake key, or automatically when Capture opens the show; Setup setting).
    * Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_CITP_TIMING / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
    * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 makes no CITP connection at all; CAPTURE_TEST_DECK_ON=1 starts with
    * Deck Control ON (armed).
@@ -151,7 +151,8 @@ class Runtime {
     this.deck.onChange(() => this.fixtures.notify());
     this.installExitHandlers();
     // v0.10.0: the persistent session from start-up (EnterShow, declaration, fixture list, identification, Capture's patch). Deck
-    // Control starts disarmed; nothing goes to DMX (and no sACN socket is opened) until a fixture is touched.
+    // Control starts disarmed; nothing goes to DMX (and no sACN socket is opened) until a fixture is touched or woken (v0.11.0: with
+    // the automatic wake on, the stored values go out as soon as Capture's show and addresses are in).
     if (process.env.CAPTURE_TEST_NO_CITP !== "1") {
       this.link.attach();
       void this.link.startPersistent();

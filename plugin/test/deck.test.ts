@@ -105,7 +105,7 @@ test("deck: the key toggles; Release (setOn false) when OFF does nothing; idle 0
   assert.match((await d.deck.setIdleSeconds(-1))!, /0 to 3600/);
   assert.match((await d.deck.setIdleSeconds(1.5))!, /whole number/);
   assert.equal(await d.deck.setIdleSeconds(0), null);
-  assert.deepEqual(state.obj, { other: 1, [DECK_KEY]: { idleSeconds: 0 } }, "merged into the global settings");
+  assert.deepEqual(state.obj, { other: 1, [DECK_KEY]: { idleSeconds: 0, autoWake: true } }, "merged into the global settings (v0.11.0: beside the automatic wake setting)");
   d.deck.activity("Home Selected key");
   assert.equal(d.deck.on, true);
   assert.equal(d.armed(), 0, "0 = never switches OFF by itself");

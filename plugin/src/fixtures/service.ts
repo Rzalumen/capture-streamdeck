@@ -88,7 +88,7 @@ export interface SetupView {
   /** typeKey -> channel list (parsed types only). */
   types: Record<string, SetupTypeView>;
   /** Handoff 21: Deck Control state and the idle switch-off time (null without Deck Control, e.g. unit tests). */
-  deck: { on: boolean; idleSeconds: number } | null;
+  deck: { on: boolean; idleSeconds: number; autoWake: boolean } | null;
   controllable: number;
   active: boolean;
   universes: number[];
@@ -161,7 +161,22 @@ export interface DeckHooks {
   activity(why: string): void;
   readonly idleSeconds: number;
   setIdleSeconds(n: number): Promise<string | null>;
+  /** v0.11.0: "Wake automatically when Capture opens the show". */
+  readonly autoWake: boolean;
+  setAutoWake(on: boolean): Promise<string | null>;
 }
+
+/** v0.11.0 (Handoff 30): what a Wake did. */
+export interface WakeResult {
+  /** "waiting": not connected to Capture (or no show entered); "nothing": nothing stored for an addressed fixture of this show. */
+  outcome: "woken" | "waiting" | "nothing";
+  /** Fixtures woken. */
+  n: number;
+  universes: number[];
+}
+
+/** v0.11.0: the Setup panel hint under the automatic-wake setting. */
+export const AUTO_WAKE_HINT = "Changes made in Capture while the Stream Deck app wasn't running are overwritten by the deck's memory when the show opens.";
 
 export class FixtureService {
   readonly selection: Selection;
@@ -173,6 +188,10 @@ export class FixtureService {
   private patchState: PatchState = newPatchState();
   /** v0.10.0: fixtures Capture patched where the deck cannot drive them (universe not declared, past 512): key -> reason (Setup). */
   private patchIssues = new Map<string, string>();
+  /** v0.11.0: an automatic wake waits for the addresses (Capture entered a show while no output was running). */
+  private autoWakePending = false;
+  /** v0.11.0: shows for which "nothing stored" was already logged by the automatic wake. */
+  private autoNothingLogged = new Set<string>();
   /** The attribute page shown on the generic dials: its index within the pages of `typeKey` (the first selected fixture's type). */
   private pageState = { typeKey: "", index: 0 };
 
@@ -272,7 +291,7 @@ export class FixtureService {
       if (types[f.typeKey] || !t?.ok || !t.model) continue;
       types[f.typeKey] = { channels: channelList(t.channels, t.model), unproven: !!t.unproven };
     }
-    const deck = this.deck ? { on: this.deck.on, idleSeconds: this.deck.idleSeconds } : null;
+    const deck = this.deck ? { on: this.deck.on, idleSeconds: this.deck.idleSeconds, autoWake: this.deck.autoWake } : null;
     const patch = this.patchActive() ? { patched: this.patchState.patched, total: this.patchState.total } : null;
     return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, deck, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING, patch, connected: this.show.connected };
   }
@@ -330,6 +349,7 @@ export class FixtureService {
   /** A different show was entered, or Capture left the show: nothing is selected any more and output stops. */
   onShowGone(why: string): void {
     this.selection.clear();
+    this.autoWakePending = false;
     this.patchState = newPatchState(); // Capture's patch belongs to the show (the stored addresses stay)
     this.patchIssues.clear();
     this.engine.clearCapture();
@@ -346,6 +366,7 @@ export class FixtureService {
    */
   onLinkClosed(why: string): void {
     this.selection.clear();
+    this.autoWakePending = false; // the next EnterShow decides again
     this.log(`${why}: selection cleared`);
     this.emit();
   }
@@ -472,6 +493,60 @@ export class FixtureService {
     }, BURST_MS);
     entry.timer.unref?.();
     this.bursts.set(k, entry);
+  }
+
+  // ------------------------------------------------------------------ v0.11.0: Wake (Handoff 30)
+
+  /**
+   * Wake (the key, and the automatic wake): every fixture of the current show that has an address (Capture's patch, or typed in
+   * fallback) and a parsed type, and has stored values, gets them back as resumed values (not knob-owned), and output starts for
+   * their universes. The armed state and the selection are not touched. Logs one line, plus one line naming the addressed fixtures
+   * with nothing stored (not woken).
+   */
+  wake(auto = false): WakeResult {
+    const tag = auto ? "Wake (automatic)" : "Wake";
+    if (!this.show.connected || this.show.showName === null) {
+      if (!auto) this.log(`${tag}: waiting for Capture (not connected or no show open): nothing sent`);
+      return { outcome: "waiting", n: 0, universes: [] };
+    }
+    const ctl = this.controllables();
+    const stored = ctl.filter((c) => this.engine.hasStored(c.fixture.key));
+    const unstored = ctl.filter((c) => !this.engine.hasStored(c.fixture.key));
+    const name = (c: Controllable): string => `${c.fixture.channel ? `Ch ${c.fixture.channel}` : "Ch 0"} ${c.fixture.name}`;
+    if (!stored.length) {
+      const show = this.showKeyName;
+      if (!auto || !this.autoNothingLogged.has(show)) {
+        if (auto) this.autoNothingLogged.add(show);
+        this.log(`${tag}: nothing stored for show "${show}" (${ctl.length} addressed fixture(s)): nothing sent`);
+      }
+      return { outcome: "nothing", n: 0, universes: [] };
+    }
+    const woken = new Set(this.engine.wake(stored.map(toTarget)));
+    const universes = [...new Set(stored.filter((c) => woken.has(c.fixture.key)).map((c) => c.addr.universe))].sort((a, b) => a - b);
+    this.log(`${tag}: ${woken.size} fixture(s) restored on universe(s) ${universes.join(", ")}`);
+    if (unstored.length) this.log(`${tag}: no stored values for ${unstored.map(name).join(", ")} (not woken)`);
+    this.emit();
+    return { outcome: "woken", n: woken.size, universes };
+  }
+
+  /**
+   * Capture entered a show (every EnterShow, after a show change was handled). The automatic wake is armed only when no output is
+   * running (plugin start, Capture reopening the show, a different show); a reconnect while output runs for the same show does not.
+   * It runs when the addresses are known: see afterList().
+   */
+  onShowEntered(): void {
+    this.autoWakePending = !!this.deck?.autoWake && !this.engine.active;
+  }
+
+  /**
+   * A FixtureList was handled (after onPatchList). The first full list received after our SDMX declaration carries the addresses
+   * (Capture's patch, or the typed ones when the patch is not available): a pending automatic wake runs now.
+   */
+  afterList(type: number | null, declared: boolean): void {
+    if (!this.autoWakePending || !declared || type === 1 || type === 2) return;
+    this.autoWakePending = false;
+    if (!this.deck?.autoWake) return;
+    this.wake(true);
   }
 
   /** FixtureRemove: Capture deleted fixtures. */

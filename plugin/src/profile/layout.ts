@@ -7,7 +7,7 @@
  *  - Every child page: Back at "0,0"; commands fill "1,0" → "3,0" → "0,1" → "3,1" (7 slots) in catalog order.
  *  - More than 7 commands: the 7th slot ("3,1") becomes a "More ▸" folder to the next page (which has its own Back).
  *  - Dials: every page has its own four. Standard set everywhere; View pages get the View set; the Look folder the Flare set.
- *  - Fixtures (v0.7.3, Handoff 24): one page at fixed positions — row 0: Back · Setup · (empty) · Deck Control; row 1: Home Light · (empty) ·
+ *  - Fixtures (v0.7.3, Handoff 24; Wake added in v0.11.0): one page at fixed positions — row 0: Back · Setup · Wake · Deck Control; row 1: Home Light · (empty) ·
  *    ◀ Page · Page ▶; dials Attribute 1 · 2 · 3 · 4 (the attribute pages are cycled by the page keys). Status and Next Fixture left the profile.
  */
 import { CATEGORIES, ENTRIES, actionName, type CatalogEntry } from "../catalog/index.js";
@@ -186,7 +186,7 @@ function fixtureDials(): Map<string, Dial> {
 }
 
 /**
- * Fixtures folder (v0.7.3): explicit positions — "0,0" Back · "1,0" Setup · "3,0" Deck Control / "0,1" Home Light · "2,1" ◀ Page · "3,1" Page ▶;
+ * Fixtures folder (v0.7.3; v0.11.0 Wake): explicit positions — "0,0" Back · "1,0" Setup · "2,0" Wake · "3,0" Deck Control / "0,1" Home Light · "2,1" ◀ Page · "3,1" Page ▶;
  * dials Attribute 1–4. The Deck key draws its state into its image: no Stream Deck title (ShowTitle false, empty title).
  */
 function buildFixtures(parent: Page, pages: Page[]): Page {

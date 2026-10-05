@@ -399,12 +399,19 @@ test("connection lost: the session reconnects with back-off, says PNam and Enter
   citp.leaveShow();
   await deck.waitFor(() => packets.slice(n0).filter((p) => p.terminated).length >= 3, 3000, "output released on LeaveShow");
   await waitStrip("sel", (f) => f.line1.value === "Click a light" && f.mark.value === "", "selection cleared, fixtures forgotten");
-  // Capture enters its show again: the list comes back, the setup is still there, nothing is selected, no DMX
+  // Capture enters its show again: the list comes back, the setup is still there, nothing is selected. v0.11.0 (Handoff 30): no output
+  // runs, so the automatic wake (on by default) puts the stored values back (Ch 203's among them), once (before: no DMX until a touch)
   const n1 = packets.length;
+  const wakes = (): number => deck.logText().split("\n").filter((l) => /Fixtures: Wake \(automatic\): \d+ fixture\(s\) restored/.test(l)).length;
+  const w0 = wakes();
   citp.enterShow("E2E SHOW");
   await deck.waitFor(() => deck.lastImage("st").includes("E2E SHOW") && /of 4 ready|ready/.test(deck.lastImage("st")), 4000, "show is back");
-  await sleep(300);
-  assert.equal(packets.slice(n1).length, 0, "no DMX until a touch");
+  await deck.waitFor(() => wakes() === w0 + 1 || undefined, 4000, "one automatic wake");
+  assert.match(deck.logText(), /Fixtures: Wake \(automatic\): \d+ fixture\(s\) restored on universe\(s\) 1\n/, "every addressed fixture this file stored values for (all on universe 1)");
+  await deck.waitFor(() => packets.slice(n1).find((p) => !p.terminated && slot(p, 285, 1) === slot(before, 285, 1)), 3000, "the stored values are sent again");
+  await sleep(900);
+  assert.equal(wakes(), w0 + 1, "exactly one");
+  await waitStrip("sel", (f) => f.line1.value === "Click a light", "still nothing selected");
 });
 
 test("a different show: selection cleared, output released, the other show's setup is empty", async () => {

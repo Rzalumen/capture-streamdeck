@@ -16,7 +16,7 @@ folders (below).
 | `Camera: Show Position 1` … `8` | OSC recall of the k-th position of catalog 1 in the open show (auto mode); the key is titled with the position's name in Capture. |
 | `Camera: Store Modifier` | Hold it, then press *Camera: Position 1–5* to store the camera there instead of recalling it (“Stored” flash; the modifier auto-releases after 30 s or when its key leaves the screen). |
 | `Look: Auto Exposure`, `Look: Laser Flicker` | Toggles over OSC (`T`/`F`). |
-| `Fixtures: Setup`, `Deck Control` (v0.7), `Home Selected`, `Status`, `◀ Page`, `Page ▶`, `Release` (kept for old keys: = Deck Control OFF) · `Fixture: Select`, `Attribute 1`, `Attribute 2`, `Attribute 3` (v0.6) · `Fixture: Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` (fixed dials, kept for hand-placed layouts) | **Fixture knobs**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" and "Attribute pages" below. |
+| `Fixtures: Setup`, `Deck Control` (v0.7), `Wake` (v0.11.0), `Home Selected`, `Status`, `◀ Page`, `Page ▶`, `Release` (kept for old keys: = Deck Control OFF) · `Fixture: Select`, `Attribute 1`, `Attribute 2`, `Attribute 3` (v0.6) · `Fixture: Pan`, `Tilt`, `Intensity`, `Zoom`, `Focus`, `Iris`, `Red\|Cyan`, `Green\|Magenta`, `Blue\|Yellow`, `White` (fixed dials, kept for hand-placed layouts) | **Fixture knobs**: drive the DMX of fixtures in the open show over sACN. See "Fixture control" and "Attribute pages" below. |
 | `Status: Connection` | Connected/Offline, Capture version, Accessibility status, median latency. Press to re-check. |
 | `Dial: …` (12) | *Exposure, Ambient, Bloom, White Balance, Fill, Hue Clamp, Contrast, Saturation, Flare, Flare Size, Flare Angle, Flare Streaks*. Turn: value += ticks × step (clamped, ≤ 30 msg/s, latest wins). Push or touch: fine mode (÷10). Long touch: reset. **Dial actions only appear in the action list when a dial slot (not a key) is selected.** |
 
@@ -171,6 +171,23 @@ the deck-driven lights in Capture once the universes were declared (v0.8.0 log o
   Ownership survives arm/disarm and reconnects and is cleared with the show. Several single-slot ChBk for one fixture within 50 ms are logged as one line
   (`Fixtures: Capture levels u1: 31 slot(s) -> Ch 202 (burst)`); every message is still applied.
 
+### Wake (v0.11.0, Handoff 30)
+
+**Fixtures: Wake** (Fixtures page, row 0 between Setup and Deck Control; key face `WAKE`): Puts every light the deck remembers back where it was,
+e.g. after reopening Capture. Lights the deck has no memory of, on the same universes, go to 0 when their universe starts (known limit).
+
+- Which fixtures: every fixture of the current show that has an address (Capture's patch, or typed in fallback) and stored values. Their stored values
+  go into the engine as resumed values (**not** knob-owned: the last move wins, a ChBk from Capture takes any of them) and output starts for their
+  universes (Wake counts as a touch; a ChBk still never starts a universe). The armed state and the selection do not change.
+- Flash after a press (2 s): `Woke N`; `Waiting` when not connected (nothing sent); `Nothing stored` when no addressed fixture of the show has stored values.
+- Log: `Fixtures: Wake: 3 fixture(s) restored on universe(s) 1, 2`, plus `Fixtures: Wake: no stored values for Ch 204 … (not woken)`.
+- Repeat presses send the stored values again (harmless; the way to recover after another Capture reopen).
+- **Automatic wake**: Setup panel setting **Wake automatically when Capture opens the show**, on by default (stored with the Deck settings,
+  `fixtureDeck.autoWake`). It runs once when Capture enters a show while no output is running (plugin start, Capture reopening the show, a show
+  change), as soon as the first FixtureList after the SDMX declaration has given the addresses (Capture's patch, or the typed ones in fallback).
+  A reconnect while output is still running does not wake. Log: `Fixtures: Wake (automatic): N fixture(s) restored on universe(s) …`; with nothing
+  stored it sends nothing and logs once per show. Changes made in Capture while the Stream Deck app wasn't running are overwritten by the deck's memory when the show opens.
+
 ### Deck status on the LCD and the Deck key (v0.7.3, Handoff 24)
 
 - The four **Fixture: Attribute** dials use `layouts/attr.json`: the channel readout as before, under a coloured **status line** (a text item
@@ -181,7 +198,7 @@ the deck-driven lights in Capture once the universes were declared (v0.8.0 log o
   Stream Deck title (the only key in the profile without one).
 - **Fixtures: Home Selected** is now called **Fixtures: Home Light** (same UUID, same behaviour).
 - **Status** and **Next Fixture** left the profile and the actions list (`VisibleInActionsList: false`); keys placed by hand keep working.
-- The Fixtures page: row 0 Back · Setup · (empty) · Deck Control; row 1 Home Light · (empty) · ◀ Page · Page ▶.
+- The Fixtures page: row 0 Back · Setup · Wake (v0.11.0) · Deck Control; row 1 Home Light · (empty) · ◀ Page · Page ▶.
 
 ### Home values, hidden channels, fewer pages (v0.7.1, Handoff 22)
 

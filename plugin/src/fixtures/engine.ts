@@ -12,6 +12,8 @@
  *  - v0.9.0 (Handoff 27): "the last move wins". Per parameter, the deck owns it after a knob turn, strip-tap home or Home Light;
  *    Capture owns it again after a ChBk covering any of its bytes (takeFromCapture). Ownership lives in the fixture state, so it
  *    survives arm / disarm (which no longer releases output) and is cleared with the fixtures (LeaveShow / show change / exit).
+ *  - v0.11.0 (Handoff 30): Wake (the key, and automatically when Capture opens a show) puts every addressed fixture's stored values in
+ *    as resumed values (not owned by the deck) and starts their universes; it counts as a touch (see wake()).
  *  - A fixture's state starts from its defaults on first touch (pages.ts: pan/tilt 50 %, intensity 100 %, the first shutter/strobe 255,
  *    additive colours full, everything else 0). Every channel of the fixture is a knob parameter (Handoff 20); values are kept per
  *    parameter.
@@ -272,6 +274,40 @@ export class DmxEngine {
     this.emit();
   }
 
+  /** v0.11.0: true when values were stored for this fixture in the current show (the resume hook returns any). */
+  hasStored(key: string): boolean {
+    return (this.o.resume?.(key)?.size ?? 0) > 0;
+  }
+
+  /**
+   * v0.11.0 (Handoff 30) Wake: every target's stored values go into the engine as RESUMED values (not knob-owned: a later ChBk takes any
+   * of them, the last move wins) and into the overlay (they are what Capture is told from now on, so an older ChBk level cannot hide
+   * them), and output starts for their universes. Wake counts as a touch. It is not a knob move: it does not need the knobs armed
+   * (`allowed`), arms nothing and remembers nothing new. Targets without stored values are skipped. Returns the keys woken.
+   */
+  wake(targets: Target[]): string[] {
+    const woken: string[] = [];
+    for (const t of targets) {
+      const stored = this.o.resume?.(t.key);
+      if (!stored?.size) continue;
+      const st = this.touch(t);
+      const params: Param[] = [];
+      for (const p of t.model.params) {
+        const v = stored.get(p.id);
+        if (v === undefined) continue;
+        st.values.set(p.id, clamp(v));
+        st.deckSet.delete(p.id);
+        params.push(p);
+      }
+      this.recordDeck(st, params);
+      woken.push(t.key);
+    }
+    if (!woken.length) return woken;
+    this.start();
+    this.emit();
+    return woken;
+  }
+
   /** Where each touched fixture is currently sent (key -> universe/address). */
   touchedAddresses(): Map<string, { universe: number; address: number }> {
     return new Map([...this.fixtures].map(([k, f]) => [k, { universe: f.universe, address: f.address }]));
@@ -347,6 +383,7 @@ export class DmxEngine {
    * A value the deck sets is from now on Capture's level too (it holds the last levels it received): written into the overlay at
    * once, so an older ChBk value can never come back on that channel (e.g. in a later ON period, when the fixture is not touched).
    * Channels the deck did not set are NOT recorded: a fixture touched later starts from its stored / home values, as before.
+   * v0.11.0: Wake records the stored values it puts back the same way (without making them deck-owned).
    */
   private recordDeck(st: FixState, params: readonly Param[]): void {
     let ov = this.overlay.get(st.universe);

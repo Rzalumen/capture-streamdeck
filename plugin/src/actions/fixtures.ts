@@ -337,6 +337,27 @@ export class FixturesHome extends FixtureKey {
   }
 }
 
+/**
+ * Fixtures: Wake (v0.11.0, Handoff 30). Puts every addressed fixture of the current show that has stored values back to them and starts
+ * output for their universes (FixtureService.wake). Does not arm the knobs and does not change the selection. Face: WAKE; after a
+ * press `Woke N` (2 s), `Waiting` when not connected, `Nothing stored` when the show has no stored values for an addressed fixture.
+ */
+export class FixturesWake extends FixtureKey {
+  constructor() {
+    super(FIXTURE_KEY_UUIDS.wake, fixtureKey(FIXTURE_KEY_UUIDS.wake));
+  }
+  protected view(c: KeyCtx): void {
+    const f = c.flasher.flash;
+    draw(c.action, { icon: this.def.icon, label: this.def.title, big: f?.text, tone: f?.tone });
+  }
+  override onKeyDown(ev: KeyDownEvent): void {
+    const r = svc().wake();
+    const text = r.outcome === "waiting" ? "Waiting" : r.outcome === "nothing" ? "Nothing stored" : `Woke ${r.n}`;
+    logEvent("Key press", this.manifestId, undefined, r.outcome === "woken" ? `wake: ${r.n} fixture(s) on universe(s) ${r.universes.join(", ")}` : r.outcome === "waiting" ? "wake: waiting for Capture (not connected): nothing sent" : "wake: nothing stored for this show: nothing sent");
+    this.ctxs.get(ev.action.id)?.flasher.show({ text, tone: r.outcome === "woken" ? undefined : "red" }, 2000);
+  }
+}
+
 /** Fixtures: Status — show name, controllable count, output state. */
 export class FixturesStatus extends FixtureKey {
   constructor() {

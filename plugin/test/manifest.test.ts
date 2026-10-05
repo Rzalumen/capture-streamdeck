@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.10.1.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.11.0.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.10.1.0");
+  assert.equal(built.Version, "0.11.0.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -125,7 +125,7 @@ test("the action list contains no configurable actions: the six generic ones are
   const HIDDEN_FIXTURE_KEYS = ["com.rezabehjat.capture.fixtures.status", "com.rezabehjat.capture.fixtures.next"];
   for (const u of HIDDEN_FIXTURE_KEYS) assert.equal(built.Actions.find((x) => x.UUID === u)?.VisibleInActionsList, false, `${u} hidden, still in the manifest`);
   assert.equal(visible.length, built.Actions.length - GENERIC.length - HIDDEN_FIXTURE_KEYS.length);
-  assert.equal(built.Actions.length, 177, "v0.6: + Attribute 1–3 dials, ◀ Page and Page ▶ keys; v0.7: + Deck Control; v0.7.1: + Attribute 4, Next Fixture");
+  assert.equal(built.Actions.length, 178, "v0.6: + Attribute 1–3 dials, ◀ Page and Page ▶ keys; v0.7: + Deck Control; v0.7.1: + Attribute 4, Next Fixture; v0.11.0: + Wake");
 });
 
 test("the handoff's named actions exist, visible, with the handoff's names", () => {
@@ -171,7 +171,7 @@ test("fixture actions: the dials are Encoder actions with the dial/select layout
     assert.deepEqual([td.Push, td.Touch, td.LongTouch], ["Fine mode", touch, undefined], "Handoff 21: push = fine, tap = home, no long touch");
   }
   const keys = built.Actions.filter((a) => a.UUID.startsWith("com.rezabehjat.capture.fixtures."));
-  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Light", "Fixtures: Status", "Fixtures: Deck Control", "Fixtures: ◀ Page", "Fixtures: Next Fixture", "Fixtures: Page ▶"]);
+  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Light", "Fixtures: Status", "Fixtures: Wake", "Fixtures: Deck Control", "Fixtures: ◀ Page", "Fixtures: Next Fixture", "Fixtures: Page ▶"]);
   assert.equal(keys.find((a) => a.Name === "Fixtures: Home Light")!.UUID, "com.rezabehjat.capture.fixtures.home", "renamed, same UUID");
   assert.match(keys.find((a) => a.Name === "Fixtures: Release")!.Tooltip, /switches Deck Control OFF/, "Release kept for compatibility");
   for (const a of keys) {

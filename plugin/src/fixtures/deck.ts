@@ -150,6 +150,8 @@ export interface DeckOptions {
 export class DeckControl {
   private _on = false;
   idleSeconds = DEFAULT_IDLE_SECONDS;
+  /** v0.11.0 (Handoff 30): "Wake automatically when Capture opens the show" (Setup panel), on by default. Stored in DECK_KEY. */
+  autoWake = true;
   private timer: unknown;
   private chain: Promise<void> = Promise.resolve();
   private listeners: (() => void)[] = [];
@@ -167,15 +169,35 @@ export class DeckControl {
     for (const fn of this.listeners) fn();
   }
 
-  /** Reads the idle setting. Never throws. */
+  /** Reads the idle setting and (v0.11.0) the automatic-wake setting. Never throws. */
   async load(): Promise<void> {
     try {
-      const d = (await this.o.globals?.read())?.[DECK_KEY] as { idleSeconds?: unknown } | undefined;
+      const d = (await this.o.globals?.read())?.[DECK_KEY] as { idleSeconds?: unknown; autoWake?: unknown } | undefined;
       const n = Number(d?.idleSeconds);
       if (d && Number.isInteger(n) && n >= 0 && n <= MAX_IDLE_SECONDS) this.idleSeconds = n;
+      if (d && typeof d.autoWake === "boolean") this.autoWake = d.autoWake;
     } catch {
       /* default */
     }
+  }
+
+  /** Both Deck settings, as stored under DECK_KEY. */
+  private settings(): { idleSeconds: number; autoWake: boolean } {
+    return { idleSeconds: this.idleSeconds, autoWake: this.autoWake };
+  }
+
+  /** v0.11.0 Setup panel: "Wake automatically when Capture opens the show". Returns an error text or null. */
+  async setAutoWake(on: boolean): Promise<string | null> {
+    if (typeof on !== "boolean") return "the automatic wake setting must be on or off";
+    this.autoWake = on;
+    this.emit();
+    try {
+      await this.o.globals?.update({ [DECK_KEY]: this.settings() });
+    } catch (e) {
+      return `could not save the automatic wake setting: ${(e as Error).message}`;
+    }
+    this.o.log(`wake automatically when Capture opens the show: ${on ? "on" : "off"}`);
+    return null;
   }
 
   /** Setup panel: seconds without fixture activity before Deck Control switches OFF (0 = never). Returns an error text or null. */
@@ -185,7 +207,7 @@ export class DeckControl {
     this.arm();
     this.emit();
     try {
-      await this.o.globals?.update({ [DECK_KEY]: { idleSeconds: n } });
+      await this.o.globals?.update({ [DECK_KEY]: this.settings() });
     } catch (e) {
       return `could not save the idle time: ${(e as Error).message}`;
     }
