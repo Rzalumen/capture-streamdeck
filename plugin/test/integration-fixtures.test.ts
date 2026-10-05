@@ -14,7 +14,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ALLOWED_OUTGOING_CAEX, CAEX, UNIDENTIFIED, decodeMessage } from "../src/fixtures/citp.ts";
+import { ALLOWED_OUTGOING_CAEX, CAEX, UNIDENTIFIED, decodeMessage, isWellFormedDeclaration } from "../src/fixtures/citp.ts";
 import { parseDataPacket, type ParsedPacket } from "../src/fixtures/sacn.ts";
 import { FakeDeck, sleep } from "./fixtures/fake-deck.ts";
 import { StubCapture } from "./fixtures/stub-capture.ts";
@@ -115,14 +115,20 @@ test("persistent session: PNam, EnterShow, one FixtureIdentify for the unidentif
   assert.deepEqual(citp.identifies[0], [[INST1, IDS.r203], [INST2, IDS.r204]], "the 16 bytes as received, 100001 upward, the cell bar (7777) not included");
   assert.ok(deck.lastImage("st").includes("0 of 3 ready"));
   assert.ok(deck.lastImage("st").includes("output off"));
-  // every message the plugin sent is PINF/CAEX and on the allowlist (+ the well-formed FixtureIdentify)
+  // every message the plugin sent is PINF/CAEX and on the allowlist (+ the well-formed FixtureIdentify), or (v0.8.0, persistent
+  // session) one of our well-formed SDMX SXSr / SXUS declarations
   for (const m of citp.received) {
     const d = decodeMessage(m);
+    if (d.layer === "SDMX") {
+      assert.ok(isWellFormedDeclaration(m), `SDMX ${m.toString("latin1", 20, 24)} is a well-formed declaration`);
+      continue;
+    }
     assert.ok(d.layer === "PINF" || d.layer === "CAEX", `layer ${d.layer}`);
     if (d.layer === "CAEX") assert.ok(ALLOWED_OUTGOING_CAEX.has(d.code!) || d.code === CAEX.FixtureIdentify, `CAEX 0x${d.code!.toString(16)} is allowed`);
   }
   for (const code of [CAEX.FixtureList, CAEX.FixtureModify, CAEX.FixtureRemove, CAEX.FixtureSelection]) assert.equal(citp.of(code).length, 0, `0x${code.toString(16)} is never sent`);
   assert.equal(citp.of(CAEX.EnterShow).length, 1, "our own EnterShow, once");
+  assert.equal(citp.received.filter((m) => m.toString("latin1", 16, 20) === "SDMX").length, 17, "v0.8.0: the declaration, once (SXSr + 16 SXUS)");
   // the list is asked for again every 1.5 s, and identified fixtures are never identified again
   await sleep(2200);
   assert.ok(citp.of(CAEX.FixtureListRequest).length >= 2, "periodic FixtureListRequest");

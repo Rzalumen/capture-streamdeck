@@ -1,14 +1,16 @@
 /**
- * CITP / CAEX wire helpers for the READ-ONLY show sync (ported from research/lib/citp.mjs; the research copy is unchanged).
+ * CITP / CAEX / SDMX wire helpers for the show sync (ported from research/lib/citp.mjs; the research copy is unchanged).
  *
  * The ONLY messages this plugin may ever put on the TCP connection are PINF/PNam, the CAEX codes in ALLOWED_OUTGOING_CAEX
- * (LaserFeedList, EnterShow, LeaveShow, FixtureListRequest, NACK) and a well-formed FixtureIdentify (v0.5: sent by the session only
- * for fixtures whose identifier is still 0xffffffff). `isAllowedOutgoing` is checked on every send; anything else (FixtureList,
- * FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace, ...) is refused.
- * All integers little-endian.
+ * (LaserFeedList, EnterShow, LeaveShow, FixtureListRequest, NACK), a well-formed FixtureIdentify (v0.5: sent by the session only
+ * for fixtures whose identifier is still 0xffffffff) and, ONLY with `{sdmxDeclare: true}` (v0.8.0, Handoff 26: the Deck-ON session's
+ * universe declaration), our own well-formed SDMX SXSr / SXUS. `isAllowedOutgoing` is checked on every send; anything else
+ * (FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace, SDMX ChBk / ChLs
+ * / Capa / UNam / EnId, ...) is refused, with or without any option. All integers little-endian.
  *
  * Sources: CITP 1.0 base header and PINF layers (jwarwick/citp-lib, puremediaserver CITPDefines.h; PLoc confirmed against real
- * Capture 2026 packets); CAEX layer from "CITP CAEX Specification F" (Capture, 2020-07-03).
+ * Capture 2026 packets); CAEX layer from "CITP CAEX Specification F" (Capture, 2020-07-03); SDMX layer as in research/lib/citp.mjs
+ * (Handoff 25), byte-checked against the real Capture run of 2026-10-05 (Capa, SXSr/SXUS accepted, ChBk received).
  */
 
 export const HEADER_SIZE = 20;
@@ -149,9 +151,120 @@ export function parseFixtureIdentify(msg: Buffer): { guidRaw: string; identifier
   return out;
 }
 
-export function isAllowedOutgoing(msg: Buffer): boolean {
+// ------------------------------------------------------------------ SDMX (v0.8.0, Handoff 26)
+//
+// SDMX header = CITP header ("SDMX") + 4-byte ContentType. Layouts (research/lib/citp.mjs has the sources quoted):
+//   SXSr  ucs1 ConnectionString                                   (Set External Source; base of a consecutive series)
+//   SXUS  u8 UniverseIndex (0-based), ucs1 ConnectionString       (Set External Universe Source)
+//   Capa  u16 CapabilityCount, u16 Capabilities[]                 (Capture sends it on connect: 2, 3, 4, 101, 102, 105)
+//   ChBk  u8 Blind, u8 UniverseIndex (0-based), u16 FirstChannel (0-based), u16 ChannelCount, u8 ChannelLevels[ChannelCount]
+// sACN connection string: "BSRE1.31/<universe>/<channel>" ("BSRE1.31/1/1" = first channel of the first universe).
+
+export const SDMX = { Capa: "Capa", UNam: "UNam", EnId: "EnId", ChBk: "ChBk", ChLs: "ChLs", SXSr: "SXSr", SXUS: "SXUS" } as const;
+/** The universes the Deck-ON session declares (fixed, as in the proven probe run: also covers universes the deck does not drive). */
+export const DECLARED_UNIVERSES: readonly number[] = Array.from({ length: 16 }, (_, i) => i + 1);
+export const MAX_DECLARED_UNIVERSE = 256;
+export const sacnConnectionString = (universe: number): string => `BSRE1.31/${universe}/1`;
+const SACN_CS = /^BSRE1\.31\/([1-9]\d{0,2})\/1$/;
+
+function checkDeclaredUniverse(u: number): void {
+  if (!Number.isInteger(u) || u < 1 || u > MAX_DECLARED_UNIVERSE) throw new RangeError(`declared sACN universe must be 1..${MAX_DECLARED_UNIVERSE}, got ${u}`);
+}
+function sdmxMessage(type: string, body: Buffer): Buffer {
+  return Buffer.concat([buildHeader(HEADER_SIZE + 4 + body.length, "SDMX"), Buffer.from(type, "latin1"), body]);
+}
+const ucs1Buf = (s: string): Buffer => Buffer.concat([Buffer.from(s, "latin1"), Buffer.from([0])]);
+
+/** SDMX/SXSr: "SDMX" + "SXSr" + ucs1 "BSRE1.31/<universe>/1". */
+export function buildSxsr(universe: number): Buffer {
+  checkDeclaredUniverse(universe);
+  return sdmxMessage(SDMX.SXSr, ucs1Buf(sacnConnectionString(universe)));
+}
+/** SDMX/SXUS: "SDMX" + "SXUS" + u8 index (universe - 1) + ucs1 "BSRE1.31/<universe>/1" (Capture universe u takes sACN universe u). */
+export function buildSxus(universe: number): Buffer {
+  checkDeclaredUniverse(universe);
+  return sdmxMessage(SDMX.SXUS, Buffer.concat([Buffer.from([universe - 1]), ucs1Buf(sacnConnectionString(universe))]));
+}
+/** The declaration exactly as the probe sent it: one SXSr for the first universe (the base), then one SXUS per universe. */
+export function buildDeclaration(universes: readonly number[] = DECLARED_UNIVERSES): { label: string; buf: Buffer }[] {
+  if (!universes.length) return [];
+  return [{ label: `SDMX SXSr ${sacnConnectionString(universes[0])}`, buf: buildSxsr(universes[0]) }, ...universes.map((u) => ({ label: `SDMX SXUS ${u}`, buf: buildSxus(u) }))];
+}
+
+/**
+ * Exactly one of our own declaration messages, well-formed: declared size = real size, a single part, "SDMX" + SXSr or SXUS, ONE
+ * null-terminated "BSRE1.31/<u>/1" with nothing after it, universe 1..256, sACN channel exactly 1, and for SXUS the index = u - 1.
+ */
+export function isWellFormedDeclaration(msg: Buffer): boolean {
+  if (msg.length < HEADER_SIZE + 4 + 2 || msg.toString("latin1", 0, 4) !== "CITP" || msg.toString("latin1", 16, 20) !== "SDMX") return false;
+  if (msg.readUInt32LE(8) !== msg.length || msg.readUInt16LE(12) !== 1 || msg.readUInt16LE(14) !== 0) return false;
+  const type = msg.toString("latin1", 20, 24);
+  let p = HEADER_SIZE + 4;
+  let index: number | null = null;
+  if (type === SDMX.SXUS) index = msg[p++];
+  else if (type !== SDMX.SXSr) return false;
+  const z = ucs1z(msg, p);
+  if (!z || z.next !== msg.length) return false;
+  const m = SACN_CS.exec(z.s);
+  if (!m) return false;
+  const u = Number(m[1]);
+  if (u < 1 || u > MAX_DECLARED_UNIVERSE) return false;
+  return index === null || index === u - 1;
+}
+
+export interface ChBk {
+  blind: number;
+  /** 0-based, as sent. */
+  universeIndex: number;
+  /** 0-based slot of the first level, as sent. */
+  firstChannel: number;
+  levels: number[];
+}
+export interface SdmxDecoded {
+  type: string | null;
+  caps?: number[];
+  chbk?: ChBk;
+  /** Set when the message does not decode (truncated, trailing bytes, levels past slot 512): nothing from it may be applied. */
+  error?: string;
+}
+
+/** SDMX receive-side decode. Never throws. A ChBk is accepted only when its size is exact and its levels fit in slots 1..512. */
+export function decodeSdmx(msg: Buffer): SdmxDecoded {
+  const r: SdmxDecoded = { type: fourcc(msg, 20) };
+  try {
+    const c = new Cur(msg, HEADER_SIZE + 4);
+    if (r.type === SDMX.Capa) {
+      const n = c.u16();
+      const caps: number[] = [];
+      for (let i = 0; i < n; i++) caps.push(c.u16());
+      r.caps = caps;
+    } else if (r.type === SDMX.ChBk) {
+      const blind = c.u8();
+      const universeIndex = c.u8();
+      const firstChannel = c.u16();
+      const n = c.u16();
+      const levels = [...c.bytes(n)];
+      if (c.p !== msg.length) throw new RangeError(`${msg.length - c.p} byte(s) after the ${n} level(s)`);
+      if (n < 1) throw new RangeError("ChannelCount is 0");
+      if (firstChannel + n > 512) throw new RangeError(`levels run past slot 512 (first ${firstChannel + 1}, count ${n})`);
+      r.chbk = { blind, universeIndex, firstChannel, levels };
+    }
+  } catch (e) {
+    r.error = (e as Error).message;
+  }
+  return r;
+}
+
+/** What `isAllowedOutgoing` may additionally accept. Default: nothing more. */
+export interface AllowOptions {
+  /** v0.8.0: our own well-formed SXSr / SXUS (the Deck-ON session's universe declaration) and NOTHING else of the SDMX layer. */
+  sdmxDeclare?: boolean;
+}
+
+export function isAllowedOutgoing(msg: Buffer, opts: AllowOptions = {}): boolean {
   if (msg.length < HEADER_SIZE + 4 || msg.toString("latin1", 0, 4) !== "CITP") return false;
   const layer = msg.toString("latin1", 16, 20);
+  if (layer === "SDMX") return opts.sdmxDeclare === true && isWellFormedDeclaration(msg);
   if (layer === "PINF") return msg.toString("latin1", 20, 24) === "PNam";
   if (layer === "CAEX") {
     const code = msg.readUInt32LE(20);
@@ -371,9 +484,11 @@ export interface DecodedMessage {
   ploc?: { port: number; type: string | null; name: string | null; state: string | null };
   showName?: string;
   fixtures?: FixtureListResult;
+  /** SDMX layer (v0.8.0). */
+  sdmx?: SdmxDecoded;
 }
 
-/** Decode what the sync needs from one complete CITP message: PLoc, EnterShow, requests, FixtureList. */
+/** Decode what the sync needs from one complete CITP message: PLoc, EnterShow, requests, FixtureList, SDMX (Capa, ChBk). */
 export function decodeMessage(msg: Buffer): DecodedMessage {
   const r: DecodedMessage = { layer: null, code: null };
   if (msg.length < HEADER_SIZE) return r;
@@ -386,6 +501,8 @@ export function decodeMessage(msg: Buffer): DecodedMessage {
       const state = name && ucs1z(msg, name.next);
       r.ploc = { port, type: type && type.s, name: name && name.s, state: state && state.s };
     }
+  } else if (r.layer === "SDMX" && msg.length >= HEADER_SIZE + 4) {
+    r.sdmx = decodeSdmx(msg);
   } else if (r.layer === "CAEX" && msg.length >= HEADER_SIZE + 4) {
     r.code = msg.readUInt32LE(HEADER_SIZE);
     try {

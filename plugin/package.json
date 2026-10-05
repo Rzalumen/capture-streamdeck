@@ -1,6 +1,6 @@
 {
   "name": "com.rezabehjat.capture",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Stream Deck+ plugin: an interface to Capture (lighting visualizer)",
@@ -8,14 +8,14 @@
     "build": "rollup -c",
     "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.rezabehjat.capture\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run gen && npm run build && node --import tsx --test --test-concurrency=1 test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts test/catalog.test.ts test/manifest.test.ts test/queue.test.ts test/worker.test.ts test/worker-script.test.ts test/menucache.test.ts test/resolve.test.ts test/profile.test.ts test/fixtures.test.ts test/pages.test.ts test/deck.test.ts test/citp-session.test.ts test/integration.test.ts test/integration-worker.test.ts test/integration-fixtures.test.ts test/integration-pages.test.ts test/integration-deck.test.ts test/integration-selection.test.ts test/integration-lcd.test.ts test/integration-lcd-offline.test.ts",
+    "test": "npm run gen && npm run build && node --import tsx --test --test-concurrency=1 test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts test/catalog.test.ts test/manifest.test.ts test/queue.test.ts test/worker.test.ts test/worker-script.test.ts test/menucache.test.ts test/resolve.test.ts test/profile.test.ts test/fixtures.test.ts test/pages.test.ts test/deck.test.ts test/citp-session.test.ts test/sdmx.test.ts test/integration.test.ts test/integration-worker.test.ts test/integration-fixtures.test.ts test/integration-pages.test.ts test/integration-deck.test.ts test/integration-selection.test.ts test/integration-lcd.test.ts test/integration-lcd-offline.test.ts test/integration-sdmx.test.ts",
     "validate": "streamdeck validate com.rezabehjat.capture.sdPlugin",
     "pack": "npm run gen && npm run build && streamdeck validate com.rezabehjat.capture.sdPlugin && streamdeck pack com.rezabehjat.capture.sdPlugin --output dist --force",
     "images": "node --import tsx scripts/make-images.mjs",
     "gen-profile": "node --import tsx scripts/gen-profile.mjs",
     "add-profile": "node scripts/add-profile.mjs",
     "gen-ui": "node --import tsx scripts/gen-ui-data.mjs",
-    "test:unit": "node --import tsx --test --test-concurrency=1 test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts test/catalog.test.ts test/manifest.test.ts test/queue.test.ts test/worker.test.ts test/worker-script.test.ts test/menucache.test.ts test/resolve.test.ts test/profile.test.ts test/fixtures.test.ts test/pages.test.ts test/deck.test.ts test/citp-session.test.ts",
+    "test:unit": "node --import tsx --test --test-concurrency=1 test/osc.test.ts test/properties.test.ts test/applescript.test.ts test/menu.test.ts test/timing.test.ts test/stub.test.ts test/ax.test.ts test/axkeys.test.ts test/render.test.ts test/catalog.test.ts test/manifest.test.ts test/queue.test.ts test/worker.test.ts test/worker-script.test.ts test/menucache.test.ts test/resolve.test.ts test/profile.test.ts test/fixtures.test.ts test/pages.test.ts test/deck.test.ts test/citp-session.test.ts test/sdmx.test.ts",
     "gen": "node --import tsx scripts/gen-manifest.mjs && node --import tsx scripts/gen-ui-data.mjs"
   },
   "engines": {

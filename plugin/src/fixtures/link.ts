@@ -87,6 +87,11 @@ export class CitpLink {
     session.on("modify", (items) => {
       if (!this.quiet) void svc.onModify(items);
     });
+    // v0.8.0: Capture's DMX levels (SDMX ChBk) are used only on the persistent (Deck ON) session, never while we close it.
+    session.on("levels", (e) => {
+      if (this.quiet || this.mode !== "on") return;
+      svc.onCaptureLevels(e);
+    });
     session.on("remove", (ids) => {
       if (this.quiet) return;
       show.remove(ids);

@@ -4,16 +4,19 @@
  * past 512, overlap). Output is released on LeaveShow, a different show, and when the setup moves or removes the address of a fixture
  * that is being driven, so no stale address stays live. Capture's own selection (FixtureSelection) and patch changes (FixtureModify,
  * bit 0x01) arrive here through link.ts.
+ * v0.8.0 (Handoff 26): Capture's DMX levels (SDMX ChBk, delta-only) arrive here too: they go into the engine's per-universe overlay
+ * (so our frames carry Capture's state instead of 0) and, for configured fixtures, into the remembered values of every channel the
+ * deck did not set this ON period (so resume and the strips follow Capture).
  */
 import { dialAttr, stepFraction, homeValue, type AttrId, type DialId } from "./attrs.js";
-import type { ModifyItem } from "./citp.js";
+import type { ChBk, ModifyItem } from "./citp.js";
 import type { DmxEngine, ParamTarget, Target } from "./engine.js";
 import { GROUP_LABEL, pageTitle, sameParam, type Page, type Param } from "./pages.js";
 import { Selection, toTarget, type Controllable } from "./selection.js";
 import { autoFill, checkSetup, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
 
-export const BLACKOUT_WARNING = "While output is on, every universe you touch is sent in full: all slots that are not set by a fixture you touched are 0. That BLACKS OUT anything else on that universe, including fixtures that are not set up here.";
+export const BLACKOUT_WARNING = "While output is on, every universe you touch is sent in full: a slot that is not set by a fixture you touched is sent at the level Capture last reported for it, and at 0 when Capture has not reported it since the deck connected (Capture only reports changes). That still BLACKS OUT lights on that universe that were lit before and not reported, including fixtures that are not set up here.";
 
 export interface SetupFixtureView {
   key: string;
@@ -285,6 +288,7 @@ export class FixtureService {
   /** A different show was entered, or Capture left the show: nothing is selected any more and output stops. */
   onShowGone(why: string): void {
     this.selection.clear();
+    this.engine.clearCapture();
     if (this.engine.active) {
       this.log(`${why}: releasing output`);
       void this.engine.release();
@@ -330,6 +334,65 @@ export class FixtureService {
       }
     }
     this.emit();
+  }
+
+  /**
+   * v0.8.0: one SDMX ChBk from Capture (the persistent session only). Blind=1 is logged and ignored. Otherwise the levels go into the
+   * engine's overlay, and every configured fixture they land on takes them for its knob parameters the deck did not set this ON period
+   * (store + strips); a parameter the deck set keeps the deck's value, and a disagreement is logged (it may be Capture echoing our sACN).
+   */
+  onCaptureLevels(e: ChBk): void {
+    const u = e.universeIndex + 1;
+    const first = e.firstChannel; // 0-based slot
+    const n = e.levels.length;
+    const span = `u${u} a${first + 1}${n > 1 ? `-${first + n}` : ""}`;
+    const vals = e.levels.length > 24 ? `${e.levels.slice(0, 24).join(",")},…` : e.levels.join(",");
+    if (e.blind) {
+      this.log(`Capture levels ${span} Blind=${e.blind}: blind (preview) levels, ignored`);
+      return;
+    }
+    this.engine.captureLevels(u, first, e.levels);
+    const hits: string[] = [];
+    const conflicts: string[] = [];
+    let onFixtures = 0;
+    for (const c of this.controllables()) {
+      if (c.addr.universe !== u) continue;
+      const base = c.addr.address - 1;
+      const lo = Math.max(first, base);
+      const hi = Math.min(first + n, base + c.fixture.channelCount); // exclusive
+      if (lo >= hi) continue;
+      onFixtures += hi - lo;
+      const t = toTarget(c);
+      const what = c.fixture.channel ? `Ch ${c.fixture.channel}` : c.fixture.name;
+      hits.push(`${what} ch ${lo - base + 1}${hi - lo > 1 ? `-${hi - base}` : ""}`);
+      const known = (slot: number, fallback: number): number => this.engine.knownLevel(u, slot) ?? fallback;
+      const inBlock = (off: number): boolean => base + off >= first && base + off < first + n;
+      const update = new Map<string, number>();
+      for (const p of c.model.params) {
+        const sl = p.slots.find((x) => inBlock(x.coarse.offset) || (x.fine !== null && inBlock(x.fine.offset)));
+        if (!sl) continue;
+        const cur = this.engine.paramValue(t, p);
+        let v: number;
+        if (sl.fine) {
+          const raw = Math.round(Math.min(1, Math.max(0, cur)) * 65535);
+          const hiB = known(base + sl.coarse.offset, raw >> 8);
+          const loB = known(base + sl.fine.offset, raw & 0xff);
+          v = ((hiB << 8) | loB) / 65535;
+        } else v = known(base + sl.coarse.offset, Math.round(cur * 255)) / 255;
+        if (this.engine.isDeckSet(t.key, p.id)) {
+          const same = sl.fine ? Math.round(v * 65535) === Math.round(cur * 65535) : Math.round(v * 255) === Math.round(cur * 255);
+          if (!same) conflicts.push(`${what} "${p.name}": Capture ${(v * 100).toFixed(1)} %, deck ${(cur * 100).toFixed(1)} %`);
+          continue;
+        }
+        update.set(p.id, v);
+      }
+      this.engine.fromCapture(t, update);
+    }
+    const outside = n - onFixtures;
+    if (!hits.length) this.log(`Capture levels ${span} = ${vals} (no configured fixture) -> overlay only`);
+    else this.log(`Capture levels ${span} = ${vals} -> ${hits.join("; ")}${outside > 0 ? `; ${outside} slot(s) on no configured fixture -> overlay only` : ""}`);
+    if (conflicts.length) this.log(`Capture levels ${span} disagree with channels the deck set (deck value kept; possibly Capture echoing our sACN): ${conflicts.join("; ")}`);
+    if (!hits.length) this.emit();
   }
 
   /** FixtureRemove: Capture deleted fixtures. */

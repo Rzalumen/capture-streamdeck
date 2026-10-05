@@ -6,9 +6,14 @@
  * FixtureListRequest (on EnterShow, after 5 s if no list came, every 30 s while entered, and when asked), NACK (Reason 3) for
  * requests we do not serve, LeaveShow when we stop, and FixtureIdentify ONLY for fixtures the caller says are still at 0xffffffff
  * (`identify()` refuses every entry that is not in the caller's `allowed` set).
- * Never sent: FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace.
+ * v0.8.0 (Handoff 26): on the PERSISTENT (Deck ON) session only, right after our EnterShow, the SDMX universe declaration (one SXSr
+ * "BSRE1.31/1/1" + one SXUS per universe 1-16), once per connection, with `{sdmxDeclare: true}` on exactly those sends. Brief
+ * (`once`) connections never send SDMX.
+ * Never sent: FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace,
+ * SDMX ChBk / ChLs / Capa / UNam / EnId (no DMX over CITP).
  *
- * Events: state(connected) | show(name) | leave() | list({type, fixtures}) | selection(ids) | modify(items) | remove(ids).
+ * Events: state(connected) | show(name) | leave() | list({type, fixtures}) | selection(ids) | modify(items) | remove(ids) |
+ * levels(ChBk) (v0.8.0: Capture's DMX levels; Capa is only logged; a malformed ChBk is logged with its hex and not emitted).
  */
 import net from "node:net";
 import { randomBytes } from "node:crypto";
@@ -22,11 +27,17 @@ import {
   buildLeaveShow,
   buildNack,
   buildPNam,
+  buildDeclaration,
+  DECLARED_UNIVERSES,
   decodeMessage,
+  hexOf,
   isAllowedOutgoing,
   parseFixtureIdentify,
+  type AllowOptions,
   type CaexFixture,
+  type ChBk,
   type ModifyItem,
+  type SdmxDecoded,
 } from "./citp.js";
 import { SYNC_NAME, discover, localIPv4, lsofPorts, tryConnect } from "./citpSync.js";
 
@@ -65,6 +76,8 @@ interface Events {
   selection: (ids: number[]) => void;
   modify: (items: ModifyItem[]) => void;
   remove: (ids: number[]) => void;
+  /** v0.8.0: one decoded SDMX ChBk (Blind is passed on; the receiver decides). */
+  levels: (e: ChBk) => void;
 }
 
 export interface SessionOptions {
@@ -78,7 +91,7 @@ export interface SessionOptions {
 const REQUESTS = new Set<number>([CAEX.GetLiveViewStatus, CAEX.GetLiveViewImage, CAEX.FixtureListRequest, CAEX.FixtureIdentify]);
 
 export class CitpSession {
-  private handlers: { [K in keyof Events]: Events[K][] } = { state: [], show: [], leave: [], list: [], selection: [], modify: [], remove: [] };
+  private handlers: { [K in keyof Events]: Events[K][] } = { state: [], show: [], leave: [], list: [], selection: [], modify: [], remove: [], levels: [] };
   private t: SessionTiming;
   private running = false;
   private once = false;
@@ -87,6 +100,8 @@ export class CitpSession {
   private wake: (() => void) | undefined;
   private chain: Promise<void> = Promise.resolve();
   private weEntered = false;
+  /** v0.8.0: the universe declaration went out on this connection. */
+  private declared = false;
   /** Capture sent EnterShow on this connection and has not left. */
   entered = false;
   connected = false;
@@ -96,7 +111,7 @@ export class CitpSession {
   private loopDone: Promise<void> = Promise.resolve();
   private lastError = "";
   /** Counters for tests / the log. */
-  sent = { identify: 0, listRequest: 0 };
+  sent = { identify: 0, listRequest: 0, declarations: 0 };
   /** The waits between connection attempts so far (ms), for the log and tests. */
   readonly delays: number[] = [];
 
@@ -288,6 +303,7 @@ export class CitpSession {
       this.connected = true;
       this.entered = false;
       this.weEntered = false;
+      this.declared = false;
       this.gotList = false;
       const framer = new CitpFramer();
       const sourceKey = randomBytes(4).readUInt32LE(0);
@@ -304,6 +320,7 @@ export class CitpSession {
         if (!this.weEntered) {
           this.weEntered = true;
           void this.send("EnterShow", buildEnterShow(SYNC_NAME));
+          if (!this.once) this.declare();
         }
         this.requestList();
         clearTimers();
@@ -319,6 +336,10 @@ export class CitpSession {
       s.on("data", (d) => {
         for (const m of framer.push(d).messages) {
           const dm = decodeMessage(m);
+          if (dm.layer === "SDMX") {
+            if (dm.sdmx) this.onSdmx(dm.sdmx, m);
+            continue;
+          }
           switch (dm.code) {
             case CAEX.GetLaserFeedList:
               void this.send("LaserFeedList (empty)", buildLaserFeedList(sourceKey, []));
@@ -378,12 +399,48 @@ export class CitpSession {
     });
   }
 
+  /**
+   * v0.8.0: declare where our DMX comes from (sACN universes 1-16), once per connection, right after our EnterShow: SXSr base 1, then
+   * SXUS 1..16, byte for byte what the probe sent on the real Capture. Only this path passes `{sdmxDeclare: true}` to the allowlist.
+   */
+  private declare(): void {
+    if (this.declared) return;
+    this.declared = true;
+    const msgs = buildDeclaration(DECLARED_UNIVERSES);
+    const sends = msgs.map((d) => this.send(d.label, d.buf, { sdmxDeclare: true }));
+    void Promise.all(sends).then((ok) => {
+      const n = ok.filter(Boolean).length;
+      if (n === msgs.length) {
+        this.sent.declarations++;
+        const u = DECLARED_UNIVERSES;
+        this.log(`declared sACN universes ${u[0]}-${u[u.length - 1]} (SXSr + ${u.length} SXUS)`);
+      } else this.log(`SDMX declaration incomplete: ${n} of ${msgs.length} message(s) went out`);
+    });
+  }
+
+  /** v0.8.0: what Capture sends on the SDMX layer. Never throws; nothing malformed is passed on. */
+  private onSdmx(d: SdmxDecoded, raw: Buffer): void {
+    if (d.error) {
+      this.log(`SDMX ${d.type ?? "?"} malformed (${d.error}); ignored. hex: ${hexOf(raw, 96)}`);
+      return;
+    }
+    if (d.caps) {
+      this.log(`SDMX Capa received: ${d.caps.join(", ") || "none"}`);
+      return;
+    }
+    if (d.chbk) {
+      this.emit("levels", d.chbk);
+      return;
+    }
+    this.log(`SDMX ${d.type ?? "?"} received (not used): ${hexOf(raw, 96)}`);
+  }
+
   /** Serialised, allowlist-checked write. Resolves true when the bytes were handed to the socket. */
-  private send(label: string, buf: Buffer): Promise<boolean> {
+  private send(label: string, buf: Buffer, allow: AllowOptions = {}): Promise<boolean> {
     const r = this.chain.then(
       () =>
         new Promise<boolean>((res) => {
-          if (!isAllowedOutgoing(buf)) {
+          if (!isAllowedOutgoing(buf, allow)) {
             this.log(`REFUSED to send ${label}: not on the outgoing allowlist`);
             return res(false);
           }

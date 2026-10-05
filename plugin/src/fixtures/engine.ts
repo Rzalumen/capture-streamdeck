@@ -1,8 +1,15 @@
 /**
  * The DMX engine (sACN E1.31). The rules:
  *  - NOTHING is sent until the user touches a fixture; a universe is sent only after a fixture on it was touched.
- *  - Once active: every active universe is sent at 40 fps (all 512 slots; everything not set by a touched fixture is 0 — this BLACKS OUT
- *    whatever else is on that universe) until `release()` or plugin exit, which send Stream_Terminated (3 frames) on every universe in use.
+ *  - Once active: every active universe is sent at 40 fps (all 512 slots; everything not set by a touched fixture is 0 unless Capture
+ *    reported its level (v0.8.0, below) — this BLACKS OUT whatever else is lit on that universe and was not reported) until
+ *    `release()` or plugin exit, which send Stream_Terminated (3 frames) on every universe in use.
+ *  - v0.8.0 (Handoff 26): per universe, an OVERLAY of Capture's last known levels, fed by Capture's SDMX ChBk messages and by the
+ *    values the deck sets (Capture holds the last levels it received, verified on Reza's Mac). A frame is: the touched fixtures'
+ *    channels the deck did NOT move this ON period at their stored values, then the overlay on top (Capture's state where known;
+ *    0 elsewhere), then the channels the deck moved this ON period on top of everything (the knob is authoritative while ON). So a
+ *    light changed with the mouse rides into our frames at Capture's value instead of being sent as 0. The overlay survives
+ *    release() (Deck OFF) and reconnects; clearCapture() (LeaveShow / show change) empties it.
  *  - A fixture's state starts from its defaults on first touch (pages.ts: pan/tilt 50 %, intensity 100 %, the first shutter/strobe 255,
  *    additive colours full, everything else 0). Every channel of the fixture is a knob parameter (Handoff 20); values are kept per
  *    parameter.
@@ -29,12 +36,22 @@ export interface Target {
   model: FixtureModel;
 }
 
-/** All slot writes for one fixture: every knob parameter at its value (home when untouched). Channels on no page stay 0. */
-export function renderModel(slots: Uint8Array, base: number, model: FixtureModel, values: ReadonlyMap<string, number>): void {
+/**
+ * All slot writes for one fixture: every knob parameter at its value (home when untouched). Channels on no page stay as they are.
+ * `only` (v0.8.0): write only the parameters it accepts.
+ */
+export function renderModel(slots: Uint8Array, base: number, model: FixtureModel, values: ReadonlyMap<string, number>, only?: (p: Param) => boolean): void {
   for (const p of model.params) {
+    if (only && !only(p)) continue;
     const v = values.get(p.id) ?? p.home;
     for (const s of p.slots) writeSlot(slots, base, s, v);
   }
+}
+
+/** v0.8.0: Capture's last known levels of one universe (`has[i]` = 1 where slot i is known). */
+export interface Overlay {
+  lv: Uint8Array;
+  has: Uint8Array;
 }
 
 export interface Transport {
@@ -118,6 +135,8 @@ interface FixState {
   model: FixtureModel;
   /** Knob parameter id -> value 0..1. A parameter not in here is at its home value. */
   values: Map<string, number>;
+  /** v0.8.0: parameters the deck itself set (knob, knob press, Home) since this fixture was touched in this ON period. */
+  deckSet: Set<string>;
 }
 
 export interface EngineOptions {
@@ -163,6 +182,8 @@ export class DmxEngine {
   /** Counters for the log / Status key. */
   frames = 0;
   private lastSlots = new Map<number, Uint8Array>();
+  /** v0.8.0: universe -> Capture's last known levels (its ChBk messages + the values the deck set). */
+  private overlay = new Map<number, Overlay>();
 
   constructor(private o: EngineOptions) {}
 
@@ -213,7 +234,11 @@ export class DmxEngine {
     if (!hit.length || !this.ok()) return false;
     for (const { target, params } of hit) {
       const st = this.touch(target);
-      for (const p of params) st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p)));
+      for (const p of params) {
+        st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p)));
+        st.deckSet.add(p.id);
+      }
+      this.recordDeck(st, params);
       this.o.remember?.(target.key, st.values);
     }
     this.start();
@@ -237,6 +262,8 @@ export class DmxEngine {
     for (const t of targets) {
       const st = this.touch(t);
       st.values = new Map(t.model.params.map((p) => [p.id, p.home]));
+      for (const p of t.model.params) st.deckSet.add(p.id);
+      this.recordDeck(st, t.model.params);
       this.o.remember?.(t.key, st.values);
     }
     this.start();
@@ -256,7 +283,12 @@ export class DmxEngine {
       const mine = ALL_ATTRS.filter((a) => values[a] !== undefined && attrParams(t, a).length);
       if (!mine.length) continue;
       const st = this.touch(t);
-      for (const a of mine) for (const p of attrParams(t, a)) st.values.set(p.id, clamp(values[a] as number));
+      for (const a of mine)
+        for (const p of attrParams(t, a)) {
+          st.values.set(p.id, clamp(values[a] as number));
+          st.deckSet.add(p.id);
+          this.recordDeck(st, [p]);
+        }
       this.o.remember?.(t.key, st.values);
       any = true;
     }
@@ -272,16 +304,87 @@ export class DmxEngine {
       return have;
     }
     // resume: the values last sent for this fixture in this show; channels never touched start at their home value
-    const st: FixState = { universe: t.universe, address: t.address, model: t.model, values: new Map(this.o.resume?.(t.key) ?? []) };
+    const st: FixState = { universe: t.universe, address: t.address, model: t.model, values: new Map(this.o.resume?.(t.key) ?? []), deckSet: new Set() };
     this.fixtures.set(t.key, st);
     return st;
   }
 
-  /** All 512 slots of one universe as they would be sent now. */
+  /**
+   * All 512 slots of one universe as they would be sent now (v0.8.0): the touched fixtures' parameters the deck did not set at their
+   * stored values, then Capture's known levels (overlay) on top, then the parameters the deck set on top of everything.
+   */
   slots(universe: number): Uint8Array {
     const s = new Uint8Array(512);
-    for (const f of this.fixtures.values()) if (f.universe === universe) renderModel(s, f.address - 1, f.model, f.values);
+    const mine = [...this.fixtures.values()].filter((f) => f.universe === universe);
+    for (const f of mine) renderModel(s, f.address - 1, f.model, f.values, (p) => !f.deckSet.has(p.id));
+    const ov = this.overlay.get(universe);
+    if (ov) for (let i = 0; i < 512; i++) if (ov.has[i]) s[i] = ov.lv[i];
+    for (const f of mine) renderModel(s, f.address - 1, f.model, f.values, (p) => f.deckSet.has(p.id));
     return s;
+  }
+
+  // ------------------------------------------------------------------ v0.8.0: Capture's levels (SDMX ChBk)
+
+  /** Record levels Capture reported (universe 1-based, `first` 0-based slot). Changes nothing else; the next frame uses them. */
+  captureLevels(universe: number, first: number, levels: readonly number[]): void {
+    let ov = this.overlay.get(universe);
+    if (!ov) this.overlay.set(universe, (ov = { lv: new Uint8Array(512), has: new Uint8Array(512) }));
+    for (let i = 0; i < levels.length && first + i < 512; i++) {
+      ov.lv[first + i] = levels[i] & 0xff;
+      ov.has[first + i] = 1;
+    }
+  }
+
+  /** Capture's last known level of one slot (0-based), undefined when unknown. */
+  knownLevel(universe: number, slot: number): number | undefined {
+    const ov = this.overlay.get(universe);
+    return ov && ov.has[slot] ? ov.lv[slot] : undefined;
+  }
+
+  /**
+   * A value the deck sets is from now on Capture's level too (it holds the last levels it received): written into the overlay at
+   * once, so an older ChBk value can never come back on that channel (e.g. in a later ON period, when the fixture is not touched).
+   * Channels the deck did not set are NOT recorded: a fixture touched later starts from its stored / home values, as before.
+   */
+  private recordDeck(st: FixState, params: readonly Param[]): void {
+    let ov = this.overlay.get(st.universe);
+    if (!ov) this.overlay.set(st.universe, (ov = { lv: new Uint8Array(512), has: new Uint8Array(512) }));
+    const base = st.address - 1;
+    const tmp = new Uint8Array(512);
+    for (const p of params) {
+      const v = st.values.get(p.id) ?? p.home;
+      for (const sl of p.slots) {
+        writeSlot(tmp, base, sl, v);
+        for (const off of sl.fine ? [sl.coarse.offset, sl.fine.offset] : [sl.coarse.offset]) {
+          const i = base + off;
+          if (i < 0 || i >= 512) continue;
+          ov.lv[i] = tmp[i];
+          ov.has[i] = 1;
+        }
+      }
+    }
+  }
+
+  /** LeaveShow / a different show: Capture's levels are forgotten with the fixtures. */
+  clearCapture(): void {
+    this.overlay.clear();
+  }
+
+  /** True when the deck set this parameter of this (touched) fixture in the current ON period. */
+  isDeckSet(key: string, paramId: string): boolean {
+    return this.fixtures.get(key)?.deckSet.has(paramId) ?? false;
+  }
+
+  /**
+   * Values Capture reported for parameters the deck did NOT set (the caller filters): a touched fixture's state takes them (so the
+   * strips and frames follow Capture), and they are remembered for resume. Then everything redraws.
+   */
+  fromCapture(t: Target, values: ReadonlyMap<string, number>): void {
+    if (!values.size) return;
+    const st = this.fixtures.get(t.key);
+    if (st && st.universe === t.universe && st.address === t.address) for (const [id, v] of values) if (!st.deckSet.has(id)) st.values.set(id, clamp(v));
+    this.o.remember?.(t.key, values);
+    this.emit();
   }
 
   private start(): void {

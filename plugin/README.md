@@ -76,6 +76,12 @@ identifier yet a number (see 2).
    FixtureRemove, FixtureSelection, FixtureConsoleStatus or SetFixtureTransformationSpace). It reads the FixtureList (model, mode, channel count,
    Capture Channel, CaptureInstanceId, position; Type 0 replaces the list, Type 1/2 add or replace fixtures), FixtureSelection, FixtureModify and
    FixtureRemove. LeaveShow or a different show clears the selection and releases DMX.
+   **v0.8.0 (Handoff 26): SDMX.** On the Deck Control ON connection only, right after its own `EnterShow`, the plugin declares where its DMX comes from:
+   one SDMX `SXSr` (`BSRE1.31/1/1`) and one `SXUS` per universe 1–16 (`BSRE1.31/<u>/1`), byte for byte what the research probe sent on the real
+   Capture (log: `CITP: declared sACN universes 1-16 (SXSr + 16 SXUS)`). These are the only SDMX messages the allowlist lets out, and only on that
+   path; ChBk / ChLs / Capa / UNam / EnId are never sent, and brief connections send no SDMX. Capture's `Capa` is logged
+   (`CITP: SDMX Capa received: 2, 3, 4, 101, 102, 105`), and its **ChBk** DMX-level messages (sent when levels change, e.g. a mouse drag in the
+   Control Pane; delta-only) are used — see 7.
 2. **Identification**: Capture reports identifier `0xffffffff` for a fixture nobody identified, and then sends no selection or patch events for it. On every
    list the plugin sends one FixtureIdentify for the fixtures still at `0xffffffff` only: the next unused number from 100001 upward, keyed by the
    CaptureInstanceId bytes as received. A fixture that already has an identifier keeps it. Log: `Fixtures: identify: 98 of 101 fixture(s) already have an identifier; sending 3 new (100102–100104)`.
@@ -102,10 +108,19 @@ identifier yet a number (see 2).
    A fixture without the attribute shows `—` and the dial does nothing. `Red|Cyan` etc. use the additive channel if the fixture has one, else the subtractive one.
    Attribute names are matched generically (whole words; speed/mode/macro/curve… channels are never the value).
 7. **DMX engine**: nothing is sent until you touch a fixture. A touched fixture starts from its defaults. The
-   universe is then sent at 40 fps — **all 512 slots; every slot not set by a touched fixture is 0, which blacks out anything else on that universe** (the Setup panel and the Status key say so) — until
+   universe is then sent at 40 fps — **all 512 slots; every slot not set by a touched fixture is 0 unless Capture reported its level (v0.8.0, below), which blacks out anything else lit on that universe** (the Setup panel and the Status key say so) — until
    **Fixtures: Release**, LeaveShow, a different show, or plugin exit, which send Stream_Terminated (3 frames) on every universe in use. Moving or clearing the address of a fixture that is being driven
    also releases output first. sACN universe = the universe you entered; priority 100; unicast `127.0.0.1:5568` plus multicast `239.255.x.y` on each interface.
    A dropped CITP connection does not stop output (it reconnects).
+   **v0.8.0: Capture's levels (ChBk).** The engine keeps, per universe, Capture's last known levels: every ChBk, plus every value the deck sets. A frame is
+   the touched fixtures' channels the deck did not move at their stored values, then Capture's known levels on top, then the channels the deck moved
+   in this ON period on top of everything (the knob wins while ON). So a light moved with the mouse rides into the deck's frames at Capture's value
+   instead of being sent as 0. For configured fixtures, ChBk also updates the remembered values of every channel the deck did not move in this ON
+   period (resume and the `~` strip values follow Capture); a ChBk that disagrees with a channel the deck moved is logged and the deck's value is
+   kept. Blind=1 is ignored; a malformed ChBk is logged with its hex and ignored. The known levels survive Deck OFF → ON and reconnects; LeaveShow or
+   a different show clears them. Log: `Fixtures: Capture levels u1 a444-447 = 22,179,220,176 -> Ch 202 ch 1-4`, or `... (no configured fixture) -> overlay only`.
+   **ChBk is delta-only**: a light that was already lit when the deck connected is still sent as 0 until Capture next reports its channels (no way to
+   ask Capture for its current levels is known).
 
 ### Deck Control (v0.7, Handoff 21)
 

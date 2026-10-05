@@ -249,6 +249,19 @@ export function buildModifyMessage(items: SynthModify[]): Buffer {
   return caex(CAEX.FixtureModify, u16(items.length), ...body);
 }
 
+/** The SDMX Capa the real Capture sent on connect (2026-10-05 probe run): capabilities 2, 3, 4, 101, 102, 105. */
+export const REAL_CAPA = Buffer.from("4349545001000000260000000100000053444d58436170610600020003000400650066006900", "hex");
+/** SDMX ChBk: "SDMX" + "ChBk" + u8 Blind, u8 UniverseIndex (0-based), u16 FirstChannel (0-based), u16 ChannelCount, u8 levels. */
+export function buildChBk(universe: number, address: number, levels: number[], blind = 0): Buffer {
+  const body = Buffer.alloc(6 + levels.length);
+  body[0] = blind;
+  body[1] = universe - 1;
+  body.writeUInt16LE(address - 1, 2);
+  body.writeUInt16LE(levels.length, 4);
+  Buffer.from(levels).copy(body, 6);
+  return Buffer.concat([buildHeader(HEADER_SIZE + 4 + body.length, "SDMX"), Buffer.from("ChBk", "latin1"), body]);
+}
+
 /**
  * Stub Capture CITP server. After PNam it sends EnterShow; a FixtureListRequest is answered with the whole list (Type 0). A
  * FixtureIdentify sets the identifiers (unless `ignoreIdentify`), like Capture does. Records every message received, and can push
@@ -262,6 +275,8 @@ export class CitpStub {
   ignoreIdentify = false;
   /** Do not answer FixtureListRequest (to test the retry). */
   muteList = false;
+  /** v0.8.0: after PNam, send the SDMX Capa the real Capture sent on 2026-10-05 (before EnterShow), like Capture does. */
+  sendCapa = false;
   server!: net.Server;
   port = 0;
   constructor(
@@ -278,7 +293,10 @@ export class CitpStub {
         for (const m of framer.push(d).messages) {
           this.received.push(m);
           const code = m.toString("latin1", 16, 20) === "CAEX" ? m.readUInt32LE(20) : null;
-          if (m.toString("latin1", 16, 24) === "PINFPNam") c.write(buildEnterShowMessage(this.showName));
+          if (m.toString("latin1", 16, 24) === "PINFPNam") {
+            if (this.sendCapa) c.write(REAL_CAPA);
+            c.write(buildEnterShowMessage(this.showName));
+          }
           else if (code === CAEX.FixtureListRequest) {
             if (!this.muteList) c.write(buildPatchMessage(this.fixtures));
           } else if (code === CAEX.FixtureIdentify) {
@@ -321,6 +339,10 @@ export class CitpStub {
   }
   leaveShow(): void {
     this.push(buildLeaveShowMessage());
+  }
+  /** v0.8.0: an SDMX ChBk (universe 1-based, address 1-based), laid out as the real Capture sends it. */
+  chbk(universe: number, address: number, levels: number[], blind = 0): void {
+    this.push(buildChBk(universe, address, levels, blind));
   }
   drop(): void {
     for (const c of this.clients) c.destroy();
