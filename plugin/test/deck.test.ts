@@ -42,8 +42,6 @@ function makeDeck(globals?: GlobalSettings) {
   let armedMs = 0;
   const deck = new DeckControl({
     start: async () => void steps.push("start"),
-    stop: async () => void steps.push("stop (LeaveShow + close)"),
-    release: async () => void steps.push("release (termination frames)"),
     afterOff: async () => void steps.push("save values"),
     log: (l) => logs.push(l),
     globals,
@@ -71,7 +69,7 @@ function makeDeck(globals?: GlobalSettings) {
 
 // ------------------------------------------------------------------ Deck Control
 
-test("deck: OFF at start; a knob/key (activity) switches ON at once and starts the session; the idle timer switches OFF: termination → LeaveShow + close → save", async () => {
+test("deck: OFF at start; a knob/key (activity) arms at once and starts the session; v0.9.0: the idle timer only disarms (no termination, no LeaveShow, no close) → save", async () => {
   const d = makeDeck();
   assert.equal(d.deck.on, false);
   assert.equal(d.armed(), 0, "no idle timer while OFF");
@@ -87,9 +85,12 @@ test("deck: OFF at start; a knob/key (activity) switches ON at once and starts t
   d.fireIdle();
   assert.equal(d.deck.on, false);
   await d.deck.settled();
-  assert.deepEqual(d.steps, ["start", "release (termination frames)", "stop (LeaveShow + close)", "save values"]);
-  assert.match(d.logs.at(-1)!, /^deck control OFF \(idle 120 s\): output terminated, LeaveShow sent, CITP connection closed/);
+  assert.deepEqual(d.steps, ["start", "save values"], "disarm: only the values are saved");
+  assert.equal(d.logs.at(-1)!, "deck control OFF (idle 120 s): knobs disarmed; output and the CITP connection keep running");
   assert.equal(d.armed(), 0);
+  d.deck.activity("Pan dial"); // re-arm: asks for the session again (link.startPersistent is a no-op while it is held)
+  await d.deck.settled();
+  assert.deepEqual(d.steps, ["start", "save values", "start"]);
 });
 
 test("deck: the key toggles; Release (setOn false) when OFF does nothing; idle 0 = never; the idle time is validated, saved and loaded", async () => {
@@ -100,7 +101,7 @@ test("deck: the key toggles; Release (setOn false) when OFF does nothing; idle 0
   await d.deck.toggle("Deck Control key");
   assert.equal(d.deck.on, false);
   await d.deck.setOn(false, "Release key");
-  assert.deepEqual(d.steps, ["start", "release (termination frames)", "stop (LeaveShow + close)", "save values"], "OFF twice = one OFF");
+  assert.deepEqual(d.steps, ["start", "save values"], "OFF twice = one OFF; v0.9.0: OFF only disarms");
   assert.match((await d.deck.setIdleSeconds(-1))!, /0 to 3600/);
   assert.match((await d.deck.setIdleSeconds(1.5))!, /whole number/);
   assert.equal(await d.deck.setIdleSeconds(0), null);
@@ -115,30 +116,32 @@ test("deck: the key toggles; Release (setOn false) when OFF does nothing; idle 0
   assert.equal(d2.deck.idleSeconds, 30, "loaded after a restart");
 });
 
-test("deck: switching OFF stops the DMX synchronously, before the CITP stop; a knob right after OFF switches ON again after the stop", async () => {
+test("deck (v0.9.0): DeckControl has no way to stop output or the connection any more; disarm by key, idle and Release only disarm; a knob right after OFF arms again", async () => {
   const order: string[] = [];
-  let releaseSync = false;
-  const deck = new DeckControl({
+  let fire: (() => void) | undefined;
+  const opts = {
     start: async () => void order.push("start"),
-    stop: async () => {
-      await sleep(20);
-      order.push("stop");
-    },
-    release: () => {
-      releaseSync = true; // DmxEngine.release clears the engine before its first await
-      order.push("release");
-      return sleep(5);
-    },
-    log: () => undefined,
-  });
+    afterOff: async () => void order.push("save"),
+    log: (l: string) => void order.push(`log: ${l}`),
+    setTimer: (fn: () => void) => ((fire = fn), "T"),
+    clearTimer: () => (fire = undefined),
+  };
+  const deck = new DeckControl(opts);
   deck.activity("Pan dial");
   void deck.setOn(false, "Deck Control key");
-  assert.equal(releaseSync, true, "release ran synchronously inside setOn(false)");
+  assert.equal(deck.on, false, "disarmed synchronously");
   deck.activity("Pan dial"); // turned again at once
   await deck.settled();
-  // the DMX stops at once (even before the queued CITP start of the first ON ran); the CITP steps keep their order
-  assert.deepEqual(order, ["release", "start", "stop", "start"]);
   assert.equal(deck.on, true);
+  deck.activity("knob");
+  fire?.(); // idle
+  await deck.settled();
+  deck.activity("knob");
+  await deck.setOn(false, "Release key");
+  // what happened (ON log lines aside): one session start per arm (queued, so it lands after a disarm logged in the same tick), one
+  // log line + one save per disarm, and nothing else
+  const steps = order.filter((o) => !o.startsWith("log: deck control ON")).map((o) => (o.startsWith("log: ") ? o.replace(/^log: deck control OFF \((.*)\): knobs disarmed; output and the CITP connection keep running$/, "OFF $1") : o));
+  assert.deepEqual(steps, ["OFF Deck Control key", "start", "save", "start", "OFF idle 120 s", "save", "OFF Release key", "start", "save"]);
 });
 
 // ------------------------------------------------------------------ remembered values
@@ -410,32 +413,22 @@ test("link (v0.7.2): the persistent connection closing clears the selection (dro
   }
 });
 
-test("service (v0.7.2): onLinkClosed clears the selection, logs it and keeps output; Deck Control OFF calls it on every path (key, idle, Release)", async () => {
-  const steps: string[] = [];
-  const cleared: string[] = [];
-  let fire: (() => void) | undefined;
-  const deck = new DeckControl({
-    start: async () => void steps.push("start"),
-    stop: async () => void steps.push("stop"),
-    release: async () => void steps.push("release"),
-    onOff: (why) => void cleared.push(why),
-    log: () => undefined,
-    setTimer: (fn) => ((fire = fn), "T"),
-    clearTimer: () => (fire = undefined),
-  });
-  deck.activity("knob");
-  await deck.toggle("Deck Control key");
-  assert.deepEqual(cleared, ["deck control OFF"], "the key");
-  deck.activity("knob");
-  fire?.();
-  await deck.settled();
-  assert.deepEqual(cleared.length, 2, "idle");
-  deck.activity("knob");
-  await deck.setOn(false, "Release key");
-  assert.equal(cleared.length, 3, "Release");
-  await deck.setOn(false, "Release key");
-  assert.equal(cleared.length, 3, "already OFF: nothing");
-  assert.ok(steps.indexOf("release") > -1);
+test("service (v0.7.2): onLinkClosed clears the selection, logs it and keeps output (v0.9.0: Deck OFF no longer calls it — see integration-selection)", async () => {
+  const show = new ShowModel({ libraryPath: "/x", open: () => ({ libPath: "x", readObjectByGuid: () => undefined, close: () => undefined }) as never });
+  const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined });
+  const logs: string[] = [];
+  const svc = new FixtureService(show, new SetupStore(memGlobals().g), engine, (l) => logs.push(l));
+  let cleared = 0;
+  const orig = svc.selection.clear.bind(svc.selection);
+  svc.selection.clear = () => {
+    cleared++;
+    orig();
+  };
+  engine.adjust([{ target: target("k1", 1), params: [P("Pan")] }], () => 0.3);
+  svc.onLinkClosed("CITP connection closed");
+  assert.equal(cleared, 1);
+  assert.deepEqual(logs, ["CITP connection closed: selection cleared"]);
+  assert.equal(engine.active, true, "output is kept");
 });
 
 test("link: a brief connection when Capture is not there fails once (the reason is shown) and does not keep retrying", async () => {

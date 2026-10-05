@@ -180,7 +180,7 @@ test("Setup panel / Setup key / Status key while OFF: a brief connection each (D
   assert.deepEqual((deck.globals as any).fixtureDeck, { idleSeconds: 1 });
 });
 
-test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Capture selects a light; then the knob drives it; idle 1 s → OFF: termination ×3, LeaveShow, close, selection cleared", async () => {
+test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Capture selects a light; then the knob drives it; v0.9.0: idle 1 s → OFF only disarms: no termination, no LeaveShow, no close (/proc), identical frames continue, selection kept", async () => {
   deck.willAppear(A.select, "sel", {}, "Encoder");
   for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
   await noSelection("no selection yet: Click a light / in Capture");
@@ -196,34 +196,33 @@ test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Captur
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.6 * 65535), "pan 60 %");
   assert.equal(slot(p, 6), 255, "intensity starts at home (never touched in this show)");
   if (process.platform === "linux") assert.equal(citpSocketsOfPlugin(), 1, "the /proc check does see the connection while ON (so its 0 while OFF means something)");
-  // no further activity: after 1 s it switches OFF by itself
-  await deck.waitFor(() => (citp.of(CAEX.LeaveShow).length > leaves && citp.clients.size === 0) || undefined, 5000, "idle OFF: LeaveShow + close");
-  const term = packets.filter((x) => x.terminated);
-  assert.equal(term.length, 3, "Stream_Terminated ×3");
-  assert.equal(pan16(term[0]), Math.round(0.6 * 65535), "the termination frames carry the last values");
-  await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): output terminated, LeaveShow sent, CITP connection closed/.test(deck.logText()) || undefined, 3000, "OFF logged");
-  assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
+  // no further activity: after 1 s it disarms by itself, and nothing else happens
+  await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): knobs disarmed; output and the CITP connection keep running/.test(deck.logText()) || undefined, 5000, "idle OFF logged");
   await waitDeck("deckkey", "off");
-  await noSelection("OFF: the selection is gone");
-  const socks = citpSocketsOfPlugin();
-  if (socks !== null) assert.equal(socks, 0, "after OFF no socket to the CITP port stays open (/proc)");
-  const n = packets.length;
+  const nOff = packets.length;
   await sleep(600);
-  assert.equal(packets.length, n, "no DMX while OFF");
+  assert.equal(packets.filter((x) => x.terminated).length, 0, "no Stream_Terminated");
+  assert.equal(citp.of(CAEX.LeaveShow).length, leaves, "no LeaveShow");
+  assert.equal(citp.clients.size, 1, "the stub still has the connection");
+  const socks = citpSocketsOfPlugin();
+  if (socks !== null) assert.equal(socks, 1, "the plugin process still holds its CITP socket (/proc)");
+  const after = packets.slice(nOff);
+  assert.ok(after.length >= 15, `frames keep going while disarmed (${after.length} in 600 ms)`);
+  for (const x of after) assert.deepEqual([...x.slots], [...p.slots], "identical slot values while disarmed");
+  assert.doesNotMatch(deck.logText(), /deck control OFF: selection cleared/);
+  await waitStrip("sel", (f) => f.line2.value.startsWith("Ch 203"), "the selection is kept while disarmed");
 });
 
-test("resume after OFF → ON: the next turn continues from 60 % (no snap to home); push = fine, tap = home that channel; ON/OFF by the Deck Control key; ON by a fixture key", async () => {
+test("v0.9.0: while disarmed a turn re-arms and moves the still-selected light at once (no new connection, no second EnterShow); push = fine, tap = home that channel; OFF/ON by the key; Home Light arms; values saved", async () => {
   deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 0 }); // never, for the rest of the file
   await deck.waitFor(() => lastSetupView()?.view?.deck?.idleSeconds === 0 || undefined, 3000, "idle off");
-  await noSelection("OFF: nothing selected");
-  const n0 = packets.length;
-  deck.dialRotate(A.a1, "a1", 5); // switches ON; moves nothing (no selection in this connection)
+  const enters = citp.of(CAEX.EnterShow).length;
+  const pnams = citp.received.filter((m) => m.toString("latin1", 16, 24) === "PINFPNam").length;
+  deck.dialRotate(A.a1, "a1", 5); // arms and moves: the selection is still Ch 203
   await waitDeck("deckkey", "on");
-  await selectInCapture();
-  assert.equal(packets.length, n0, "the turn before the selection sent nothing");
-  await waitStrip("a1", (f) => f.value.value === "~60.0", "selected: the strip shows the remembered value");
-  deck.dialRotate(A.a1, "a1", 5);
-  await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.65 * 65535), "65 %: resumed from 60 %, not from 50 %");
+  await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.65 * 65535), "65 %: continued from 60 %, not from 50 %");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "no second EnterShow on re-arm");
+  assert.equal(citp.received.filter((m) => m.toString("latin1", 16, 24) === "PINFPNam").length, pnams, "no new connection");
   // push = fine mode
   deck.dialDown(A.a1, "a1");
   await waitStrip("a1", (f) => f.mark.value.includes("FINE"), "fine on");
@@ -236,29 +235,26 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
   await waitPacket((x) => slot(x, 6) === Math.round(0.6 * 255), "dimmer 60 %");
   deck.touchTap(A.a1, "a1", false);
   await waitPacket((x) => pan16(x) === 0x8000 && slot(x, 6) === Math.round(0.6 * 255), "pan home, dimmer kept");
-  deck.dialRotate(A.a1, "a1", 20); // pan 70 % before the restart test
+  deck.dialRotate(A.a1, "a1", 20); // pan 70 %
   await waitPacket((x) => pan16(x) === Math.round(0.7 * 65535), "pan 70 %");
-  // the key: OFF
+  // the key: OFF (disarm only)
   deck.keyDown(A.deck, "deckkey");
   await waitDeck("deckkey", "off");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "OFF by key: closed");
-  assert.match(deck.logText(), /deck control OFF \(Deck Control key\)/);
-  // a fixture key switches it ON (Home Selected) but homes nothing: the selection went with OFF
+  assert.match(deck.logText(), /deck control OFF \(Deck Control key\): knobs disarmed/);
+  assert.equal(citp.clients.size, 1, "still connected");
+  // Home Light arms and homes the still-selected light
   deck.willAppear(A.home, "home", {});
-  const n1 = packets.length;
   deck.keyDown(A.home, "home");
   await waitDeck("deckkey", "on");
   assert.match(deck.logText(), /deck control ON \(Home Light key\)/);
-  await selectInCapture();
-  assert.equal(packets.length, n1, "Home with nothing selected sent nothing");
-  deck.keyDown(A.home, "home");
-  await waitPacket((x) => !x.terminated && pan16(x) === 0x8000 && slot(x, 6) === 255, "Home Selected once Capture selected the light");
+  await waitPacket((x) => !x.terminated && pan16(x) === 0x8000 && slot(x, 6) === 255, "Home Light: the selected light at home");
   deck.dialRotate(A.a1, "a1", 25); // 75 %
   await waitPacket((x) => pan16(x) === Math.round(0.75 * 65535), "pan 75 %");
   deck.keyDown(A.deck, "deckkey"); // OFF: the values are saved
   await waitDeck("deckkey", "off");
   await deck.waitFor(() => (deck.globals as any).fixtureValues?.["DECK SHOW"]?.[INST]?.ch0 === 0.75 || undefined, 3000, "values saved in the global settings");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "closed");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "one EnterShow for the whole connection");
+  assert.equal(packets.filter((x) => x.terminated).length, 0, "never terminated");
 });
 
 test("resume after a plugin restart: a new plugin process starts OFF and the first turn continues from the stored 75 %", async () => {
@@ -266,7 +262,12 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   // Handoff 22 migration check: pretend these values were written by v0.7 (no migration mark) with the old bad shutter value
   delete globals.fixtureValuesMigration;
   globals.fixtureValues["DECK SHOW"][INST].ch6 = 0.3; // channel 7 "Shutter"
-  await deck.stop();
+  // v0.9.0: plugin exit is the one deck-side end: termination ×3 on the started universe, then LeaveShow
+  const leaves = citp.of(CAEX.LeaveShow).length;
+  const t0 = packets.length;
+  await deck.stop(); // SIGTERM
+  await deck.waitFor(() => (packets.slice(t0).filter((x) => x.terminated).length === 3 && citp.of(CAEX.LeaveShow).length === leaves + 1) || undefined, 3000, "exit: termination ×3 + LeaveShow");
+  assert.deepEqual([...new Set(packets.slice(t0).filter((x) => x.terminated).map((x) => x.universe))], [1]);
   await sleep(500);
   deck = new FakeDeck();
   deck.globals = globals;

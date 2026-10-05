@@ -421,54 +421,47 @@ test("a different show: selection cleared, output released, the other show's set
   await deck.waitFor(() => deck.lastImage("st").includes("E2E SHOW") && !deck.lastImage("st").includes("0 of"), 4000, "back in the first show");
 });
 
-test("Fixtures: Release (kept for old keys) switches Deck Control OFF: Stream_Terminated x3, LeaveShow, connection closed, then nothing more", async () => {
+test("Fixtures: Release (kept for old keys), v0.9.0: disarms only — no Stream_Terminated, no LeaveShow, the connection stays, identical frames keep going, the selection stays", async () => {
   citp.select([IDS.r203]);
   await waitStrip("sel", (f) => f.line2.value === "Ch 203 · 1/285", "203 selected");
   deck.dialRotate(A.tilt, "tilt", 1);
   await deck.waitFor(() => deck.lastImage("st").includes("OUTPUT ON"), 3000, "status shows output on");
   assert.ok(deck.lastImage("st").includes("U1"));
   assert.ok(deck.lastImage("st").includes("rest of the universe = 0"), "the blackout reminder is on the Status key");
+  await sleep(100);
+  const ref = packets.filter((x) => !x.terminated).at(-1)!;
   const n0 = packets.length;
   const leaves = citp.of(CAEX.LeaveShow).length;
+  const enters = citp.of(CAEX.EnterShow).length;
   deck.keyDown(A.release, "rel");
-  await deck.waitFor(() => packets.slice(n0).filter((p) => p.terminated).length >= 3, 3000, "3 terminated frames");
-  await deck.waitFor(() => (citp.of(CAEX.LeaveShow).length > leaves && citp.clients.size === 0) || undefined, 3000, "LeaveShow, then the connection closes");
-  await sleep(300);
-  const after = packets.slice(n0);
-  assert.equal(after.filter((p) => p.terminated).length, 3);
-  assert.ok(after.filter((p) => p.terminated).every((p) => p.universe === 1));
-  const n1 = packets.length;
-  const m1 = citp.received.length;
+  await deck.waitFor(() => /Fixtures: deck control OFF \(Release key\): knobs disarmed; output and the CITP connection keep running/.test(deck.logText()) || undefined, 3000, "Release logged");
   await sleep(1200);
-  assert.equal(packets.length, n1, "nothing is sent after Release");
-  assert.equal(citp.received.length, m1, "and no reconnect while Deck Control is OFF");
-  assert.equal(citp.clients.size, 0);
-  await deck.waitFor(() => deck.lastImage("st").includes("output off"), 3000, "status shows output off");
-  assert.match(deck.logText(), /Fixtures: deck control OFF \(Release key\)/);
+  const after = packets.slice(n0);
+  assert.equal(after.filter((p) => p.terminated).length, 0, "no Stream_Terminated");
+  assert.ok(after.length >= 30, `frames keep going (${after.length} in 1.2 s)`);
+  for (const p of after) assert.deepEqual([...p.slots], [...ref.slots], "identical slot values");
+  assert.equal(citp.of(CAEX.LeaveShow).length, leaves, "no LeaveShow");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters);
+  assert.equal(citp.clients.size, 1, "the connection stays");
+  assert.ok(deck.lastImage("st").includes("OUTPUT ON"), "the Status key still shows output on");
+  assert.equal(strip("sel").line2.value, "Ch 203 · 1/285", "the selection stays");
 });
 
-test("after Release a knob turn switches Deck Control ON again and RESUMES from the values last sent (no snap to home); plugin exit (SIGTERM) sends the termination frames and LeaveShow", async () => {
+test("after Release a knob turn re-arms and moves the still-selected light at once, from where it was (no snap to home); plugin exit (SIGTERM) sends the termination frames and LeaveShow", async () => {
   const last = packets.filter((x) => !x.terminated).at(-1)!;
   const tilt0 = (slot(last, 285, 3) << 8) | slot(last, 285, 4);
   const pan0 = (slot(last, 285, 1) << 8) | slot(last, 285, 2);
   const int0 = slot(last, 285, 6);
   assert.ok(pan0 !== 0x8000 || int0 !== 255 || tilt0 !== 0x8000, "203 is somewhere other than home, so a snap would show");
-  // v0.7.2: Release (OFF) cleared the selection, so the turn that switches ON moves nothing
-  const nOn = packets.length;
+  const enters = citp.of(CAEX.EnterShow).length;
   deck.dialRotate(A.tilt, "tilt", -10);
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "the persistent session is back");
-  assert.match(deck.logText(), /Fixtures: deck control ON \(Tilt dial\)/);
-  assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
-  await waitStrip("sel", (f) => f.line1.value === "Click a light", "nothing selected after Release");
-  await sleep(200);
-  assert.equal(packets.length, nOn, "the turn before a selection sent nothing");
-  citp.select([IDS.r203]);
-  await waitStrip("sel", (f) => f.line2.value === "Ch 203 · 1/285", "203 selected in Capture");
-  deck.dialRotate(A.tilt, "tilt", -10); // 203 again
+  await deck.waitFor(() => /Fixtures: deck control ON \(Tilt dial\)/.test(deck.logText()) || undefined, 3000, "re-armed by the turn");
   const want = Math.round((Math.round((tilt0 / 65535) * 10000) / 10000 - 0.1) * 65535);
-  const p = await waitPacket((x) => !x.terminated && Math.abs(((slot(x, 285, 3) << 8) | slot(x, 285, 4)) - want) <= 7, "tilt resumed −10 %");
+  const p = await waitPacket((x) => !x.terminated && Math.abs(((slot(x, 285, 3) << 8) | slot(x, 285, 4)) - want) <= 7, "tilt −10 % from where it was");
   assert.equal((slot(p, 285, 1) << 8) | slot(p, 285, 2), pan0, "pan where it was, not 50 %");
   assert.equal(slot(p, 285, 6), int0, "intensity where it was, not 100 %");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "no new EnterShow: same connection");
+  assert.doesNotMatch(deck.logText(), /deck control OFF: selection cleared/);
   const n0 = packets.length;
   const leaves = citp.of(CAEX.LeaveShow).length;
   await sleep(300);

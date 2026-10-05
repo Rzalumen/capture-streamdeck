@@ -266,20 +266,20 @@ export class FixturesSetup extends FixtureKey {
     const f = c.flasher.flash;
     draw(c.action, { icon: this.def.icon, label: this.def.title, badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
   }
-  /** Reads the show again: a brief connection while Deck Control is OFF (it does not switch it ON), a fresh list request while ON. */
+  /** Reads the show again: a fresh list request on the persistent connection once it is held (v0.9.0: also while disarmed), else a brief connection (it does not arm). */
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     c?.flasher.show({ text: "Reading…" }, 1500);
     keepAlive("Setup key");
-    if (rt.deck.on) await svc().show.sync();
+    if (rt.link.mode === "on") await svc().show.sync();
     else await rt.link.briefSync("Setup key");
   }
 
   /** The Property Inspector appeared: read the fixture list (brief connection while Deck Control is OFF). */
   override onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): void {
     rt.log.info("Fixtures: setup inspector opened");
-    if (!rt.deck.on && process.env.CAPTURE_TEST_NO_CITP !== "1") void rt.link.briefSync("Setup panel");
+    if (rt.link.mode !== "on" && process.env.CAPTURE_TEST_NO_CITP !== "1") void rt.link.briefSync("Setup panel");
   }
 
   /** The Setup Property Inspector's messages: {cmd: "get" | "resync" | "set" | "clear" | "autofill", ...}. */
@@ -293,7 +293,7 @@ export class FixturesSetup extends FixtureKey {
   }
 }
 
-/** Fixtures: Release — kept for keys placed earlier (Handoff 21): switches Deck Control OFF (termination frames, LeaveShow, close). */
+/** Fixtures: Release — kept for keys placed earlier (Handoff 21). v0.9.0: disarms the knobs only (output and the connection keep running). */
 export class FixturesRelease extends FixtureKey {
   constructor() {
     super(FIXTURE_KEY_UUIDS.release, fixtureKey(FIXTURE_KEY_UUIDS.release));
@@ -304,11 +304,10 @@ export class FixturesRelease extends FixtureKey {
     draw(c.action, { icon: this.def.icon, label: this.def.title, active: on, tone: on ? "accent" : "normal", badge: on ? "ON" : undefined, big: f?.text });
   }
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    const was = svc().engine.universes;
     const on = rt.deck.on;
     await rt.deck.setOn(false, "Release key");
-    logEvent("Key press", this.manifestId, undefined, `${on ? "deck control OFF" : "deck control was already OFF"}${was.length ? `; output released on universe(s) ${was.join(", ")}` : ""}`);
-    this.ctxs.get(ev.action.id)?.flasher.show({ text: was.length ? "Released" : "Idle" }, 1200);
+    logEvent("Key press", this.manifestId, undefined, `${on ? "deck control OFF (knobs disarmed; output keeps running)" : "deck control was already OFF"}`);
+    this.ctxs.get(ev.action.id)?.flasher.show({ text: "Disarmed" }, 1200);
   }
 }
 
@@ -341,7 +340,7 @@ export class FixturesStatus extends FixtureKey {
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     keepAlive("Status key");
-    if (rt.deck.on) await svc().show.sync();
+    if (rt.link.mode === "on") await svc().show.sync();
     else await rt.link.briefSync("Status key");
   }
 }

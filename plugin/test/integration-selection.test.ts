@@ -141,34 +141,43 @@ test("ON, select B, turn Pan: only B's slots change", async () => {
   assert.ok(p.slots.subarray(ADDR_A - 1, ADDR_A - 1 + N).every((v) => v === 0), "A untouched");
 });
 
-test("OFF; ON by a knob turn: nothing moves, no fallback to A and no carry-over of B; the strip reads 'Click a light / in Capture'", async () => {
+test("v0.9.0: OFF (disarm) keeps the connection and the selection; ON by a knob turn moves B at once; no fallback to A", async () => {
+  const enters = citp.of(CAEX.EnterShow).length;
   deck.keyDown(A_.deck, "deckkey");
   await waitDeck("deckkey", "off");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "closed");
-  assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
-  await noSelection("OFF cleared the selection");
-  // in Capture the user now clicks and moves A with the mouse: the deck sees none of it (no connection)
+  await sleep(300);
+  assert.equal(citp.clients.size, 1, "still connected");
+  assert.doesNotMatch(deck.logText(), /deck control OFF: selection cleared/);
+  assert.equal(deck.lastFeedback("sel").line2.value, `Ch 202 · 1/${ADDR_B}`, "B is still selected while disarmed");
   const n0 = packets.length;
   deck.dialRotate(A_.a1, "a1", 5);
   await waitDeck("deckkey", "on");
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "persistent session");
-  await sleep(500);
-  assert.equal(packets.length, n0, "no sACN packet at all after the turn (nothing selected in this connection)");
-  await noSelection("still nothing selected");
+  await deck.waitFor(() => live(n0).find((x) => panB(x) === Math.round(0.65 * 65535)), 3000, "B pan 65 %: the turn that re-armed moved B");
+  for (const x of live(n0)) assert.ok(changed(undefined, x).every(inB), "only B's slots are non-zero (no fallback to A)");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "same connection");
 });
 
-test("select B, turn Pan: only B's slots change, continuing from B's stored value", async () => {
+test("select B, turn Pan: only B's slots change, continuing from B's value", async () => {
   await selectB();
   const n0 = packets.length;
   deck.dialRotate(A_.a1, "a1", 5);
-  await deck.waitFor(() => live(n0).find((x) => panB(x) === Math.round(0.65 * 65535)), 3000, "B pan 65 % (resumed from 60 %)");
+  await deck.waitFor(() => live(n0).find((x) => panB(x) === Math.round(0.7 * 65535)), 3000, "B pan 70 % (continued from 65 %)");
   for (const x of live(n0)) assert.ok(changed(undefined, x).every(inB), "only B's slots are non-zero");
 });
 
-test("the stub drops the connection; it reconnects with no selection: a turn moves nothing", async () => {
+test("the stub drops the connection: output keeps running (same values), it reconnects and declares again, with no selection: a turn moves nothing", async () => {
   const enters = citp.of(CAEX.EnterShow).length;
+  const decl = citp.received.filter((m) => m.toString("latin1", 16, 24) === "SDMXSXSr").length;
+  await sleep(100);
+  const ref = live(0).at(-1)!;
+  const n0 = packets.length;
   citp.drop();
   await deck.waitFor(() => (citp.of(CAEX.EnterShow).length > enters && citp.clients.size === 1) || undefined, 5000, "reconnected");
+  const during = live(n0);
+  assert.ok(during.length >= 5, `frames kept going across the drop (${during.length})`);
+  for (const x of during) assert.deepEqual([...x.slots], [...ref.slots], "same values across the drop");
+  assert.equal(packets.slice(n0).filter((x) => x.terminated).length, 0, "no termination on a drop");
+  await deck.waitFor(() => citp.received.filter((m) => m.toString("latin1", 16, 24) === "SDMXSXSr").length === decl + 1 || undefined, 3000, "declared again after the reconnect");
   await deck.waitFor(() => /Fixtures: CITP connection closed: selection cleared/.test(deck.logText()) || undefined, 2000, "cleared on close");
   await noSelection("after the reconnect");
   await turnMovesNothing("after a reconnect");

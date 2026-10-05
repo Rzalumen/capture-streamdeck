@@ -41,10 +41,10 @@
   <div class="sect">Deck Control</div>
   <div id="deck-state" class="hint full"></div>
   <div class="inline fill">
-    <span class="small">Switch OFF after</span><input id="idle-s" type="number" min="0" max="3600" step="1" value="120" />
-    <span class="small">s without fixture activity (0 = never)</span>
+    <span class="small">Disarm the knobs after</span><input id="idle-s" type="number" min="0" max="3600" step="1" value="120" />
+    <span class="small">s without fixture activity (output keeps running; 0 = never)</span>
   </div>
-  <div class="hint full">While Deck Control is ON the deck holds the CITP link to Capture (it follows the selection and drives DMX) and Capture's Control Pane is locked. OFF frees the Control Pane. Any fixture knob or key switches it ON.</div>
+  <div class="hint full">Deck Control ON arms the knobs; OFF disarms them. The first ON connects to Capture as a console (it follows the selection and drives DMX), and the deck then stays connected: while OFF it keeps sending what Capture shows, and a change made in Capture (mouse, Control Pane) takes a channel back from the knob. Only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it.</div>
 
   <div class="sect">Fixtures</div>
   <div class="cbx"><input id="all" type="checkbox" /><label for="all">Show all fixtures (not only those with pan or tilt)</label></div>

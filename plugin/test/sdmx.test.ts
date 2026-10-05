@@ -318,7 +318,7 @@ test("engine: a frame = untouched channels at their stored values < Capture's le
   assert.equal(engine.knownLevel(1, 200), undefined);
 });
 
-test("engine: Capture's levels survive release (Deck OFF) and are cleared by clearCapture (LeaveShow / show change); a value the deck set later replaces an older ChBk value for good", async () => {
+test("engine: Capture's levels survive release() and are cleared by clearCapture (LeaveShow / show change); a value the deck set later replaces an older ChBk value for good", async () => {
   const mem = new ValueMemory(memGlobals().g, 10_000);
   const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined, resume: (k) => mem.get("S", k), remember: (k, v) => mem.set("S", k, v) });
   const A = target("A", 285);
@@ -343,7 +343,7 @@ test("engine: Capture's levels survive release (Deck OFF) and are cleared by cle
   assert.equal(s2[443 + 7], 255, "B red: home");
 });
 
-test("engine: fromCapture updates a touched fixture's untouched parameters and the store, never a parameter the deck set", () => {
+test("engine (v0.9.0): takeFromCapture gives Capture the parameters it reported — values, store, and the deck loses ownership (top layer); a knob turn takes them back from Capture's value", () => {
   const mem = new ValueMemory(memGlobals().g, 10_000);
   const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined, resume: (k) => mem.get("S", k), remember: (k, v) => mem.set("S", k, v) });
   const A = target("A", 1);
@@ -351,12 +351,20 @@ test("engine: fromCapture updates a touched fixture's untouched parameters and t
   assert.equal(engine.isDeckSet("A", P("Pan").id), true);
   assert.equal(engine.isDeckSet("A", P("Tilt").id), false);
   assert.equal(engine.isDeckSet("nobody", P("Tilt").id), false);
-  engine.fromCapture(A, new Map([[P("Tilt").id, 0.25], [P("Pan").id, 0.9]]));
+  engine.captureLevels(1, 0, [0xe6, 0x66]); // what Capture reported for the pan bytes (0.9)
+  engine.takeFromCapture(A, new Map([[P("Tilt").id, 0.25], [P("Pan").id, 0.9]]));
   assert.equal(engine.paramValue(A, P("Tilt")), 0.25);
-  assert.equal(engine.paramValue(A, P("Pan")), 0.4, "a deck-set parameter is not changed by fromCapture");
+  assert.equal(engine.paramValue(A, P("Pan")), 0.9, "the deck-set pan is Capture's now");
+  assert.equal(engine.isDeckSet("A", P("Pan").id), false, "the deck no longer owns it");
+  assert.equal(mem.get("S", "A")!.get(P("Pan").id), 0.9, "stored");
+  const s = engine.slots(1);
+  assert.deepEqual([s[0], s[1]], [0xe6, 0x66], "the frame carries Capture's pan");
+  engine.adjust([{ target: A, params: [P("Pan")] }], (c) => c + 0.01);
+  assert.equal(engine.isDeckSet("A", P("Pan").id), true, "the knob takes it back");
+  assert.equal(engine.paramValue(A, P("Pan")), 0.91, "continuing from Capture's 0.9, not the old 0.4");
   // an untouched fixture: only the store
   const B = target("B", 100);
-  engine.fromCapture(B, new Map([[P("Dimmer").id, 0.5]]));
+  engine.takeFromCapture(B, new Map([[P("Dimmer").id, 0.5]]));
   assert.equal(engine.isTouched("B"), false);
   assert.equal(mem.get("S", "B")!.get(P("Dimmer").id), 0.5);
   assert.equal(engine.paramValue(B, P("Dimmer")), 0.5, "shown (and resumed) from the store");
@@ -387,7 +395,7 @@ async function serviceRig() {
   return { show, svc, engine, mem, logs, A, B, C };
 }
 
-test("service: ChBk on a configured untouched fixture -> overlay + store + strips; on a deck-set channel -> the deck's value stays and the disagreement is logged; Blind=1 ignored; unconfigured slots -> overlay only; LeaveShow clears", async () => {
+test("service (v0.9.0): ChBk on a configured untouched fixture -> overlay + store + strips; on a channel the knob set -> Capture takes it (frames, store, strip, one 'took' line); Blind=1 ignored; unconfigured slots -> overlay only; LeaveShow clears levels and ownership", async () => {
   const { show, svc, engine, mem, logs, A, B } = await serviceRig();
   svc.onSelectionEvent([900]); // Ch 203
   assert.equal(svc.attrRotate(0, 10, false), true); // A pan 50 % -> 60 %
@@ -408,22 +416,27 @@ test("service: ChBk on a configured untouched fixture -> overlay + store + strip
   assert.equal(r.touched, false);
   assert.equal(Math.round(r.value! * 65535), (22 << 8) | 179);
   svc.onSelectionEvent([900]);
-  // a block over A's deck-set pan (disagrees) and A's untouched tilt
+  // the mouse moves A's pan (the knob set it) and A's tilt: Capture takes both
   const n0 = logs.length;
-  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 284, levels: [1, 2, 64, 0] });
+  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 284, levels: [0xbf, 0x9f, 64, 0] });
+  const capPan = (0xbf << 8) | 0x9f;
   const s2 = engine.slots(1);
-  assert.equal((s2[284] << 8) | s2[285], aPan, "the deck's pan stays in the output");
-  assert.deepEqual([s2[286], s2[287]], [64, 0], "A's tilt (not set by the deck) follows Capture");
+  assert.equal((s2[284] << 8) | s2[285], capPan, "the frame carries Capture's pan now (last move wins)");
+  assert.deepEqual([s2[286], s2[287]], [64, 0], "A's tilt follows Capture");
+  assert.equal(Math.round(svc.attrReadout(0).value! * 65535), capPan, "A's pan strip shows Capture's value");
   assert.equal(Math.round(svc.attrReadout(1).value! * 65535), 64 << 8, "A's tilt strip follows Capture");
-  assert.equal(mem.get("S", A.key)!.get("ch0"), 0.6, "the store keeps the deck's pan");
-  assert.equal(Math.round(mem.get("S", A.key)!.get("ch2")! * 65535), 64 << 8, "the store takes A's tilt");
+  assert.equal(Math.round(mem.get("S", A.key)!.get("ch0")! * 65535), capPan, "the store takes Capture's pan");
+  assert.equal(engine.isDeckSet(A.key, "ch0"), false);
   const newLogs = logs.slice(n0);
-  assert.ok(newLogs.includes("Capture levels u1 a285-288 = 1,2,64,0 -> Ch 203 ch 1-4"), newLogs.join("\n"));
-  assert.ok(newLogs.some((l) => /^Capture levels u1 a285-288 disagree with channels the deck set \(deck value kept; possibly Capture echoing our sACN\): Ch 203 "Pan": Capture 0\.4 %, deck 60\.0 %$/.test(l)), newLogs.join("\n"));
-  // the same value as the deck's (an echo): no disagreement logged
-  const n1 = logs.length;
-  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 284, levels: [aPan >> 8, aPan & 0xff] });
-  assert.ok(!logs.slice(n1).some((l) => /disagree/.test(l)), "an echo of the deck's own value is not a disagreement");
+  assert.ok(newLogs.includes("Capture levels u1 a285-288 = 191,159,64,0 -> Ch 203 ch 1-4"), newLogs.join("\n"));
+  assert.deepEqual(newLogs.filter((l) => /^Capture took/.test(l)), [`Capture took Ch 203 "Pan" (knob 60.0 % -> Capture ${((capPan / 65535) * 100).toFixed(1)} %)`], "one took line, for the pan only (the knob never set the tilt)");
+  assert.ok(!logs.some((l) => /disagree/.test(l)), "the old disagree line is gone");
+  // the knob takes it back, continuing from Capture's value
+  assert.equal(svc.attrRotate(0, 1, false), true);
+  const back = Math.round((Math.round((capPan / 65535 + 0.01) * 10000) / 10000) * 65535);
+  const s3 = engine.slots(1);
+  assert.equal((s3[284] << 8) | s3[285], back, "knob +1 % from Capture's pan, not from 60 %");
+  assert.equal(engine.isDeckSet(A.key, "ch0"), true);
   // Blind
   const before = Buffer.from(engine.slots(1));
   const n2 = logs.length;
@@ -437,9 +450,70 @@ test("service: ChBk on a configured untouched fixture -> overlay + store + strip
   assert.deepEqual([...engine.slots(1).subarray(49, 53)], [5, 6, 7, 8]);
   svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 455, levels: [40, 41, 42, 43] }); // B ch 13-14 (zoom coarse + fine) and 2 slots past B
   assert.ok(logs.includes("Capture levels u1 a456-459 = 40,41,42,43 -> Ch 202 ch 13-14; 2 slot(s) on no configured fixture -> overlay only"), logs.slice(-3).join("\n"));
-  // LeaveShow: Capture's levels go with the show
+  // LeaveShow: Capture's levels and the deck's ownership go with the show
   svc.onShowGone("Capture left the show");
   show.clear();
   assert.equal(engine.knownLevel(1, 49), undefined);
   assert.equal(engine.knownLevel(1, 443), undefined);
+  assert.equal(engine.isDeckSet(A.key, "ch0"), false, "ownership cleared");
+  assert.equal(engine.active, false, "output released");
+  assert.equal(svc.selection.view().primary, undefined, "selection cleared");
+});
+
+test("service (v0.9.0): a 16-bit parameter the knob owns, reported on its coarse byte only: the fine byte keeps the knob's last-sent value (no jump); 'took' logged at most once per parameter per second with the held-back count", async () => {
+  const { svc, engine, logs, A } = await serviceRig();
+  svc.onSelectionEvent([900]);
+  svc.attrRotate(0, 10, false); // pan 60 % = 0x9999
+  const raw = Math.round(0.6 * 65535);
+  assert.equal(raw & 0xff, 0x99);
+  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 284, levels: [0x40] }); // coarse only
+  const s = engine.slots(1);
+  assert.deepEqual([s[284], s[285]], [0x40, raw & 0xff], "coarse from Capture, fine = the knob's last-sent fine byte");
+  assert.equal(engine.knownLevel(1, 285), raw & 0xff, "the fine byte was written into the overlay");
+  assert.equal(Math.round(engine.paramValue({ key: A.key, universe: 1, address: 285, map: undefined as never, model: undefined as never }, { id: "ch0", home: 0.5 } as never) * 65535), (0x40 << 8) | (raw & 0xff));
+  // the fine byte alone, while the deck owns the parameter again: the coarse keeps the knob's value
+  svc.attrRotate(0, 1, false);
+  const raw2 = Math.round(Math.round((((0x40 << 8) | (raw & 0xff)) / 65535 + 0.01) * 10000) / 10000 * 65535);
+  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 285, levels: [0x07] }); // fine only
+  const s2 = engine.slots(1);
+  assert.deepEqual([s2[284], s2[285]], [raw2 >> 8, 0x07], "fine from Capture, coarse = the knob's last-sent coarse byte");
+  // rate limit: the second take within 1 s is held back and counted into the next line
+  const took = logs.filter((l) => /^Capture took Ch 203 "Pan"/.test(l));
+  assert.equal(took.length, 1, `one took line within the second (${took.join(" | ")})`);
+  await sleep(1050);
+  svc.attrRotate(0, 1, false);
+  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 284, levels: [0x50, 0] });
+  const took2 = logs.filter((l) => /^Capture took Ch 203 "Pan"/.test(l));
+  assert.equal(took2.length, 2);
+  assert.match(took2[1], /\(\+1 more not logged\)$/);
+});
+
+test("service (v0.9.0): a burst of 31 single-slot ChBk for one fixture within 20 ms: all applied, ONE summary line; a lone single-slot message keeps its own line", async () => {
+  const { svc, engine, logs, B } = await serviceRig();
+  const n0 = logs.length;
+  const slotsB = Array.from({ length: 14 }, (_, i) => 443 + i);
+  const t0 = Date.now();
+  for (let k = 0; k < 31; k++) {
+    const slot = slotsB[k % 14];
+    svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: slot, levels: [(k * 7) & 0xff] });
+  }
+  assert.ok(Date.now() - t0 < 20, "sent within 20 ms");
+  // every message applied: the last value per slot is in the overlay
+  for (let k = 17; k < 31; k++) assert.equal(engine.knownLevel(1, slotsB[k % 14]), (k * 7) & 0xff);
+  assert.equal(logs.slice(n0).filter((l) => /^Capture levels/.test(l)).length, 0, "nothing logged yet (the burst is still open)");
+  await sleep(120);
+  assert.deepEqual(logs.slice(n0).filter((l) => /^Capture levels/.test(l)), ["Capture levels u1: 31 slot(s) -> Ch 202 (burst)"]);
+  assert.ok(B);
+  const n1 = logs.length;
+  svc.onCaptureLevels({ blind: 0, universeIndex: 0, firstChannel: 448, levels: [128] });
+  await sleep(120);
+  assert.deepEqual(logs.slice(n1), ["Capture levels u1 a449 = 128 -> Ch 202 ch 6"]);
+});
+
+test("service/engine: ChBk alone never starts a universe (nothing touched -> no output, however many levels arrive)", async () => {
+  const { svc, engine } = await serviceRig();
+  svc.onCaptureLevels(REAL_CHBK[0][1]);
+  svc.onCaptureLevels({ blind: 0, universeIndex: 1, firstChannel: 0, levels: [1, 2, 3] });
+  assert.equal(engine.active, false, "no output");
+  assert.deepEqual(engine.universes, []);
 });

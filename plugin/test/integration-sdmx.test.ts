@@ -107,6 +107,30 @@ const select = async (id: number, ch: number): Promise<void> => {
   citp.select([id]);
   await waitStrip("sel", (f) => f.line2.value.startsWith(`Ch ${ch}`), `selected in Capture: Ch ${ch}`);
 };
+/** The plugin process's TCP connections to the stub's CITP port, read from /proc (null where /proc is not available); as in integration-deck. */
+function citpSocketsOfPlugin(): number | null {
+  const pid = deck.proc?.pid;
+  if (!pid || !fs.existsSync(`/proc/${pid}/fd`) || !fs.existsSync("/proc/net/tcp")) return null;
+  const inodes = new Set<string>();
+  for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) {
+    try {
+      const m = /^socket:\[(\d+)\]$/.exec(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (m) inodes.add(m[1]);
+    } catch {
+      /* closed meanwhile */
+    }
+  }
+  let n = 0;
+  for (const f of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    if (!fs.existsSync(f)) continue;
+    for (const line of fs.readFileSync(f, "utf8").split("\n").slice(1)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length < 10) continue;
+      if (parseInt(c[2].split(":")[1], 16) === citp.port && inodes.has(c[9])) n++;
+    }
+  }
+  return n;
+}
 const lastSetupView = (): any => deck.received.filter((m) => m.event === "sendToPropertyInspector" && m.payload?.event === "setup").at(-1)?.payload;
 
 test("start-up brief connection: no SDMX; addresses set (A 1/285, B 1/444)", async () => {
@@ -167,12 +191,20 @@ test("ChBk for B: B's slots carry Capture's levels while A keeps the knob values
   assert.equal(at(q, ADDR_B + 5), 128);
 });
 
-test("ChBk on A's knob channel: output keeps the deck value, disagreement logged; Blind=1 and truncated ChBk change nothing; unconfigured slots ride along", async () => {
-  const want = Math.round(0.65 * 65535);
-  citp.chbk(1, ADDR_A, [1, 2, 64, 0]); // A pan (deck set it) + A tilt (deck did not)
-  const p = await waitPacket((x) => at(x, ADDR_A + 2) === 64, "A tilt follows Capture");
-  assert.equal(pan16(p, ADDR_A), want, "A's pan is the deck's");
-  await waitLog(/Fixtures: Capture levels u1 a285-288 disagree with channels the deck set \(deck value kept; possibly Capture echoing our sACN\): Ch 203 "Pan": Capture 0\.4 %, deck 65\.0 %/, "disagreement logged");
+test("v0.9.0 last move wins: ChBk on A's knob-set pan -> the frames carry Capture's value, the strip shows it, one 'took' line; the next turn takes it back from there; Blind=1 and truncated change nothing; unconfigured slots ride along", async () => {
+  await select(ID_A, 203);
+  citp.chbk(1, ADDR_A, [0xbf, 0x9f, 64, 0]); // the mouse moved A's pan (the knob set it) and A's tilt
+  const capPan = (0xbf << 8) | 0x9f;
+  const p = await waitPacket((x) => pan16(x, ADDR_A) === capPan && at(x, ADDR_A + 2) === 64, "A follows Capture: pan and tilt");
+  assert.ok(p);
+  await waitStrip("a1", (f) => f.value.value === ((capPan / 65535) * 100).toFixed(1), "A's pan strip shows Capture's value");
+  await waitLog(new RegExp(`Fixtures: Capture took Ch 203 "Pan" \\(knob 65\\.0 % -> Capture ${((capPan / 65535) * 100).toFixed(1).replace(".", "\\.")} %\\)`), "took line");
+  assert.equal(deck.logText().split("\n").filter((l) => /Capture took Ch 203 "Pan"/.test(l)).length, 1, "logged once");
+  assert.doesNotMatch(deck.logText(), /disagree/);
+  deck.dialRotate(A.a1, "a1", 1); // the knob takes it back, from Capture's value
+  const want = Math.round((Math.round((capPan / 65535 + 0.01) * 10000) / 10000) * 65535);
+  await waitPacket((x) => pan16(x, ADDR_A) === want, "knob +1 % from Capture's pan (not from 65 %)");
+  await sleep(100);
   const before = live().at(-1)!;
   citp.chbk(1, ADDR_B + 5, [9], 1); // Blind
   const real = buildChBk(1, ADDR_B + 7, [200, 200]);
@@ -193,28 +225,59 @@ test("ChBk on A's knob channel: output keeps the deck value, disagreement logged
   await waitStrip("a3", (f) => f.value.value === `~${((128 / 255) * 100).toFixed(1)}`, "B dimmer strip = ~Capture's value");
 });
 
-test("Deck OFF -> ON: B's levels stay in the frames; B's untouched channels resume from Capture's levels, not home", async () => {
-  deck.keyDown(A.deck, "deckkey");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "OFF: closed");
-  await waitLog(/deck control OFF \(Deck Control key\)/, "OFF");
-  await deck.waitFor(() => ((deck.globals as any).fixtureValues?.["SDMX SHOW"]?.[INST_B]?.ch5 !== undefined ? true : undefined), 3000, "B's values saved");
-  const saved = (deck.globals as any).fixtureValues["SDMX SHOW"][INST_B];
-  assert.equal(Math.round(saved.ch0 * 65535), (22 << 8) | 179, "B pan stored from Capture");
-  assert.equal(Math.round(saved.ch5 * 255), 128, "B dimmer stored from Capture");
-  const decl0 = sdmxSent().length;
-  deck.keyDown(A.deck, "deckkey"); // ON
-  await deck.waitFor(() => (sdmxSent().length === decl0 + 17 ? true : undefined), 5000, "declared again on the new connection");
+test("v0.9.0 Deck OFF = disarm: no termination, no LeaveShow, connection kept (/proc), frames identical; while disarmed a ChBk still lands (frames + store); a burst of 31 single-slot ChBk = one log line; a turn re-arms with no new EnterShow or declaration", async () => {
   await select(ID_A, 203);
-  deck.dialRotate(A.a1, "a1", 5); // A pan 70 %
-  const p = await waitPacket((x) => pan16(x, ADDR_A) === Math.round(0.7 * 65535), "A pan 70 %");
-  assert.deepEqual([at(p, ADDR_B), at(p, ADDR_B + 1), at(p, ADDR_B + 2), at(p, ADDR_B + 3), at(p, ADDR_B + 5)], [22, 179, 220, 176, 128], "B's levels survived OFF -> ON");
-  assert.deepEqual([at(p, 50), at(p, 53)], [5, 8], "unconfigured slots too");
-  // now drive B: its tilt by the knob, everything else from Capture's levels (not home: dimmer would be 255, pan 0x8000)
-  await select(ID_B, 202);
-  deck.dialRotate(A.a2, "a2", 1); // B tilt +1 %
-  const tilt = Math.round(Math.min(1, ((220 << 8) | 176) / 65535 + 0.01) * 10000) / 10000;
-  const q = await waitPacket((x) => ((at(x, ADDR_B + 2) << 8) | at(x, ADDR_B + 3)) === Math.round(tilt * 65535), "B tilt +1 % from Capture's level");
-  assert.equal(pan16(q, ADDR_B), (22 << 8) | 179, "B pan: Capture's level, not home 50 %");
-  assert.equal(at(q, ADDR_B + 5), 128, "B dimmer: Capture's level, not home 100 %");
-  assert.equal(pan16(q, ADDR_A), Math.round(0.7 * 65535), "A keeps its knob value");
+  await sleep(100);
+  const ref = live().at(-1)!;
+  const n0 = packets.length;
+  const leaves = citp.of(CAEX.LeaveShow).length;
+  const enters = citp.of(CAEX.EnterShow).length;
+  const decl = sdmxSent().length;
+  deck.keyDown(A.deck, "deckkey");
+  await waitLog(/deck control OFF \(Deck Control key\): knobs disarmed; output and the CITP connection keep running/, "OFF");
+  await sleep(500);
+  assert.equal(packets.slice(n0).filter((x) => x.terminated).length, 0, "no Stream_Terminated");
+  assert.equal(citp.of(CAEX.LeaveShow).length, leaves, "no LeaveShow");
+  assert.equal(citp.clients.size, 1, "the connection stays");
+  const socks = citpSocketsOfPlugin();
+  if (process.platform === "linux") assert.equal(socks, 1, "the plugin still holds its CITP socket (/proc)");
+  for (const x of live().slice(-10)) assert.deepEqual([...x.slots], [...ref.slots], "identical frames while disarmed");
+  // the knobs are disarmed, so a value the store holds for B's dimmer must come from Capture now
+  citp.chbk(1, ADDR_B + 5, [77]); // the mouse moves B's dimmer while the deck is OFF
+  await waitPacket((x) => at(x, ADDR_B + 5) === 77, "a ChBk while disarmed reaches the frames");
+  await deck.waitFor(() => (Math.round(((deck.globals as any).fixtureValues?.["SDMX SHOW"]?.[INST_B]?.ch5 ?? -1) * 255) === 77 ? true : undefined), 3000, "and the store (saved)");
+  // a burst like the one on the real Mac (14:46:07): 31 single-slot messages for B within ~20 ms
+  const burst = Array.from({ length: 31 }, (_, k) => buildChBk(1, ADDR_B + (k % 14), [(k * 5) & 0xff]));
+  citp.push(Buffer.concat(burst));
+  await waitLog(/Fixtures: Capture levels u1: 31 slot\(s\) -> Ch 202 \(burst\)/, "one burst line");
+  const last = await waitPacket((x) => at(x, ADDR_B + 2) === 150, "every message applied (the last one: slot ADDR_B+2 = 150)");
+  for (let k = 17; k < 31; k++) assert.equal(at(last, ADDR_B + (k % 14)), (k * 5) & 0xff, `slot ${ADDR_B + (k % 14)}`);
+  // re-arm by a turn on the still-selected A: same connection, no new EnterShow, no new declaration
+  deck.dialRotate(A.a1, "a1", 1);
+  await waitLog(/deck control ON \(Attribute 1 dial\)/, "re-armed");
+  await sleep(300);
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "exactly one EnterShow on the connection");
+  assert.equal(sdmxSent().length, decl, "exactly one declaration on the connection");
+});
+
+test("v0.9.0: Capture's LeaveShow releases output and clears Capture's levels and the selection (ownership: see sdmx.test); plugin exit (SIGTERM) after a new touch: termination ×3, then LeaveShow", async () => {
+  const n0 = packets.length;
+  citp.leaveShow();
+  await waitLog(/Fixtures: Capture left the show: releasing output/, "released on LeaveShow");
+  await deck.waitFor(() => (packets.slice(n0).filter((x) => x.terminated).length === 3 ? true : undefined), 3000, "termination ×3 on LeaveShow (as before)");
+  await waitStrip("sel", (f) => f.line1.value === "Click a light", "selection cleared");
+  const lists = citp.of(CAEX.FixtureListRequest).length;
+  citp.enterShow("SDMX SHOW");
+  await deck.waitFor(() => citp.of(CAEX.FixtureListRequest).length > lists || undefined, 3000, "list asked again");
+  await sleep(400); // the list is answered and applied
+  await select(ID_A, 203);
+  const n1 = packets.length;
+  deck.dialRotate(A.a1, "a1", 1);
+  const p = await waitPacket(() => true, "output again after the touch");
+  assert.deepEqual([at(p, ADDR_B), at(p, ADDR_B + 5), at(p, 50)], [0, 0, 0], "Capture's levels were cleared with the show: B and the spare slots are 0 again");
+  const leaves = citp.of(CAEX.LeaveShow).length;
+  const t0 = packets.length;
+  assert.ok(t0 >= n1);
+  deck.proc!.kill("SIGTERM");
+  await deck.waitFor(() => (packets.slice(t0).filter((x) => x.terminated).length === 3 && citp.of(CAEX.LeaveShow).length === leaves + 1 ? true : undefined), 4000, "exit: termination ×3 + LeaveShow");
 });

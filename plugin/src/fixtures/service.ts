@@ -16,7 +16,11 @@ import { Selection, toTarget, type Controllable } from "./selection.js";
 import { autoFill, checkSetup, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
 
-export const BLACKOUT_WARNING = "While output is on, every universe you touch is sent in full: a slot that is not set by a fixture you touched is sent at the level Capture last reported for it, and at 0 when Capture has not reported it since the deck connected (Capture only reports changes). That still BLACKS OUT lights on that universe that were lit before and not reported, including fixtures that are not set up here.";
+/** v0.9.0: at most one "Capture took" line per parameter in this time. */
+export const TOOK_LOG_MS = 1000;
+/** v0.9.0: single-slot ChBk for the same fixture closer together than this are logged as one burst line. */
+export const BURST_MS = 50;
+export const BLACKOUT_WARNING = "While output is on, every universe you touch is sent in full: a slot that is not set by a fixture you touched is sent at the level Capture last reported for it, and at 0 when Capture has not reported it since the deck connected (Capture only reports changes). That still BLACKS OUT lights on that universe that were lit before and not reported, including fixtures that are not set up here. Deck Control OFF only disarms the knobs: the deck stays connected and keeps sending what Capture shows; only quitting the Stream Deck app (or Capture closing the show) lets go.";
 
 export interface SetupFixtureView {
   key: string;
@@ -297,8 +301,8 @@ export class FixtureService {
   }
 
   /**
-   * Deck Control OFF, or the persistent (ON) CITP connection closed for any reason: the selection belongs to that connection, so it
-   * goes. Output is NOT released here (a dropped connection keeps output, as in v0.5). Brief connections never call this.
+   * The persistent CITP connection closed for any reason: the selection belongs to that connection, so it goes (v0.9.0: Deck OFF
+   * only disarms and keeps the selection). Output is NOT released here (a dropped connection keeps output, as in v0.5). Brief connections never call this.
    */
   onLinkClosed(why: string): void {
     this.selection.clear();
@@ -337,9 +341,12 @@ export class FixtureService {
   }
 
   /**
-   * v0.8.0: one SDMX ChBk from Capture (the persistent session only). Blind=1 is logged and ignored. Otherwise the levels go into the
-   * engine's overlay, and every configured fixture they land on takes them for its knob parameters the deck did not set this ON period
-   * (store + strips); a parameter the deck set keeps the deck's value, and a disagreement is logged (it may be Capture echoing our sACN).
+   * One SDMX ChBk from Capture (the persistent session only; v0.8.0, last-move-wins in v0.9.0). Blind=1 is logged and ignored.
+   * Otherwise the levels go into the engine's overlay, and on every configured fixture they land on, each knob parameter they cover
+   * (any byte) is taken over by Capture: its value goes to the engine state, the remembered values and the strip, and it leaves the
+   * deck's top layer (logged as "Capture took …" when the deck owned it, at most once per parameter per second). For a 16-bit
+   * parameter covered on one byte only, the other byte's last-sent value is written into the overlay first, so the frame does not jump.
+   * Logging: single-slot messages for the same fixture within 50 ms of each other become one "(burst)" line; every message is applied.
    */
   onCaptureLevels(e: ChBk): void {
     const u = e.universeIndex + 1;
@@ -353,7 +360,7 @@ export class FixtureService {
     }
     this.engine.captureLevels(u, first, e.levels);
     const hits: string[] = [];
-    const conflicts: string[] = [];
+    const hitKeys: string[] = [];
     let onFixtures = 0;
     for (const c of this.controllables()) {
       if (c.addr.universe !== u) continue;
@@ -365,34 +372,66 @@ export class FixtureService {
       const t = toTarget(c);
       const what = c.fixture.channel ? `Ch ${c.fixture.channel}` : c.fixture.name;
       hits.push(`${what} ch ${lo - base + 1}${hi - lo > 1 ? `-${hi - base}` : ""}`);
-      const known = (slot: number, fallback: number): number => this.engine.knownLevel(u, slot) ?? fallback;
+      hitKeys.push(c.fixture.key);
       const inBlock = (off: number): boolean => base + off >= first && base + off < first + n;
       const update = new Map<string, number>();
       for (const p of c.model.params) {
         const sl = p.slots.find((x) => inBlock(x.coarse.offset) || (x.fine !== null && inBlock(x.fine.offset)));
         if (!sl) continue;
-        const cur = this.engine.paramValue(t, p);
+        const cur = Math.min(1, Math.max(0, this.engine.paramValue(t, p)));
+        const deckOwned = this.engine.isDeckSet(t.key, p.id);
         let v: number;
         if (sl.fine) {
-          const raw = Math.round(Math.min(1, Math.max(0, cur)) * 65535);
-          const hiB = known(base + sl.coarse.offset, raw >> 8);
-          const loB = known(base + sl.fine.offset, raw & 0xff);
+          const raw = Math.round(cur * 65535);
+          // the byte this ChBk did not carry: what was last sent (the deck's byte when it owns the parameter), kept in the overlay
+          for (const [off, byte] of [[sl.coarse.offset, raw >> 8], [sl.fine.offset, raw & 0xff]] as const)
+            if (!inBlock(off)) this.engine.setKnownLevel(u, base + off, byte, deckOwned);
+          const hiB = this.engine.knownLevel(u, base + sl.coarse.offset) ?? raw >> 8;
+          const loB = this.engine.knownLevel(u, base + sl.fine.offset) ?? raw & 0xff;
           v = ((hiB << 8) | loB) / 65535;
-        } else v = known(base + sl.coarse.offset, Math.round(cur * 255)) / 255;
-        if (this.engine.isDeckSet(t.key, p.id)) {
-          const same = sl.fine ? Math.round(v * 65535) === Math.round(cur * 65535) : Math.round(v * 255) === Math.round(cur * 255);
-          if (!same) conflicts.push(`${what} "${p.name}": Capture ${(v * 100).toFixed(1)} %, deck ${(cur * 100).toFixed(1)} %`);
-          continue;
-        }
+        } else v = (this.engine.knownLevel(u, base + sl.coarse.offset) ?? Math.round(cur * 255)) / 255;
+        if (deckOwned) this.logTook(`${t.key}/${p.id}`, `${what} "${p.name}" (knob ${(cur * 100).toFixed(1)} % -> Capture ${(v * 100).toFixed(1)} %)`);
         update.set(p.id, v);
       }
-      this.engine.fromCapture(t, update);
+      this.engine.takeFromCapture(t, update);
     }
     const outside = n - onFixtures;
-    if (!hits.length) this.log(`Capture levels ${span} = ${vals} (no configured fixture) -> overlay only`);
-    else this.log(`Capture levels ${span} = ${vals} -> ${hits.join("; ")}${outside > 0 ? `; ${outside} slot(s) on no configured fixture -> overlay only` : ""}`);
-    if (conflicts.length) this.log(`Capture levels ${span} disagree with channels the deck set (deck value kept; possibly Capture echoing our sACN): ${conflicts.join("; ")}`);
+    const line = !hits.length ? `Capture levels ${span} = ${vals} (no configured fixture) -> overlay only` : `Capture levels ${span} = ${vals} -> ${hits.join("; ")}${outside > 0 ? `; ${outside} slot(s) on no configured fixture -> overlay only` : ""}`;
+    if (n === 1) this.burstLog(u, hitKeys[0] ?? "", hits.length ? hits[0].replace(/ ch \d+$/, "") : "", line);
+    else this.log(line);
     if (!hits.length) this.emit();
+  }
+
+  /** "Capture took …" lines: at most one per parameter per second; the lines held back are counted into the next one. */
+  private tookLog = new Map<string, { at: number; held: number }>();
+  private logTook(key: string, text: string): void {
+    const now = Date.now();
+    const r = this.tookLog.get(key);
+    if (r && now - r.at < TOOK_LOG_MS) {
+      r.held++;
+      return;
+    }
+    this.tookLog.set(key, { at: now, held: 0 });
+    this.log(`Capture took ${text}${r?.held ? ` (+${r.held} more not logged)` : ""}`);
+  }
+
+  /** Single-slot ChBk logging (v0.9.0): one line per message, or one "(burst)" line for several within BURST_MS of each other. */
+  private bursts = new Map<string, { n: number; line: string; label: string; u: number; timer: NodeJS.Timeout }>();
+  private burstLog(u: number, fixtureKey: string, label: string, line: string): void {
+    const k = `${u}|${fixtureKey}`;
+    const b = this.bursts.get(k);
+    if (b) {
+      b.n++;
+      clearTimeout(b.timer);
+    }
+    const entry = b ?? { n: 1, line, label, u, timer: undefined as unknown as NodeJS.Timeout };
+    entry.timer = setTimeout(() => {
+      this.bursts.delete(k);
+      if (entry.n === 1) this.log(entry.line);
+      else this.log(`Capture levels u${entry.u}: ${entry.n} slot(s) -> ${entry.label || "no configured fixture (overlay only)"} (burst)`);
+    }, BURST_MS);
+    entry.timer.unref?.();
+    this.bursts.set(k, entry);
   }
 
   /** FixtureRemove: Capture deleted fixtures. */

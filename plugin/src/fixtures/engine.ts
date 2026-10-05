@@ -6,10 +6,12 @@
  *    `release()` or plugin exit, which send Stream_Terminated (3 frames) on every universe in use.
  *  - v0.8.0 (Handoff 26): per universe, an OVERLAY of Capture's last known levels, fed by Capture's SDMX ChBk messages and by the
  *    values the deck sets (Capture holds the last levels it received, verified on Reza's Mac). A frame is: the touched fixtures'
- *    channels the deck did NOT move this ON period at their stored values, then the overlay on top (Capture's state where known;
- *    0 elsewhere), then the channels the deck moved this ON period on top of everything (the knob is authoritative while ON). So a
- *    light changed with the mouse rides into our frames at Capture's value instead of being sent as 0. The overlay survives
- *    release() (Deck OFF) and reconnects; clearCapture() (LeaveShow / show change) empties it.
+ *    channels the deck does NOT own at their stored values, then the overlay on top (Capture's state where known; 0 elsewhere), then
+ *    the channels the deck owns on top of everything. So a light changed with the mouse rides into our frames at Capture's value
+ *    instead of being sent as 0. The overlay survives release() and reconnects; clearCapture() (LeaveShow / show change) empties it.
+ *  - v0.9.0 (Handoff 27): "the last move wins". Per parameter, the deck owns it after a knob turn, strip-tap home or Home Light;
+ *    Capture owns it again after a ChBk covering any of its bytes (takeFromCapture). Ownership lives in the fixture state, so it
+ *    survives arm / disarm (which no longer releases output) and is cleared with the fixtures (LeaveShow / show change / exit).
  *  - A fixture's state starts from its defaults on first touch (pages.ts: pan/tilt 50 %, intensity 100 %, the first shutter/strobe 255,
  *    additive colours full, everything else 0). Every channel of the fixture is a knob parameter (Handoff 20); values are kept per
  *    parameter.
@@ -135,7 +137,7 @@ interface FixState {
   model: FixtureModel;
   /** Knob parameter id -> value 0..1. A parameter not in here is at its home value. */
   values: Map<string, number>;
-  /** v0.8.0: parameters the deck itself set (knob, knob press, Home) since this fixture was touched in this ON period. */
+  /** Parameters the deck owns (v0.9.0 "last move wins"): set by a knob, a knob press or Home, and not taken back by a ChBk since. */
   deckSet: Set<string>;
 }
 
@@ -370,21 +372,36 @@ export class DmxEngine {
     this.overlay.clear();
   }
 
-  /** True when the deck set this parameter of this (touched) fixture in the current ON period. */
+  /** True when the deck owns this parameter of this (touched) fixture: it set it last (no ChBk took it back since). */
   isDeckSet(key: string, paramId: string): boolean {
     return this.fixtures.get(key)?.deckSet.has(paramId) ?? false;
   }
 
   /**
-   * Values Capture reported for parameters the deck did NOT set (the caller filters): a touched fixture's state takes them (so the
-   * strips and frames follow Capture), and they are remembered for resume. Then everything redraws.
+   * v0.9.0: Capture reported these parameters (a ChBk covered at least one byte of each): Capture owns them now. A touched fixture's
+   * state takes the values and the deck gives up ownership (they leave the top layer); the values are remembered for resume. Then
+   * everything redraws. The next knob turn on such a parameter continues from Capture's value and takes it back.
    */
-  fromCapture(t: Target, values: ReadonlyMap<string, number>): void {
+  takeFromCapture(t: Target, values: ReadonlyMap<string, number>): void {
     if (!values.size) return;
     const st = this.fixtures.get(t.key);
-    if (st && st.universe === t.universe && st.address === t.address) for (const [id, v] of values) if (!st.deckSet.has(id)) st.values.set(id, clamp(v));
+    if (st && st.universe === t.universe && st.address === t.address)
+      for (const [id, v] of values) {
+        st.values.set(id, clamp(v));
+        st.deckSet.delete(id);
+      }
     this.o.remember?.(t.key, values);
     this.emit();
+  }
+
+  /** Set one of Capture's known levels (0-based slot); an already known level is replaced only with `force`. */
+  setKnownLevel(universe: number, slot: number, level: number, force = false): void {
+    if (slot < 0 || slot >= 512) return;
+    let ov = this.overlay.get(universe);
+    if (!ov) this.overlay.set(universe, (ov = { lv: new Uint8Array(512), has: new Uint8Array(512) }));
+    if (ov.has[slot] && !force) return;
+    ov.lv[slot] = level & 0xff;
+    ov.has[slot] = 1;
   }
 
   private start(): void {

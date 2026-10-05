@@ -1,13 +1,15 @@
 /**
- * Handoff 21 (v0.7): "Deck Control" and the remembered channel values.
+ * Handoff 21 (v0.7) / Handoff 27 (v0.9.0): "Deck Control" (arming the knobs) and the remembered channel values.
  *
- * Any CITP console connection locks Capture's Control Pane (proven on Reza's Mac), and disconnecting gives the mouse back. So:
- *  - Deck Control OFF (the default at start-up): no CITP session is held and no DMX is sent. The fixture list is read with BRIEF
+ *  - Before the first arm after plugin start: no CITP session is held and no DMX is sent. The fixture list is read with BRIEF
  *    connections (link.ts) at start-up, when the Setup panel opens and when Setup / Status is pressed.
- *  - Deck Control ON: the persistent session (v0.6) plus DMX. Switched ON by the Deck Control key, or by any fixture knob turn or
- *    fixture key press while OFF; switched OFF by the key (or the old Release key), or automatically after N seconds without
- *    fixture activity (Setup panel; default 120 s, 0 = never). OFF = termination frames on every universe in use, then LeaveShow,
- *    then close.
+ *  - The first arm (the Deck Control key, any fixture knob turn, strip tap, Home Light, ◀ Page / Page ▶) opens the persistent session:
+ *    EnterShow, the SDMX declaration, DMX on first touch. v0.9.0: from then on NOTHING on the deck's side ends it. Disarming (the key,
+ *    the idle timer, the hidden Release key) only stops the knobs and Home Light changing values: no Stream_Terminated, no LeaveShow,
+ *    no close; output keeps running with the same values. Evidence (v0.8.0 log, Reza's Mac, 2026-10-05): the old OFF (termination
+ *    ×3, LeaveShow, close) reset the deck-driven lights in Capture once the universes were declared.
+ *  - The connection and output end only on plugin exit (termination ×3 + LeaveShow), when Capture leaves / changes the show
+ *    (release), and the connection is re-made after Capture closes it (output keeps running meanwhile).
  *
  * ValueMemory keeps the last value the deck sent for every channel of every fixture, per show name, in the global settings, so
  * output resumes where it was instead of snapping to the home values.
@@ -135,15 +137,9 @@ export class ValueMemory {
 // ------------------------------------------------------------------ Deck Control
 
 export interface DeckOptions {
-  /** Start the persistent CITP session (after any brief connection in progress). */
+  /** Start the persistent CITP session (after any brief connection in progress); a no-op while it is already held. */
   start: () => Promise<void>;
-  /** LeaveShow + close the persistent session. */
-  stop: () => Promise<void>;
-  /** Termination frames on every universe in use (DmxEngine.release). Must stop output synchronously before its first await. */
-  release: () => Promise<void>;
-  /** Called synchronously when Deck Control switches OFF, by every path (key, idle, Release key): clears the selection (v0.7.2). */
-  onOff?: (why: string) => void;
-  /** Called after OFF (e.g. to save the remembered values). */
+  /** Called after a disarm (e.g. to save the remembered values). v0.9.0: disarming sends nothing and closes nothing. */
   afterOff?: () => Promise<void> | void;
   log: (s: string) => void;
   globals?: GlobalSettings;
@@ -211,7 +207,11 @@ export class DeckControl {
     return this.setOn(!this._on, why);
   }
 
-  /** Switch ON or OFF. The flag changes at once; the CITP start/stop is serialised behind any previous switch. */
+  /**
+   * Arm (ON) or disarm (OFF). The flag changes at once. ON also makes sure the persistent CITP session is held (the first arm after
+   * plugin start opens it; later it is a no-op). v0.9.0: OFF only disarms: no termination frames, no LeaveShow, no close, and the
+   * selection stays (Capture's FixtureSelection keeps arriving on the connection).
+   */
   setOn(on: boolean, why: string): Promise<void> {
     if (on === this._on) {
       if (on) this.arm();
@@ -226,20 +226,14 @@ export class DeckControl {
       return this.chain;
     }
     this.disarm();
-    this.o.onOff?.("deck control OFF");
-    // stop the DMX first, synchronously (release() clears the engine before its first await), then LeaveShow + close
-    const released = this.o.release();
     this.emit();
+    this.o.log(`deck control OFF (${why}): knobs disarmed; output and the CITP connection keep running`);
     this.chain = this.chain.then(async () => {
-      const t0 = Date.now();
       try {
-        await released;
-        await this.o.stop();
         await this.o.afterOff?.();
       } catch (e) {
-        this.o.log(`deck control: switching OFF failed: ${(e as Error).message}`);
+        this.o.log(`deck control: saving after OFF failed: ${(e as Error).message}`);
       }
-      this.o.log(`deck control OFF (${why}): output terminated, LeaveShow sent, CITP connection closed (${Date.now() - t0} ms)`);
     });
     return this.chain;
   }

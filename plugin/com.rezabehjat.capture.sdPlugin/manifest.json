@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.8.0.0",
+  "Version": "0.9.0.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2680,7 +2680,7 @@
       "Name": "Fixtures: Release",
       "UUID": "com.rezabehjat.capture.fixtures.release",
       "Icon": "imgs/icons/fx-release",
-      "Tooltip": "Kept for keys placed earlier: switches Deck Control OFF (Stream_Terminated on every universe in use, then LeaveShow and the CITP connection closes).",
+      "Tooltip": "Kept for keys placed earlier: switches Deck Control OFF, i.e. disarms the knobs. The deck stays connected and keeps sending what Capture shows; only quitting the Stream Deck app (or Capture closing the show) lets go.",
       "Controllers": [
         "Keypad"
       ],
@@ -2726,7 +2726,7 @@
       "Name": "Fixtures: Deck Control",
       "UUID": "com.rezabehjat.capture.fixtures.deck",
       "Icon": "imgs/icons/fx-deck",
-      "Tooltip": "Press to switch Deck Control ON/OFF. The key's colour says the state: grey = OFF (no link to Capture, no DMX, Capture's Control Pane works); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). Capture's Control Pane is locked while ON. Any fixture knob or key switches it ON; it switches OFF after the idle time set in Setup.",
+      "Tooltip": "Press to arm (ON) or disarm (OFF) the fixture knobs. The key's colour says the state: grey = OFF (knobs disarmed); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). The first ON connects to Capture as a console; after that the deck stays connected: while OFF it keeps sending what Capture shows (changes made in Capture are kept), and only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it; it disarms after the idle time set in Setup.",
       "Controllers": [
         "Keypad"
       ],

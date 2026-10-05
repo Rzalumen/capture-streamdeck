@@ -38,7 +38,7 @@
     if (!view) return;
     $("blackout").textContent = view.blackoutWarning;
     if (view.deck) {
-      $("deck-state").textContent = view.deck.on ? "Deck Control is ON: the CITP link is held, Capture's Control Pane is locked." : "Deck Control is OFF: no CITP link, no DMX; Capture's Control Pane works.";
+      $("deck-state").textContent = view.deck.on ? "Deck Control is ON: the knobs are armed." : "Deck Control is OFF: the knobs are disarmed (once connected, the deck keeps sending what Capture shows).";
       if (document.activeElement !== $("idle-s")) $("idle-s").value = String(view.deck.idleSeconds);
     }
     const st = view.status;

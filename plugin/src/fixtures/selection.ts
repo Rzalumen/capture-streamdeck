@@ -1,9 +1,9 @@
 /**
  * Which fixture(s) the attribute dials and the Home key act on (v0.7.2): only the fixtures Capture selected (FixtureSelection) during
- * the current Deck Control ON connection, narrowed to the controllable ones (type parsed safely + an address). There is no fallback
+ * the current persistent connection, narrowed to the controllable ones (type parsed safely + an address). There is no fallback
  * fixture: with nothing selected the dials and Home move nothing and the strip reads "Click a light / in Capture". An empty selection
- * in Capture clears; Deck Control OFF and the persistent connection closing clear too (FixtureService.onLinkClosed), so no selection
- * carries over from an earlier connection. The Select dial / Next Fixture key still pick one fixture by hand (an explicit choice)
+ * in Capture clears; the persistent connection closing, LeaveShow and a show change clear too (FixtureService.onLinkClosed /
+ * onShowGone), so no selection carries over from an earlier connection. v0.9.0: disarming (Deck OFF) keeps the selection. The Select dial / Next Fixture key still pick one fixture by hand (an explicit choice)
  * until Capture's next click.
  */
 import type { ChannelMap } from "./attrs.js";

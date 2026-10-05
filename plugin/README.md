@@ -117,7 +117,7 @@ identifier yet a number (see 2).
    in this ON period on top of everything (the knob wins while ON). So a light moved with the mouse rides into the deck's frames at Capture's value
    instead of being sent as 0. For configured fixtures, ChBk also updates the remembered values of every channel the deck did not move in this ON
    period (resume and the `~` strip values follow Capture); a ChBk that disagrees with a channel the deck moved is logged and the deck's value is
-   kept. Blind=1 is ignored; a malformed ChBk is logged with its hex and ignored. The known levels survive Deck OFF → ON and reconnects; LeaveShow or
+   kept (v0.9.0: Capture takes the channel instead, "the last move wins" — see Deck Control). Blind=1 is ignored; a malformed ChBk is logged with its hex and ignored. The known levels survive Deck OFF → ON and reconnects; LeaveShow or
    a different show clears them. Log: `Fixtures: Capture levels u1 a444-447 = 22,179,220,176 -> Ch 202 ch 1-4`, or `... (no configured fixture) -> overlay only`.
    **ChBk is delta-only**: a light that was already lit when the deck connected is still sent as 0 until Capture next reports its channels (no way to
    ask Capture for its current levels is known).
@@ -133,11 +133,28 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
 - **ON**: the persistent session as in v0.6 (follows the selection, picks up re-patching) and the knobs drive DMX. The Control Pane is locked while ON.
 - Switch ON with **Fixtures: Deck Control** (amber "Deck ON" / grey "Deck OFF"), or with **any fixture knob turn or fixture key** (Home Selected, the page keys,
   a strip tap). Switch OFF with the key, the old **Release** key, or automatically after the idle time set in the Setup panel (default 120 s without fixture
-  activity; 0 = never). OFF = Stream_Terminated ×3 on every universe in use, then LeaveShow, then the connection closes (`Fixtures: deck control OFF (idle 120 s): …`).
+  activity; 0 = never). Up to v0.8.0: OFF = Stream_Terminated ×3 on every universe in use, then LeaveShow, then the connection closes. **v0.9.0: OFF only disarms — see below.**
 - **Resume**: the last value the deck sent for every channel of every fixture is kept per show in the global settings. When output starts again (after OFF, or
   after a restart) a fixture starts from those values; the home values are used only for channels never touched in that show. Home Selected and the strip
   tap store the home values.
 - **Knob gestures**: **push = fine mode (0.1 %) on/off; tap the strip = home that channel**. (Before v0.7 it was the other way round.)
+
+**v0.9.0 (Handoff 27): the deck stays a connected console; Deck Control only arms the knobs.** The OFF above (termination, LeaveShow, close) reset
+the deck-driven lights in Capture once the universes were declared (v0.8.0 log on Reza's Mac). Now:
+- The **first arm** after plugin start (Deck key, any fixture knob turn, strip tap, Home Light, ◀ Page / Page ▶) opens the persistent session as before:
+  EnterShow, the SDMX declaration, DMX on first touch. Before that, start-up / Setup / Status use brief connections exactly as above.
+- **OFF = disarmed**: knobs and Home Light change no value. Nothing else happens: no Stream_Terminated, no LeaveShow, no close; output keeps going at
+  40 fps with the same values, Capture's selection keeps arriving and stays on the deck, and ChBk from Capture keep landing in the frames and the store.
+  The key, the idle timer (Setup: "Disarm the knobs after N s without fixture activity (output keeps running)") and the hidden Release key all only
+  disarm (`Fixtures: deck control OFF (idle 120 s): knobs disarmed; output and the CITP connection keep running`).
+- Output and the connection end only on **plugin exit** (termination ×3 + LeaveShow; the deck-driven lights may reset then), and when **Capture leaves or
+  changes the show** (release, Capture's levels and the selection cleared). When Capture closes the connection, output keeps running and the plugin
+  reconnects and declares again (selection cleared, Capture's levels kept).
+- **The last move wins**, per parameter: a knob turn, strip-tap home or Home Light makes the deck the owner; a ChBk covering any byte of the parameter makes
+  Capture the owner (its value goes to the frames, the store and the strip; the next knob turn continues from it). Logged as
+  `Fixtures: Capture took Ch 201 "Pan" (knob 83.0 % -> Capture 74.9 %)`, at most once per parameter per second (`(+N more not logged)`).
+  Ownership survives arm/disarm and reconnects and is cleared with the show. Several single-slot ChBk for one fixture within 50 ms are logged as one line
+  (`Fixtures: Capture levels u1: 31 slot(s) -> Ch 202 (burst)`); every message is still applied.
 
 ### Deck status on the LCD and the Deck key (v0.7.3, Handoff 24)
 

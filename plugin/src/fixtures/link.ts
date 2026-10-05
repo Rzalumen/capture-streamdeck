@@ -2,8 +2,9 @@
  * Wires the CITP session to the show model, the identification and the fixture service. Pure plumbing: every decision lives in the
  * class it calls.
  *
- * Handoff 21: the session is no longer always on. `startPersistent()` / `stopPersistent()` (Deck Control ON / OFF) run the v0.6
- * persistent session; while OFF, `briefSync()` connects briefly — PNam → EnterShow → FixtureList → FixtureIdentify (0xffffffff only)
+ * Handoff 21: the session is no longer always on. `startPersistent()` (the first Deck Control arm) runs the v0.6 persistent session;
+ * v0.9.0 (Handoff 27): the deck never stops it again (`stopPersistent()` is no longer called by Deck Control; only plugin exit,
+ * `stop()`, closes it). Before the first arm, `briefSync()` connects briefly — PNam → EnterShow → FixtureList → FixtureIdentify (0xffffffff only)
  * → LeaveShow → close — and logs how long it took. Our own disconnects ("quiet") keep the fixture list (the show goes offline, not
  * into an error) and ignore anything Capture says while we close.
  */
@@ -105,7 +106,7 @@ export class CitpLink {
     void this.startPersistent();
   }
 
-  /** Deck Control ON: the persistent session (after any brief connection in progress). */
+  /** The first Deck Control arm: the persistent session (after any brief connection in progress). A no-op while it is held. */
   startPersistent(): Promise<void> {
     this.attach();
     this.ops = this.ops.then(async () => {
@@ -118,7 +119,7 @@ export class CitpLink {
     return this.ops;
   }
 
-  /** Deck Control OFF: LeaveShow, close, no reconnect. The fixture list stays (offline). */
+  /** LeaveShow, close, no reconnect; the fixture list stays (offline). v0.9.0: not used by Deck Control any more (disarm keeps the link). */
   stopPersistent(): Promise<void> {
     this.ops = this.ops.then(async () => {
       if (this.mode !== "on") return;

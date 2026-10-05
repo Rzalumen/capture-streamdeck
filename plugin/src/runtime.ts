@@ -59,8 +59,9 @@ class Runtime {
 
   /**
    * Fixture control: library channel lists, per-show address setup, DMX over sACN. Handoff 21 (v0.7): "Deck Control" — OFF at
-   * start-up (no CITP session held, no DMX; brief connections read the fixture list), ON = the persistent session of v0.5/v0.6
-   * (selection, patch changes) and DMX. Nothing is sent to DMX until the user touches a fixture.
+   * start-up (no CITP session held, no DMX; brief connections read the fixture list); the first arm opens the persistent session of
+   * v0.5/v0.6 (selection, patch changes) and DMX, and v0.9.0 keeps it until plugin exit (disarming only stops the knobs). Nothing is
+   * sent to DMX until the user touches a fixture.
    * Env (tests only): CAPTURE_TEST_CITP_PORT / CAPTURE_TEST_CITP_TIMING / CAPTURE_TEST_LIBRARY / CAPTURE_TEST_SACN_PORT /
    * CAPTURE_TEST_SACN_NO_MULTICAST=1; CAPTURE_TEST_NO_CITP=1 makes no CITP connection at all; CAPTURE_TEST_DECK_ON=1 starts with
    * Deck Control ON (the v0.6 end-to-end tests); CAPTURE_TEST_BRIEF_MS = brief-connection timeout.
@@ -100,12 +101,12 @@ class Runtime {
     (l) => log.info(`Fixtures: ${l}`),
   );
   readonly link = new CitpLink(this.citp, this.fixtures.show, this.fixtures, (l) => log.info(`Fixtures: ${l}`), undefined, undefined, Number(process.env.CAPTURE_TEST_BRIEF_MS) || undefined);
-  /** Deck Control: OFF = no CITP session, no DMX (Capture's Control Pane is free); ON = persistent session + DMX. */
+  /**
+   * Deck Control = arming the knobs (v0.9.0, Handoff 27). The first arm opens the persistent session; disarming sends and closes
+   * nothing (output keeps running). Only plugin exit, or Capture leaving / changing the show, ends output.
+   */
   readonly deck = new DeckControl({
     start: () => this.link.startPersistent(),
-    stop: () => this.link.stopPersistent(),
-    release: () => this.fixtures.engine.release(),
-    onOff: (why) => this.fixtures.onLinkClosed(why),
     afterOff: () => this.memory.flush(),
     log: (l) => log.info(`Fixtures: ${l}`),
     globals: this.globals,
