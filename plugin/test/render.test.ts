@@ -90,7 +90,16 @@ test("header text per dial slot: off / click / driving (single, ×2 same model, 
   assert.equal(long, "Robe Robin MegaPo…");
   assert.equal(long.length, 18);
   assert.equal(headerText(2, H("driving", { line1: "Exactly18Character" })), "Exactly18Character", "18 characters: not clipped");
-  assert.equal(headerText(3, H("driving", { page: "Shutters 1/3", pageIndex: 4, pageCount: 8 })), "Shutters 1/3 5/8");
+  // v0.10.1 (Handoff 29): one count only — the page title without its own k/m, then the overall n/N
+  assert.equal(headerText(3, H("driving", { page: "Shutters 1/2", pageIndex: 1, pageCount: 8 })), "Shutters 2/8", "a split group");
+  assert.equal(headerText(3, H("driving", { page: "Shutters 2/2", pageIndex: 2, pageCount: 8 })), "Shutters 3/8");
+  assert.equal(headerText(3, H("driving", { page: "Shutters · Beam", pageIndex: 3, pageCount: 8 })), "Shutters · Beam 4/8", "a mixed page");
+  assert.equal(headerText(3, H("driving", { page: "Gobo/FX · Other 1/2", pageIndex: 6, pageCount: 8 })), "Gobo/FX · Other 7/8", "a repeated mixed title");
+  assert.equal(headerText(3, H("driving", { page: "Main", pageIndex: 0, pageCount: 7 })), "Main 1/7");
+  for (const [page, i, n] of [["Shutters 1/3", 1, 8], ["Colour 2/2", 5, 8], ["Main", 0, 3], ["Beam · Colour", 4, 7]] as const) {
+    const t = headerText(3, H("driving", { page, pageIndex: i, pageCount: n }));
+    assert.equal((t.match(/\d+\/\d+/g) ?? []).length, 1, `one count only: ${t}`);
+  }
   assert.equal(headerText(3, H("driving", { page: "" })), "", "no page: empty");
 });
 

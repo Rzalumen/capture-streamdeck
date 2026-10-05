@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.10.0.0",
+  "Version": "0.10.1.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2741,7 +2741,7 @@
       "Name": "Fixtures: ◀ Page",
       "UUID": "com.rezabehjat.capture.fixtures.page-prev",
       "Icon": "imgs/icons/fx-page-prev",
-      "Tooltip": "Previous attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Previous attribute page (Main, Shutters, Beam, Colour, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],
@@ -2772,7 +2772,7 @@
       "Name": "Fixtures: Page ▶",
       "UUID": "com.rezabehjat.capture.fixtures.page-next",
       "Icon": "imgs/icons/fx-page-next",
-      "Tooltip": "Next attribute page (Main, Colour, Beam, Shutters, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
+      "Tooltip": "Next attribute page (Main, Shutters, Beam, Colour, Gobo/FX, Other) of the selected fixture for the Attribute dials. The title shows the current page.",
       "Controllers": [
         "Keypad"
       ],

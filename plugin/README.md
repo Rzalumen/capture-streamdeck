@@ -193,9 +193,11 @@ the deck-driven lights in Capture once the universes were declared (v0.8.0 log o
 - **Hidden channels**: a name with the whole word *function(s)*, *control* or *auto* is on no page and always sent at 0 (never stored, never homed).
   The Setup Channels list shows it greyed out as "hidden (0)".
 - **All four dials are Attribute dials** (Attribute 1–4, 4 channels per page); **Main = Pan · Tilt · Intensity · Zoom**; Strobe/Shutter is part of
-  **Beam**. After Main the channels run in group order (Colour · Beam · Shutters · Gobo/FX · Other) and **every page is filled with 4**, so the
+  **Beam**. After Main the channels run in group order (v0.10.1: **Shutters · Beam · Colour · Gobo/FX · Other**; before: Colour · Beam · Shutters · …) and **every page is filled with 4**, so the
   end of one group shares a page with the start of the next; a page is titled by its groups ("Colour · Beam"), a repeated title is numbered. The Select dial left the profile (still in the action list); the **Fixtures: Next Fixture** key cycles the controllable fixtures and shows
   the one selected ("Next / Ch 207").
+  v0.10.1: the LCD header shows one page count only: the page title without its own `k/m`, then the overall `n/N` (`Shutters 2/8`, not
+  `Shutters 1/3 2/8`); the page keys keep their titles with `k/m`.
 - One-time migration on the first start of v0.7.1: stored shutter/strobe values (the old 255) are deleted from the remembered values the first time
   each fixture's channel names are read (logged: `values migration (v0.7.1): …`).
 

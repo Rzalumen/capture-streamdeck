@@ -122,7 +122,7 @@ test("Setup panel: addresses saved; the spot's Channels list (37 rows, 8/16-bit,
   assert.equal(t.channels.length, 37);
   assert.equal(t.unproven, true, "the 37-channel synthetic spot hits the parser's search budget, like the SolaFrame 750 did");
   assert.equal(spot.unproven, true);
-  assert.deepEqual(t.channels[27], { n: 28, name: "Shutter 1B", bits: "8-bit", pair: null, page: "Beam · Shutters" });
+  assert.deepEqual(t.channels[27], { n: 28, name: "Shutter 1B", bits: "8-bit", pair: null, page: "Shutters 1/2" });
   assert.deepEqual(t.channels[6], { n: 7, name: "Dimmer", bits: "16-bit", pair: 8, page: "Main" });
   assert.deepEqual(t.channels[7], { n: 8, name: "Dimmer Fine", bits: "16-bit fine", pair: 7, page: "" });
   const wash = v.fixtures.find((f: any) => f.key === INST_WASH);
@@ -130,7 +130,7 @@ test("Setup panel: addresses saved; the spot's Channels list (37 rows, 8/16-bit,
   assert.equal(packets.length, 0, "no DMX before a user touch");
 });
 
-test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 → sACN changes only on that blade's slot; press = blade out", async () => {
+test("select the spot in Capture → Page ▶ once to Shutters (v0.10.1) → turn Attribute 2 → sACN changes only on that blade's slot; press = blade out", async () => {
   deck.willAppear(A.select, "sel", {}, "Encoder");
   for (const k of ["a1", "a2", "a3", "a4"] as const) deck.willAppear(A[k], k, {}, "Encoder");
   deck.willAppear(A.prev, "prev", {});
@@ -148,15 +148,15 @@ test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 �
   assert.deepEqual(["a1", "a2", "a3", "a4"].map((k) => strip(k).name.value), ["Pan", "Tilt", "Dimmer", "Zoom"]);
   assert.equal(strip("a3").value.value, "~100.0", "Main: Pan · Tilt · Intensity (the dimmer) · Zoom");
   assert.equal(strip("a4").value.value, "~50.0", "zoom home 50 % (Handoff 22)");
-  for (let i = 0; i < 3; i++) deck.keyDown(A.next, "next");
-  await waitTitle("next", "Beam\nShutters");
-  await waitStrip("a3", (f) => f.name.value === "Shutter 1B", "Attribute 3 = Shutter 1B");
-  assert.deepEqual(["a1", "a2", "a4"].map((k) => strip(k).name.value), ["Focus", "Shutter 1A", "Shutter 2A"]);
-  assert.equal(strip("a3").value.value, "~0.0", "blades start out (0 %), nothing sent yet");
+  deck.keyDown(A.next, "next"); // v0.10.1 (Handoff 29): Page ▶ once = the blades
+  await waitTitle("next", "Shutters\n1/2");
+  await waitStrip("a2", (f) => f.name.value === "Shutter 1B", "Attribute 2 = Shutter 1B");
+  assert.deepEqual(["a1", "a3", "a4"].map((k) => strip(k).name.value), ["Shutter 1A", "Shutter 2A", "Shutter 2B"]);
+  assert.equal(strip("a2").value.value, "~0.0", "blades start out (0 %), nothing sent yet");
   assert.equal(packets.length, 0);
 
   // first touch: output starts from the defaults
-  deck.dialRotate(A.a3, "a3", 10);
+  deck.dialRotate(A.a2, "a2", 10);
   const first = await waitPacket((p) => slot(p, SPOT_ADDR, 28) === Math.round(0.1 * 255), "Shutter 1B 10 %");
   assert.deepEqual([slot(first, SPOT_ADDR, 1), slot(first, SPOT_ADDR, 3)], [0x80, 0x80], "pan/tilt 50 %");
   assert.equal(slot(first, SPOT_ADDR, 6), 255, "Shutter/Strobe open");
@@ -168,29 +168,29 @@ test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 �
 
   // the next turn changes that blade's slot only
   const before = packets.at(-1)!;
-  deck.dialRotate(A.a3, "a3", 15);
+  deck.dialRotate(A.a2, "a2", 15);
   const after = await waitPacket((p) => slot(p, SPOT_ADDR, 28) === Math.round(0.25 * 255), "Shutter 1B 25 %");
   assert.deepEqual(changed(before, after), [SPOT_ADDR + 27], "only Shutter 1B (channel 28 of the spot) changed");
-  await waitStrip("a3", (f) => f.value.value === "25.0", "strip shows 25.0 %");
+  await waitStrip("a2", (f) => f.value.value === "25.0", "strip shows 25.0 %");
 
   // a blade on the next page
   deck.keyDown(A.next, "next");
-  await waitTitle("next", "Shutters");
-  await waitStrip("a3", (f) => f.name.value === "Shutter 3B", "Attribute 3 = Shutter 3B");
+  await waitTitle("next", "Shutters\n2/2");
+  await waitStrip("a2", (f) => f.name.value === "Shutter 3B", "Attribute 2 = Shutter 3B");
   const b2 = packets.at(-1)!;
-  deck.dialRotate(A.a3, "a3", 40);
+  deck.dialRotate(A.a2, "a2", 40);
   const a2 = await waitPacket((p) => slot(p, SPOT_ADDR, 32) === Math.round(0.4 * 255), "Shutter 3B 40 %");
   assert.deepEqual(changed(b2, a2), [SPOT_ADDR + 31], "only Shutter 3B changed");
 
   // tap Attribute 3's strip = that blade home (out), Shutter 1B keeps its value (Handoff 21: push = fine, tap = home)
-  deck.touchTap(A.a3, "a3", false);
+  deck.touchTap(A.a2, "a2", false);
   const h = await waitPacket((p) => slot(p, SPOT_ADDR, 32) === 0, "Shutter 3B out");
   assert.equal(slot(h, SPOT_ADDR, 28), Math.round(0.25 * 255));
   // back to the first Shutters page: Shutter 1B still at 25 %
   deck.keyDown(A.prev, "prev");
-  await waitTitle("prev", "Beam\nShutters");
-  await waitStrip("a3", (f) => f.name.value === "Shutter 1B" && f.value.value === "25.0", "Shutter 1B still 25 %");
-  await deck.waitFor(() => /page: Beam · Shutters/.test(deck.logText()) || undefined, 3000, "page change logged");
+  await waitTitle("prev", "Shutters\n1/2");
+  await waitStrip("a2", (f) => f.name.value === "Shutter 1B" && f.value.value === "25.0", "Shutter 1B still 25 %");
+  await deck.waitFor(() => /page: Shutters 1\/2/.test(deck.logText()) || undefined, 3000, "page change logged");
 });
 
 test("select the wash (a different type): pages reset to Main; the spot keeps its blade; the wash's own pages", async () => {
@@ -205,7 +205,7 @@ test("select the wash (a different type): pages reset to Main; the spot keeps it
   const diff = changed(before, p);
   assert.ok(diff.every((s) => s >= WASH_ADDR && s < WASH_ADDR + 14), `only the wash's slots changed: ${diff}`);
   deck.keyDown(A.next, "next");
-  await waitTitle("next", "Colour");
+  await waitTitle("next", "Beam\nColour"); // v0.10.1: the wash has no Shutters group, so Beam comes first
   // back to the spot: Main again (a different type than the wash)
   citp.select([ID.spot]);
   await waitTitle("next", "Main");

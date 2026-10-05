@@ -318,7 +318,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.10.0.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.10.1.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }

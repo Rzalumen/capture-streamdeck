@@ -272,6 +272,9 @@ export interface HeaderInput {
 export const clipText = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** Header text for dial slot 0–3 (left to right): together the four make one status line across the LCD. */
+/** The " k/m" a repeated page title carries ("Shutters 1/3"); group labels never end in digits otherwise. */
+const PAGE_PART = / \d+\/\d+$/;
+
 export function headerText(slot: number, h: HeaderInput): string {
   if (h.state === "off") return slot === 0 ? "DECK OFF" : "";
   if (h.state === "click") return ["CLICK A LIGHT", "Click a light", "in Capture", ""][slot] ?? "";
@@ -283,7 +286,8 @@ export function headerText(slot: number, h: HeaderInput): string {
     case 2:
       return clipText(h.line1, 18);
     case 3:
-      return h.page ? `${h.page} ${h.pageIndex + 1}/${h.pageCount}` : "";
+      // v0.10.1 (Handoff 29): the page title WITHOUT its own "k/m" (the page keys keep it), then the overall n/N: "Shutters 2/8"
+      return h.page ? `${h.page.replace(PAGE_PART, "")} ${h.pageIndex + 1}/${h.pageCount}` : "";
     default:
       return "";
   }

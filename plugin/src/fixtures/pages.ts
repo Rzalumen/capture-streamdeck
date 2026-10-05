@@ -22,7 +22,8 @@ import { isAdditiveColourName, type Slot } from "./attrs.js";
 import { NOT_THE_VALUE, tokens, type Channel } from "./modes.js";
 
 export type GroupId = "main" | "colour" | "beam" | "shutters" | "gobo" | "other";
-export const GROUP_ORDER: readonly GroupId[] = ["main", "colour", "beam", "shutters", "gobo", "other"];
+/** v0.10.1 (Handoff 29): after Main, Shutters · Beam · Colour · Gobo/FX · Other (was Colour · Beam · Shutters · …). */
+export const GROUP_ORDER: readonly GroupId[] = ["main", "shutters", "beam", "colour", "gobo", "other"];
 export const GROUP_LABEL: Record<GroupId, string> = { main: "Main", colour: "Colour", beam: "Beam", shutters: "Shutters", gobo: "Gobo/FX", other: "Other" };
 /** What a channel name is (before the Main page takes the first pan, tilt, dimmer and zoom). */
 export type Kind = "pan" | "tilt" | "dimmer" | "zoom" | "strobe" | "colour" | "beam" | "shutters" | "gobo" | "other";
@@ -255,7 +256,7 @@ export function buildModel(channels: Channel[], excludedOffsets: readonly number
 
   const pages: Page[] = [];
   if (main.some(Boolean)) pages.push({ group: "main", label: GROUP_LABEL.main, part: "", params: main, placeholders: [...MAIN_LABELS] });
-  // v0.7.1 (Handoff 22, "at most 8 pages"): after Main, the channels run in group order (Colour · Beam · Shutters · Gobo/FX · Other) and
+  // v0.7.1 (Handoff 22, "at most 8 pages"): after Main, the channels run in group order (v0.10.1: Shutters · Beam · Colour · Gobo/FX · Other) and
   // fill every page with 4, so a small remainder of one group shares a page with the start of the next. A page is titled by the groups
   // on it ("Colour · Beam"); a title that repeats is numbered ("Shutters 1/2").
   const rest = GROUP_ORDER.filter((g) => g !== "main").flatMap((g) => params.filter((p) => p.group === g));
