@@ -211,6 +211,8 @@ export interface FixtureStatusView {
   fixtures: number;
   active: boolean;
   universes: number[];
+  /** v0.10.0: the session is not connected (it keeps retrying): the head reads "Waiting". */
+  waiting?: boolean;
 }
 
 /** The Fixtures: Status key (144×144): show name, controllable count, output state (with the blackout reminder while output is on). */
@@ -224,7 +226,7 @@ export function fixtureStatusSvg(v: FixtureStatusView): string {
   if (v.sync === "syncing") head = "Reading…";
   else if (v.sync === "ok") head = clip(v.showName ?? "(unnamed show)", 13);
   else {
-    head = v.sync === "error" ? "No show" : "Not read";
+    head = v.waiting ? "Waiting" : v.sync === "error" ? "No show" : "Not read";
     headColor = COLORS.red;
   }
   const count = v.sync === "ok" || v.fixtures ? `${v.controllable} of ${v.fixtures} ready` : "press to read";

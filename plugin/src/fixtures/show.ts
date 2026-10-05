@@ -10,6 +10,9 @@ import { loadChannels, type Channel } from "./modes.js";
 import { drivenSignature, mapChannels, type ChannelMap } from "./attrs.js";
 import { buildModel, type FixtureModel } from "./pages.js";
 
+/** v0.10.0: what Setup / Status / the Setup panel show while the session is not connected (it keeps retrying). */
+export const WAITING = "Waiting for Capture";
+
 /** The parser's warning when it could not prove the parse is the only one (Handoff 20: shown on the Setup panel). */
 export const UNPROVEN_MARK = "uniqueness is not proven";
 
@@ -119,7 +122,7 @@ export class ShowModel {
 
   /** The session connected, lost the connection or failed to connect (`reason` says why). */
   setConnected(connected: boolean, reason?: string): void {
-    const err = connected ? null : (reason ?? "not connected to Capture (retrying)");
+    const err = connected ? null : `${WAITING}: ${reason ?? "not connected (retrying)"}`;
     if (this.connected === connected && (connected || this.error === err) && this.status !== "idle") return;
     this.connected = connected;
     this.status = connected ? "syncing" : "error";
@@ -127,7 +130,7 @@ export class ShowModel {
     this.emit();
   }
 
-  /** We closed the connection ourselves (Deck Control OFF, end of a brief connection): the list stays; this is not an error. */
+  /** We closed the connection ourselves (plugin exit): the list stays; this is not an error. */
   setOffline(): void {
     this.connected = false;
     if (this.status === "syncing") {
@@ -154,12 +157,15 @@ export class ShowModel {
     this.fixtures = [];
     this.lastSig = "";
     this.status = this.connected ? "syncing" : "error";
-    if (!this.connected) this.error = "not connected to Capture (retrying)";
+    if (!this.connected) this.error = `${WAITING}: not connected (retrying)`;
     this.emit();
   }
 
-  /** A FixtureList message. Type 0 (or unknown) replaces everything; Type 1 and 2 add or replace the fixtures they carry. */
-  applyList(type: number | null, list: CaexFixture[]): void {
+  /**
+   * A FixtureList message. Type 0 (or unknown) replaces everything; Type 1 and 2 add or replace the fixtures they carry. Returns the
+   * message's fixtures by the keys the model uses (v0.10.0: the service reads Capture's patch from them).
+   */
+  applyList(type: number | null, list: CaexFixture[]): Map<string, CaexFixture> {
     const keyed = this.keyed(list);
     if (type === 1 || type === 2) for (const [k, f] of keyed) this.raw.set(k, f);
     else this.raw = new Map(keyed);
@@ -177,6 +183,7 @@ export class ShowModel {
     this.listWaiters = [];
     for (const w of waiters) w();
     this.emit();
+    return keyed;
   }
 
   /** FixtureRemove: drop fixtures by identifier. */
@@ -267,7 +274,7 @@ export class ShowModel {
     });
     if (this.status === "syncing") {
       this.status = this.fixtures.length ? "ok" : "error";
-      if (!this.fixtures.length) this.error = this.connected ? "Capture sent no FixtureList (is a show open?)" : "not connected to Capture (retrying)";
+      if (!this.fixtures.length) this.error = this.connected ? "Capture sent no FixtureList (is a show open?)" : `${WAITING}: not connected (retrying)`;
       this.emit();
     }
   }

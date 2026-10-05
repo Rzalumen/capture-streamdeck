@@ -178,10 +178,15 @@ export interface SynthFixture {
   position?: [number, number, number];
   /** FixtureIdentifier as Capture reports it (default 100 + list index; 0xffffffff = not identified). */
   identifier?: number;
+  /** v0.10.0: the fixture's patch in "Capture" (1-based). Reported as Patched=1 only after the plugin declared its universes. */
+  patch?: { universe: number; address: number };
 }
 
-/** A CAEX FixtureList (`type`: 0 existing, 1 new, 2 exchanged). Patched is always 0, like Capture 2026 sends it. */
-export function buildPatchMessage(fixtures: SynthFixture[], type = 0): Buffer {
+/**
+ * A CAEX FixtureList (`type`: 0 existing, 1 new, 2 exchanged). Patched is 0, like Capture 2026 sends it to an undeclared console;
+ * with `withPatch` (v0.10.0: the console declared its universes) a fixture with a `patch` is sent as Patched=1 with its address.
+ */
+export function buildPatchMessage(fixtures: SynthFixture[], type = 0, withPatch = false): Buffer {
   const body: Buffer[] = [Buffer.from([type]), u16(fixtures.length)];
   fixtures.forEach((f, i) => {
     const ids: [number, Buffer][] = [];
@@ -198,8 +203,7 @@ export function buildPatchMessage(fixtures: SynthFixture[], type = 0): Buffer {
       Buffer.from([0]),
       Buffer.from([ids.length]),
       ...ids.flatMap(([t, d]) => [Buffer.from([t]), u16(d.length), d]),
-      Buffer.from([0, 0]),
-      u16(0),
+      ...(withPatch && f.patch ? [Buffer.from([1, f.patch.universe - 1]), u16(f.patch.address - 1)] : [Buffer.from([0, 0]), u16(0)]),
       ucs2(""),
       u16(f.channel),
       ucs2(""),
@@ -277,6 +281,8 @@ export class CitpStub {
   muteList = false;
   /** v0.8.0: after PNam, send the SDMX Capa the real Capture sent on 2026-10-05 (before EnterShow), like Capture does. */
   sendCapa = false;
+  /** v0.10.0: connections that sent the SDMX declaration (their lists carry the patch, as on the real Capture). */
+  readonly declaredConns = new Set<net.Socket>();
   server!: net.Server;
   port = 0;
   constructor(
@@ -284,7 +290,7 @@ export class CitpStub {
     public showName = "STUB SHOW",
   ) {}
 
-  async listen(): Promise<this> {
+  async listen(port = 0): Promise<this> {
     this.server = net.createServer((c) => {
       this.clients.add(c);
       const framer = new CitpFramer();
@@ -297,8 +303,9 @@ export class CitpStub {
             if (this.sendCapa) c.write(REAL_CAPA);
             c.write(buildEnterShowMessage(this.showName));
           }
+          else if (m.toString("latin1", 16, 24) === "SDMXSXSr") this.declaredConns.add(c);
           else if (code === CAEX.FixtureListRequest) {
-            if (!this.muteList) c.write(buildPatchMessage(this.fixtures));
+            if (!this.muteList) c.write(buildPatchMessage(this.fixtures, 0, this.declaredConns.has(c)));
           } else if (code === CAEX.FixtureIdentify) {
             const n = m.readUInt16LE(24);
             const got: [string, number][] = [];
@@ -315,9 +322,12 @@ export class CitpStub {
         }
       });
       c.on("error", () => undefined);
-      c.on("close", () => this.clients.delete(c));
+      c.on("close", () => {
+        this.clients.delete(c);
+        this.declaredConns.delete(c);
+      });
     });
-    await new Promise<void>((res) => this.server.listen(0, "127.0.0.1", () => res()));
+    await new Promise<void>((res) => this.server.listen(port, "127.0.0.1", () => res()));
     this.port = (this.server.address() as net.AddressInfo).port;
     return this;
   }
@@ -331,7 +341,7 @@ export class CitpStub {
     this.push(buildModifyMessage(items));
   }
   list(type = 0, fixtures = this.fixtures): void {
-    this.push(buildPatchMessage(fixtures, type));
+    for (const c of this.clients) c.write(buildPatchMessage(fixtures, type, this.declaredConns.has(c)));
   }
   enterShow(name = this.showName): void {
     this.showName = name;
@@ -357,6 +367,6 @@ export class CitpStub {
   }
 }
 
-export async function startPatchStub(fixtures: SynthFixture[], { showName = "STUB SHOW" } = {}): Promise<CitpStub> {
-  return new CitpStub(fixtures, showName).listen();
+export async function startPatchStub(fixtures: SynthFixture[], { showName = "STUB SHOW", port = 0 } = {}): Promise<CitpStub> {
+  return new CitpStub(fixtures, showName).listen(port);
 }

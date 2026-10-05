@@ -9,12 +9,28 @@
  * deck did not set this ON period (so resume and the strips follow Capture).
  */
 import { dialAttr, stepFraction, homeValue, type AttrId, type DialId } from "./attrs.js";
-import type { ChBk, ModifyItem } from "./citp.js";
+import type { CaexFixture, ChBk, ModifyItem } from "./citp.js";
 import type { DmxEngine, ParamTarget, Target } from "./engine.js";
 import { GROUP_LABEL, pageTitle, sameParam, type Page, type Param } from "./pages.js";
 import { Selection, toTarget, type Controllable } from "./selection.js";
-import { autoFill, checkSetup, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
+import { MAX_UNIVERSE, autoFill, checkSetup, sharedNotes, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
+
+/** v0.10.0: what the Setup commands answer while the addresses come from Capture's patch. */
+export const PATCH_READ_ONLY = "Addresses come from Capture's patch: re-patch the fixture in Capture to change it.";
+
+/** v0.10.0: Capture's patch for the current show (FixtureLists received after our SDMX declaration). */
+interface PatchState {
+  /** A declared FixtureList with at least one Patched=1 fixture came for this show: Capture's patch is the source of the addresses. */
+  active: boolean;
+  patched: number;
+  total: number;
+  /** "Capture's patch was not available" is logged once per show. */
+  unavailableLogged: boolean;
+  /** Shared-slot pairs already logged ("keyA|keyB"). */
+  sharedLogged: Set<string>;
+}
+const newPatchState = (): PatchState => ({ active: false, patched: 0, total: 0, unavailableLogged: false, sharedLogged: new Set() });
 
 /** v0.9.0: at most one "Capture took" line per parameter in this time. */
 export const TOOK_LOG_MS = 1000;
@@ -41,6 +57,10 @@ export interface SetupFixtureView {
   addr: Address | null;
   issues: string[];
   controllable: boolean;
+  /** v0.10.0: the address was taken from Capture's patch. */
+  fromCapture: boolean;
+  /** v0.10.0: "shares 1/285 with Ch 205" (Capture's patch puts this fixture on slots another fixture uses too). */
+  shared: string[];
 }
 /** One row of a type's channel list in the Setup panel (Handoff 20 §5). */
 export interface SetupChannelView {
@@ -73,6 +93,10 @@ export interface SetupView {
   active: boolean;
   universes: number[];
   blackoutWarning: string;
+  /** v0.10.0: Capture's patch is the source of the addresses (read-only in the panel); null = typed addresses (fallback). */
+  patch: { patched: number; total: number } | null;
+  /** v0.10.0: the persistent session is connected to Capture. */
+  connected: boolean;
 }
 
 /** What one generic Attribute dial shows. */
@@ -145,6 +169,10 @@ export class FixtureService {
   deck: DeckHooks | undefined;
   private listeners: (() => void)[] = [];
   private lastRefresh = 0;
+  /** v0.10.0: Capture's patch for the current show. */
+  private patchState: PatchState = newPatchState();
+  /** v0.10.0: fixtures Capture patched where the deck cannot drive them (universe not declared, past 512): key -> reason (Setup). */
+  private patchIssues = new Map<string, string>();
   /** The attribute page shown on the generic dials: its index within the pages of `typeKey` (the first selected fixture's type). */
   private pageState = { typeKey: "", index: 0 };
 
@@ -180,14 +208,18 @@ export class FixtureService {
 
   // ------------------------------------------------------------------ model
 
-  private issues(): Map<string, string[]> {
+  private entries(): SetupEntry[] {
     const saved = this.setup.forShow(this.show.showName);
     const entries: SetupEntry[] = [];
     for (const f of this.show.fixtures) {
       const a = saved[f.key];
-      if (a) entries.push({ key: f.key, label: `${f.name} Ch ${f.channel}`, channelCount: f.channelCount, addr: a });
+      if (a) entries.push({ key: f.key, label: `${f.name} Ch ${f.channel}`, short: f.channel ? `Ch ${f.channel}` : f.name, channelCount: f.channelCount, addr: a });
     }
-    return checkSetup(entries);
+    return entries;
+  }
+
+  private issues(): Map<string, string[]> {
+    return checkSetup(this.entries());
   }
 
   /** Controllable fixtures in Capture-channel order. */
@@ -208,6 +240,7 @@ export class FixtureService {
     const saved = this.setup.forShow(this.show.showName);
     const issues = this.issues();
     const ctl = new Set(this.controllable().map((c) => c.fixture.key));
+    const shared = sharedNotes(this.entries());
     const fixtures = this.show.fixtures
       .map<SetupFixtureView>((f) => {
         const t = this.show.types.get(f.typeKey);
@@ -226,8 +259,10 @@ export class FixtureService {
           notes: t?.notes ?? [],
           unproven: !!t?.unproven,
           addr: saved[f.key] ?? null,
-          issues: issues.get(f.key) ?? [],
+          issues: [...(issues.get(f.key) ?? []), ...(this.patchIssues.has(f.key) ? [this.patchIssues.get(f.key) as string] : [])],
           controllable: ctl.has(f.key),
+          fromCapture: saved[f.key]?.src === "capture",
+          shared: shared.get(f.key) ?? [],
         };
       })
       .sort((a, b) => a.channel - b.channel);
@@ -238,7 +273,8 @@ export class FixtureService {
       types[f.typeKey] = { channels: channelList(t.channels, t.model), unproven: !!t.unproven };
     }
     const deck = this.deck ? { on: this.deck.on, idleSeconds: this.deck.idleSeconds } : null;
-    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, deck, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING };
+    const patch = this.patchActive() ? { patched: this.patchState.patched, total: this.patchState.total } : null;
+    return { status: this.show.status, error: this.show.error, showName: this.show.showName, fixtures, types, deck, controllable: ctl.size, active: this.engine.active, universes: this.engine.universes, blackoutWarning: BLACKOUT_WARNING, patch, connected: this.show.connected };
   }
 
   private controllable(): Controllable[] {
@@ -253,6 +289,7 @@ export class FixtureService {
 
   /** Set or clear one fixture's address. Returns an error text, or null when saved. */
   async setAddress(key: string, addr: Address | null): Promise<string | null> {
+    if (this.patchActive()) return PATCH_READ_ONLY;
     const f = this.show.fixtures.find((x) => x.key === key);
     if (!f) return "unknown fixture (read the show again)";
     const what = `Ch ${f.channel} ${f.name}`;
@@ -271,6 +308,7 @@ export class FixtureService {
 
   /** Auto-fill sequential from a start address over `keys` (in Capture channel order). Returns an error text, or null when saved. */
   async autoFill(keys: string[], start: Address): Promise<string | null> {
+    if (this.patchActive()) return PATCH_READ_ONLY;
     const items = keys
       .map((k) => this.show.fixtures.find((f) => f.key === k))
       .filter((f): f is NonNullable<typeof f> => !!f)
@@ -292,6 +330,8 @@ export class FixtureService {
   /** A different show was entered, or Capture left the show: nothing is selected any more and output stops. */
   onShowGone(why: string): void {
     this.selection.clear();
+    this.patchState = newPatchState(); // Capture's patch belongs to the show (the stored addresses stay)
+    this.patchIssues.clear();
     this.engine.clearCapture();
     if (this.engine.active) {
       this.log(`${why}: releasing output`);
@@ -439,11 +479,136 @@ export class FixtureService {
     this.emit();
   }
 
+  // ------------------------------------------------------------------ v0.10.0: addresses from Capture's patch (Handoff 28)
+
+  /** True while Capture's patch is the source of the addresses for the current show (Setup is read-only then). */
+  patchActive(): boolean {
+    return this.patchState.active;
+  }
+
+  /**
+   * A FixtureList (already applied to the show model; `keyed` = its fixtures by model key). Only a list received after our SDMX
+   * declaration on this connection can carry the patch. A Type 0 list with at least one Patched=1 fixture makes Capture's patch the
+   * source: every fixture of the show gets Capture's address (Patched=1: universe+1 / UniverseChannel+1) or none (Patched=0), replacing
+   * typed entries. A declared Type 0 list with no Patched=1 at all changes nothing (typed entries stay; logged once per show). Type 1/2
+   * lists update the fixtures they carry while Capture's patch is the source.
+   */
+  async onPatchList(type: number | null, keyed: ReadonlyMap<string, CaexFixture>, declared: boolean): Promise<void> {
+    if (!declared) return;
+    const partial = type === 1 || type === 2;
+    const list = [...keyed.values()];
+    const patched = list.filter((f) => f.patched === 1).length;
+    if (!partial) {
+      if (!patched) {
+        if (!this.patchState.active && !this.patchState.unavailableLogged) {
+          this.patchState.unavailableLogged = true;
+          this.log(`Capture's patch was not available (no fixture with Patched=1 in the list after the declaration): the typed addresses are used`);
+        }
+        return;
+      }
+      const was = this.patchState.active ? `${this.patchState.patched}/${this.patchState.total}` : "";
+      this.patchState.active = true;
+      this.patchState.patched = patched;
+      this.patchState.total = this.show.fixtures.length;
+      if (was !== `${patched}/${this.show.fixtures.length}`) this.log(`Capture's patch: ${patched} of ${this.show.fixtures.length} fixture(s) patched`);
+      const want = new Map<string, CaexFixture | undefined>(this.show.fixtures.map((f) => [f.key, keyed.get(f.key)]));
+      await this.applyPatch(want);
+      return;
+    }
+    if (!this.patchState.active) return;
+    await this.applyPatch(new Map(keyed));
+    this.patchState.patched = this.show.fixtures.filter((f) => this.setup.get(this.show.showName, f.key)?.src === "capture").length + this.patchIssues.size;
+    this.patchState.total = this.show.fixtures.length;
+  }
+
+  /**
+   * Capture's patch for these fixtures (undefined / Patched=0 = no address). Writes the changes into the setup store in one save
+   * (marked as Capture's), logs each change once, and logs fixtures that share slots once. The engine is released by reconcile() when
+   * a driven fixture's address changes (as for any setup change).
+   */
+  private async applyPatch(want: ReadonlyMap<string, { patched: number; universe: number; universeChannel: number } | undefined>): Promise<void> {
+    const changes: Record<string, Address | null> = {};
+    const lines: string[] = [];
+    for (const [key, raw] of want) {
+      const f = this.show.fixtures.find((x) => x.key === key);
+      if (!f) continue;
+      const what = `${f.channel ? `Ch ${f.channel}` : "Ch 0"} ${f.name}`;
+      const saved = this.setup.get(this.show.showName, key);
+      const was = saved ? `${saved.universe}/${saved.address}, ${saved.src === "capture" ? "from Capture" : "typed"}` : "none";
+      let target: Address | null = null;
+      if (raw && raw.patched === 1) {
+        const u = raw.universe + 1;
+        const a = raw.universeChannel + 1;
+        const problem = u > MAX_UNIVERSE ? `universe not declared (1-${MAX_UNIVERSE})` : validateAddress(u, a, f.channelCount);
+        if (problem) {
+          const text = `Capture's patch: ${u}/${a}: ${problem}`;
+          if (this.patchIssues.get(key) !== text) lines.push(`address from Capture's patch ${what} ${u}/${a}: ${problem} — not controllable`);
+          this.patchIssues.set(key, text);
+        } else {
+          this.patchIssues.delete(key);
+          target = { universe: u, address: a, src: "capture" };
+        }
+      } else this.patchIssues.delete(key);
+      if (target) {
+        if (saved && saved.src === "capture" && saved.universe === target.universe && saved.address === target.address) continue;
+        changes[key] = target;
+        lines.push(`address from Capture's patch ${what} -> ${target.universe}/${target.address} (was ${was})`);
+      } else if (saved) {
+        changes[key] = null;
+        if (!this.patchIssues.has(key)) lines.push(`address from Capture's patch ${what} -> none (not patched in Capture; was ${was})`);
+      }
+    }
+    if (Object.keys(changes).length) {
+      const err = await this.setup.setMany(this.show.showName, changes);
+      if (err) {
+        this.log(`Capture's patch not saved: ${err}`);
+        return;
+      }
+    }
+    for (const l of lines) this.log(l);
+    this.logShared();
+    this.emit();
+  }
+
+  /** Fixtures that share slots in Capture's patch: one log line per pair, once per show. */
+  private logShared(): void {
+    const entries = this.entries().filter((e) => e.addr.src === "capture");
+    for (let i = 0; i < entries.length; i++)
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i];
+        const b = entries[j];
+        if (a.addr.universe !== b.addr.universe) continue;
+        if (!(a.addr.address <= b.addr.address + b.channelCount - 1 && b.addr.address <= a.addr.address + a.channelCount - 1)) continue;
+        const pair = [a.key, b.key].sort().join("|");
+        if (this.patchState.sharedLogged.has(pair)) continue;
+        this.patchState.sharedLogged.add(pair);
+        this.log(`Capture's patch: ${a.short} and ${b.short} share ${a.addr.universe}/${Math.max(a.addr.address, b.addr.address)} (both stay controllable; a knob on either drives the shared slots)`);
+      }
+  }
+
   /**
    * FixtureModify. Only the patch bit (0x01) is used: the fixture's universe and address (converted to 1-based) go into the setup when
    * they fit and do not overlap another fixture; Patched=0 clears the entry. Nothing is ever sent back to Capture.
    */
   async onModify(items: ModifyItem[]): Promise<void> {
+    // v0.10.0: while Capture's patch is the source, a re-patch / unpatch goes through the same path as the lists (overlaps accepted)
+    if (this.patchActive()) {
+      const want = new Map<string, { patched: number; universe: number; universeChannel: number }>();
+      for (const it of items) {
+        if (!(it.changed & 0x01)) continue;
+        const f = this.show.resolve(it.identifier);
+        if (f) want.set(f.key, it);
+        else {
+          this.log(`patch change for fixture identifier ${it.identifier >>> 0 === 0xffffffff ? "0xffffffff (unidentified)" : it.identifier} which is not in the list: asking for a fresh list`);
+          if (Date.now() - this.lastRefresh > 2000) {
+            this.lastRefresh = Date.now();
+            this.show.requestRefresh();
+          }
+        }
+      }
+      if (want.size) await this.applyPatch(want);
+      return;
+    }
     for (const it of items) {
       if (!(it.changed & 0x01)) continue;
       const f = this.show.resolve(it.identifier);

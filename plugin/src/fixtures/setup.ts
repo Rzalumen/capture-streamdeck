@@ -1,13 +1,20 @@
 /**
- * The per-show address setup. Capture never sends the patch over CITP (Patched=0 for every fixture), so the universe and DMX address
- * of each fixture the plugin may drive are entered by the user and stored here: per show name, keyed by the fixture's
- * CaptureInstanceId (stable per fixture), in the plugin's Stream Deck global settings.
+ * The per-show address setup: per show name, keyed by the fixture's CaptureInstanceId (stable per fixture), in the plugin's Stream
+ * Deck global settings.
+ *
+ * v0.10.0 (Handoff 28): once the plugin has declared its universes, Capture's FixtureList carries the real patch (Patched=1 with
+ * universe/address; proven on Reza's Mac). Then the addresses come from Capture's patch (FixtureService.onPatchList) and are stored
+ * here marked `src: "capture"`, replacing typed entries. Without Capture's patch (fallback) the user types them, as before.
+ * Overlaps: two entries that BOTH come from Capture's patch may share slots (a real patch can do that: both stay controllable);
+ * an overlap involving a typed entry is refused as before.
  */
 import type { GlobalSettings } from "../lib/globals.js";
 
 export interface Address {
   universe: number;
   address: number;
+  /** v0.10.0: "capture" = taken from Capture's patch (absent = typed in the Setup panel / auto-fill / old FixtureModify path). */
+  src?: "capture";
 }
 export type SetupData = Record<string, Record<string, Address>>;
 
@@ -28,9 +35,16 @@ export interface SetupEntry {
   label: string;
   channelCount: number;
   addr: Address;
+  /** v0.10.0: the short name used in "shares 1/285 with Ch 205" (default: label). */
+  short?: string;
 }
 
-/** Problems per fixture key: out of range, past 512, or overlapping another fixture's channels in the same universe. Empty map = clean. */
+const fromCapture = (e: SetupEntry): boolean => e.addr.src === "capture";
+
+/**
+ * Problems per fixture key: out of range, past 512, or overlapping another fixture's channels in the same universe. Empty map = clean.
+ * v0.10.0: two entries that both come from Capture's patch may overlap (see sharedNotes); any other overlap is a problem.
+ */
 export function checkSetup(entries: SetupEntry[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   const add = (k: string, m: string): void => void out.set(k, [...(out.get(k) ?? []), m]);
@@ -48,8 +62,31 @@ export function checkSetup(entries: SetupEntry[]): Map<string, string[]> {
       const aEnd = a.addr.address + a.channelCount - 1;
       const bEnd = b.addr.address + b.channelCount - 1;
       if (a.addr.address <= bEnd && b.addr.address <= aEnd) {
+        if (fromCapture(a) && fromCapture(b)) continue; // a real patch: accepted (sharedNotes)
         add(a.key, `overlaps ${b.label} (${b.addr.universe}/${b.addr.address}–${bEnd})`);
         add(b.key, `overlaps ${a.label} (${a.addr.universe}/${a.addr.address}–${aEnd})`);
+      }
+    }
+  }
+  return out;
+}
+
+/** v0.10.0: "shares 1/285 with Ch 205" per fixture key, for entries from Capture's patch that overlap each other. */
+export function sharedNotes(entries: SetupEntry[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const add = (k: string, m: string): void => void out.set(k, [...(out.get(k) ?? []), m]);
+  const cap = entries.filter((e) => fromCapture(e) && validateAddress(e.addr.universe, e.addr.address, e.channelCount) === null);
+  for (let i = 0; i < cap.length; i++) {
+    for (let j = i + 1; j < cap.length; j++) {
+      const a = cap[i];
+      const b = cap[j];
+      if (a.addr.universe !== b.addr.universe) continue;
+      const aEnd = a.addr.address + a.channelCount - 1;
+      const bEnd = b.addr.address + b.channelCount - 1;
+      if (a.addr.address <= bEnd && b.addr.address <= aEnd) {
+        const at = `${a.addr.universe}/${Math.max(a.addr.address, b.addr.address)}`;
+        add(a.key, `shares ${at} with ${b.short ?? b.label}`);
+        add(b.key, `shares ${at} with ${a.short ?? a.label}`);
       }
     }
   }
@@ -81,8 +118,9 @@ export function autoFill(items: { key: string; channelCount: number }[], start: 
 
 const cleanAddress = (v: unknown): Address | undefined => {
   if (!v || typeof v !== "object") return undefined;
-  const { universe, address } = v as Record<string, unknown>;
-  return validateAddress(universe, address) === null ? { universe: universe as number, address: address as number } : undefined;
+  const { universe, address, src } = v as Record<string, unknown>;
+  if (validateAddress(universe, address) !== null) return undefined;
+  return src === "capture" ? { universe: universe as number, address: address as number, src: "capture" } : { universe: universe as number, address: address as number };
 };
 
 export class SetupStore {
@@ -140,7 +178,7 @@ export class SetupStore {
     const s = showKey(showName);
     const next: SetupData = { ...this.data, [s]: { ...(this.data[s] ?? {}) } };
     for (const [k, a] of Object.entries(changes)) {
-      if (a) next[s][k] = { universe: a.universe, address: a.address };
+      if (a) next[s][k] = a.src === "capture" ? { universe: a.universe, address: a.address, src: "capture" } : { universe: a.universe, address: a.address };
       else delete next[s][k];
     }
     if (!Object.keys(next[s]).length) delete next[s];

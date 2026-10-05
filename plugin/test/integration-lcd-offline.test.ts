@@ -38,7 +38,7 @@ test("Capture unreachable: Deck ON by key turns the header line and the key ambe
   deck.willAppear(`${U}.fixtures.deck`, "deckkey", {});
   deck.willAppear(`${U}.fixture.attr1`, "a1", {}, "Encoder");
   deck.willAppear(`${U}.fixture.attr2`, "a2", {}, "Encoder");
-  await deck.waitFor(() => /brief sync \(start-up\): no fixture list/.test(deck.logText()) || undefined, 12000, "the start-up read failed (nothing listens)");
+  await deck.waitFor(() => /CITP: could not connect to Capture's CITP port/.test(deck.logText()) || undefined, 12000, "v0.10.0: the start-up session could not connect (nothing listens); it keeps retrying");
   await sleep(300);
   assert.equal(header("a1"), "DECK OFF");
   assert.equal(keyBg(), "#2A2E33");

@@ -1,7 +1,7 @@
 /**
  * End-to-end (Handoff 26, v0.8.0) on the REAL built plugin (bin/plugin.js) with a stub Capture that, like the real one, sends SDMX Capa
  * on connect and ChBk level deltas later; a synthetic library; a UDP listener for sACN; the fake Stream Deck application.
- *  - start-up (Deck OFF): the brief connection sends no SDMX;
+ *  - v0.10.0 start-up: the session connects and declares with no Deck press;
  *  - Deck ON: PNam, LaserFeedList, EnterShow, SXSr + SXUS 1-16 (exact bytes), FixtureListRequest; Capa and the declaration logged;
  *  - the deck drives fixture A (Ch 203); Capture reports levels for fixture B (Ch 202): the frames now carry B's levels while A keeps
  *    the knob values (frame diff); a block on A's knob channel does not change the output and is logged as a disagreement; Blind=1
@@ -133,31 +133,10 @@ function citpSocketsOfPlugin(): number | null {
 }
 const lastSetupView = (): any => deck.received.filter((m) => m.event === "sendToPropertyInspector" && m.payload?.event === "setup").at(-1)?.payload;
 
-test("start-up brief connection: no SDMX; addresses set (A 1/285, B 1/444)", async () => {
-  await waitLog(/Fixtures: brief sync \(start-up\): \d+ ms, 2 fixture\(s\), connection closed/, "brief sync", 8000);
-  assert.equal(sdmxSent().length, 0, "the brief connection sent no SDMX");
-  assert.match(deck.logText(), /CITP: SDMX Capa received: 2, 3, 4, 101, 102, 105/, "Capa is logged on the brief connection too (nothing is sent back)");
-  deck.willAppear(A.setup, "setup", {});
-  deck.inspectorAppeared(A.setup, "setup");
-  await waitLog(/brief sync \(Setup panel\)/, "brief sync for the panel", 6000);
-  deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST_A, universe: 1, address: ADDR_A });
-  deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST_B, universe: 1, address: ADDR_B });
-  await deck.waitFor(() => (lastSetupView()?.view?.controllable === 2 ? true : undefined), 3000, "both addresses saved");
-  deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 0 });
-  await deck.waitFor(() => lastSetupView()?.view?.deck?.idleSeconds === 0 || undefined, 3000, "idle off");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "brief connections closed");
-  assert.equal(sdmxSent().length, 0, "still no SDMX after the panel's brief connections");
-});
-
-test("Deck ON: the declaration follows our EnterShow (exact bytes), once; the deck drives A", async () => {
-  deck.willAppear(A.deck, "deckkey", {});
-  deck.willAppear(A.select, "sel", {}, "Encoder");
-  for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
-  const n0 = citp.received.length;
-  deck.keyDown(A.deck, "deckkey");
-  await waitLog(/CITP: declared sACN universes 1-16 \(SXSr \+ 16 SXUS\)/, "declaration logged", 5000);
-  await deck.waitFor(() => citp.of(CAEX.FixtureListRequest).length && citp.received.length >= n0 + 21 ? true : undefined, 3000, "list request after the declaration");
-  const seq = citp.received.slice(n0);
+test("v0.10.0 start-up: the session declares after our EnterShow with no Deck press (exact bytes, once); Capa logged; addresses typed (this stub sends Patched=0)", async () => {
+  await waitLog(/CITP: declared sACN universes 1-16 \(SXSr \+ 16 SXUS\)/, "declaration logged at start-up", 8000);
+  await deck.waitFor(() => (citp.received.length >= 21 ? true : undefined), 3000, "list request after the declaration");
+  const seq = citp.received;
   assert.deepEqual(names(seq).slice(0, 21), ["PINFPNam", "CAEX:0x30101", "CAEX:0x20100", "SDMXSXSr", ...Array(16).fill("SDMXSXUS"), "CAEX:0x20200"]);
   assert.deepEqual(seq[3], buildSxsr(1));
   for (let u = 1; u <= 16; u++) assert.deepEqual(seq[3 + u], buildSxus(u));
@@ -165,11 +144,32 @@ test("Deck ON: the declaration follows our EnterShow (exact bytes), once; the de
   assert.equal(seq[4].toString("hex"), "43495450010000002600000001000000" + "53444d58" + "53585553" + "00" + Buffer.from("BSRE1.31/1/1\0").toString("hex"));
   assert.equal(seq[19].toString("hex"), "43495450010000002700000001000000" + "53444d58" + "53585553" + "0f" + Buffer.from("BSRE1.31/16/1\0").toString("hex"));
   assert.match(deck.logText(), /CITP: SDMX Capa received: 2, 3, 4, 101, 102, 105/);
+  await waitLog(/Capture's patch was not available/, "fallback logged (Patched=0 everywhere)");
+  deck.willAppear(A.setup, "setup", {});
+  deck.inspectorAppeared(A.setup, "setup");
+  deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST_A, universe: 1, address: ADDR_A });
+  deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST_B, universe: 1, address: ADDR_B });
+  await deck.waitFor(() => (lastSetupView()?.view?.controllable === 2 ? true : undefined), 3000, "both addresses saved");
+  deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 0 });
+  await deck.waitFor(() => lastSetupView()?.view?.deck?.idleSeconds === 0 || undefined, 3000, "idle off");
+  assert.equal(sdmxSent().length, 17, "declared once");
+  assert.equal(citp.clients.size, 1, "one connection, held");
+  assert.equal(packets.length, 0, "no sACN before a touch");
+});
+
+test("Deck ON by key: no new connection or declaration; the deck drives A", async () => {
+  deck.willAppear(A.deck, "deckkey", {});
+  deck.willAppear(A.select, "sel", {}, "Encoder");
+  for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
+  const enters = citp.of(CAEX.EnterShow).length;
+  deck.keyDown(A.deck, "deckkey");
+  await waitLog(/deck control ON \(Deck Control key\)/, "ON");
   await select(ID_A, 203);
   await waitStrip("a1", (f) => f.name.value === "Pan", "Main page: Pan");
   deck.dialRotate(A.a1, "a1", 10); // A pan 60 %
   const p = await waitPacket((x) => pan16(x, ADDR_A) === Math.round(0.6 * 65535), "A pan 60 %");
   assert.deepEqual([...p.slots.subarray(ADDR_B - 1, ADDR_B - 1 + 14)], Array(14).fill(0), "B: nothing known yet -> 0");
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "no new EnterShow");
   assert.equal(sdmxSent().length, 17, "declared once on this connection");
   for (const m of sdmxSent()) assert.ok(["SXSr", "SXUS"].includes(m.toString("latin1", 20, 24)), "only SXSr / SXUS were ever sent");
 });

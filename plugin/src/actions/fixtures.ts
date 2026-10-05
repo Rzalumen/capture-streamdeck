@@ -266,20 +266,29 @@ export class FixturesSetup extends FixtureKey {
     const f = c.flasher.flash;
     draw(c.action, { icon: this.def.icon, label: this.def.title, badge: st.controllable ? String(st.controllable) : undefined, big: f?.text, tone: f?.tone });
   }
-  /** Reads the show again: a fresh list request on the persistent connection once it is held (v0.9.0: also while disarmed), else a brief connection (it does not arm). */
+  /**
+   * Reads the show again (v0.10.0): a fresh list request on the held session. While the session is not connected the key shows
+   * "Waiting for Capture" and the session tries to connect at once (no brief connection any more). It does not arm.
+   */
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     const c = this.ctxs.get(ev.action.id);
+    keepAlive("Setup key");
+    if (!svc().show.connected) {
+      logEvent("Key press", this.manifestId, undefined, "read the show again: waiting for Capture (not connected)");
+      c?.flasher.show({ text: "Waiting", tone: "red" }, 1500);
+      rt.link.reconnect("Setup key");
+      return;
+    }
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     c?.flasher.show({ text: "Reading…" }, 1500);
-    keepAlive("Setup key");
-    if (rt.link.mode === "on") await svc().show.sync();
-    else await rt.link.briefSync("Setup key");
+    await svc().show.sync();
   }
 
-  /** The Property Inspector appeared: read the fixture list (brief connection while Deck Control is OFF). */
+  /** The Property Inspector appeared: ask the held session for a fresh list (v0.10.0; nothing to do while it is not connected). */
   override onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): void {
     rt.log.info("Fixtures: setup inspector opened");
-    if (rt.link.mode !== "on" && process.env.CAPTURE_TEST_NO_CITP !== "1") void rt.link.briefSync("Setup panel");
+    if (svc().show.connected) rt.link.requestList("Setup panel");
+    else rt.link.reconnect("Setup panel");
   }
 
   /** The Setup Property Inspector's messages: {cmd: "get" | "resync" | "set" | "clear" | "autofill", ...}. */
@@ -335,13 +344,17 @@ export class FixturesStatus extends FixtureKey {
   }
   protected view(c: KeyCtx): void {
     const st = svc().status();
-    c.action.setImage(svgDataUrl(fixtureStatusSvg({ sync: st.syncStatus as never, showName: st.showName, controllable: st.controllable, fixtures: st.fixtures, active: st.active, universes: st.universes }))).catch(() => undefined);
+    c.action.setImage(svgDataUrl(fixtureStatusSvg({ sync: st.syncStatus as never, showName: st.showName, controllable: st.controllable, fixtures: st.fixtures, active: st.active, universes: st.universes, waiting: !svc().show.connected && st.syncStatus !== "ok" }))).catch(() => undefined);
   }
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     logEvent("Key press", this.manifestId, undefined, "read the show again");
     keepAlive("Status key");
-    if (rt.link.mode === "on") await svc().show.sync();
-    else await rt.link.briefSync("Status key");
+    if (!svc().show.connected) {
+      rt.log.info("Fixtures: Status key: waiting for Capture (not connected)");
+      rt.link.reconnect("Status key");
+      return;
+    }
+    await svc().show.sync();
   }
 }
 

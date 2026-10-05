@@ -1,5 +1,5 @@
 // Handoff 21 unit tests: Deck Control (ON/OFF, idle switch-off, order of the OFF steps), remembered values (resume), the engine's
-// gate, and the CITP link's brief vs persistent connections against a stub Capture over real TCP sockets.
+// gate, and the CITP link's persistent connection (v0.10.0: from start-up; no brief connections) against a stub Capture over real TCP sockets.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { drivenSignature, mapChannels } from "../src/fixtures/attrs.ts";
@@ -291,7 +291,7 @@ async function makeLink() {
   const show = new ShowModel({ libraryPath: "/x", open: () => ({ libPath: "x", readObjectByGuid: (g: string) => objects[g], close: () => undefined }) as never, request: () => link.requestList("t"), reconnect: () => link.reconnect("t"), log: (l) => logs.push(l) });
   const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined });
   const svc = new FixtureService(show, new SetupStore(memGlobals().g), engine, (l) => logs.push(l));
-  link = new CitpLink(session, show, svc, (l) => logs.push(l), undefined, 100, 2000);
+  link = new CitpLink(session, show, svc, (l) => logs.push(l), undefined, 100);
   link.attach();
   const codes = () => stub.received.map((m) => {
     const d = decodeMessage(m);
@@ -310,89 +310,48 @@ const waitFor = async <T>(f: () => T | undefined | false, ms = 3000, what = "con
   }
 };
 
-test("link: a brief connection = PNam → EnterShow → FixtureListRequest → FixtureIdentify (0xffffffff only) → LeaveShow → close; the list stays, nothing is held, no reconnect", async () => {
+test("link (v0.10.0): startPersistent = PNam → LaserFeedList → EnterShow → SXSr + 16 SXUS → FixtureListRequest → FixtureIdentify (0xffffffff only); held, lists re-requested; a 'read the show' is a list request on it; LeaveShow only on stop()", async () => {
   const L = await makeLink();
   try {
-    await L.link.briefSync("start-up");
-    // (the empty LaserFeedList answers Capture's GetLaserFeedList, as in every session)
-    assert.deepEqual(L.codes(), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify), C(CAEX.LeaveShow)]);
+    await L.link.startPersistent();
+    await waitFor(() => L.stub.identifies.length === 1 || undefined, 2000, "identified");
+    const c = L.codes();
+    assert.deepEqual(c.slice(0, 22), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), "SDMX:SXSr", ...Array(16).fill("SDMX:SXUS"), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify)]);
     assert.deepEqual(L.stub.identifies, [[["00000000-0000-0000-0000-0000000000d1", 100001]]], "only the unidentified fixture; Capture's 4242 kept");
-    await waitFor(() => L.stub.clients.size === 0 || undefined, 1000, "stub sees the connection closed");
-    assert.equal(L.session.active, false, "the session loop has ended");
-    assert.equal(L.link.mode, "off");
-    assert.equal(L.show.fixtures.length, 2);
-    assert.equal(L.show.status, "ok", "our own close is not an error");
-    assert.equal(L.show.connected, false);
-    assert.match(L.logs.join("\n"), /brief sync \(start-up\): \d+ ms, 2 fixture\(s\), connection closed/);
-    const n = L.stub.received.length;
-    await sleep(400);
-    assert.equal(L.stub.received.length, n, "no reconnect, no periodic list request");
-    assert.equal(L.stub.clients.size, 0);
-    // a second brief connection sees the identifier now stored in "Capture": nothing to identify
-    await L.link.briefSync("Setup panel");
-    assert.equal(L.stub.identifies.length, 1, "no FixtureIdentify the second time");
-    assert.equal(L.link.briefs.length, 2);
-    // two requests at once share one brief connection
-    await Promise.all([L.link.briefSync("a"), L.link.briefSync("b")]);
-    assert.equal(L.stub.of(CAEX.EnterShow).length, 3);
-  } finally {
-    await L.link.stop();
-    await L.stub.close();
-  }
-});
-
-test("link: ON holds the persistent session (selection arrives, list re-requested); OFF sends LeaveShow and closes, no reconnect; while ON a 'read the show' is only a list request", async () => {
-  const L = await makeLink();
-  try {
-    await L.link.briefSync("start-up");
-    await L.link.startPersistent();
-    await waitFor(() => L.stub.clients.size === 1 || undefined, 2000, "persistent connection");
-    await waitFor(() => L.show.connected || undefined, 2000, "connected");
-    await waitFor(() => L.stub.of(CAEX.FixtureListRequest).length >= 2 || undefined, 2000, "list on the persistent session");
+    assert.equal(L.link.mode, "on");
+    assert.equal(L.show.connected, true);
+    await waitFor(() => L.stub.of(CAEX.FixtureListRequest).length >= 3 || undefined, 2000, "periodic list requests on the held session");
     const enters = L.stub.of(CAEX.EnterShow).length;
-    L.link.requestList("Setup key");
+    const lists = L.stub.of(CAEX.FixtureListRequest).length;
+    assert.equal(L.link.requestList("Setup key"), true);
+    await sleep(50);
+    assert.equal(L.stub.of(CAEX.FixtureListRequest).length, lists + 1, "the read is a list request");
+    assert.equal(L.stub.of(CAEX.EnterShow).length, enters, "no new connection");
+    assert.equal(L.stub.of(CAEX.LeaveShow).length, 0, "no LeaveShow while held");
+    await L.link.startPersistent(); // a second start (Deck ON) is a no-op
     await sleep(100);
-    assert.equal(L.stub.of(CAEX.EnterShow).length, enters, "no new connection while ON");
-    L.stub.select([4242]);
-    await waitFor(() => L.logs.some((l) => /Capture selected Ch 204/.test(l)) || undefined, 2000, "selection followed");
-    await L.link.stopPersistent();
-    assert.equal(L.stub.of(CAEX.LeaveShow).length, 2, "LeaveShow from the brief connection and from OFF");
-    await waitFor(() => L.stub.clients.size === 0 || undefined, 1000, "closed");
-    assert.equal(L.show.status, "ok");
-    assert.equal(L.show.fixtures.length, 2, "the list stays while OFF");
-    const n = L.stub.received.length;
-    await sleep(500);
-    assert.equal(L.stub.received.length, n, "OFF: no reconnect");
-    assert.equal(L.session.active, false);
+    assert.equal(L.stub.of(CAEX.EnterShow).length, enters);
+    await L.link.stop();
+    assert.equal(L.stub.of(CAEX.LeaveShow).length, 1, "LeaveShow on stop (plugin exit)");
+    assert.equal(L.show.fixtures.length, 2, "the list stays");
   } finally {
     await L.link.stop();
     await L.stub.close();
   }
 });
 
-test("link (v0.7.2): the persistent connection closing clears the selection (dropped socket, OFF); a brief connection never does", async () => {
+test("link (v0.7.2/v0.10.0): the persistent connection closing clears the selection; it stays cleared after the reconnect", async () => {
   const L = await makeLink();
   try {
-    await L.link.briefSync("start-up");
-    // OFF: a hand-picked fixture survives a brief connection's close
-    await L.svc.setAddress(L.show.fixtures[0].key, { universe: 1, address: 1 });
-    L.svc.selection.step(1);
-    const picked = L.svc.selection.keys;
-    assert.equal(picked.length, 1);
-    await L.link.briefSync("Setup panel");
-    assert.equal(L.link.briefs.length, 2);
-    assert.deepEqual(L.svc.selection.keys, picked, "a brief connection's close leaves the selection alone");
-    assert.ok(!L.logs.some((l) => /selection cleared/.test(l)));
-    // ON: Capture selects; a brief sync while ON (only a list request) leaves it alone
     await L.link.startPersistent();
-    await waitFor(() => L.show.connected || undefined, 2000, "connected");
+    await waitFor(() => (L.show.connected && L.show.fixtures.length === 2) || undefined, 2000, "connected, list read");
     L.stub.select([4242]);
     await waitFor(() => L.logs.some((l) => /Capture selected Ch 204/.test(l)) || undefined, 2000, "selection followed");
     const sel = L.svc.selection.keys;
     assert.equal(sel.length, 1);
-    await L.link.briefSync("Setup key");
+    L.link.requestList("Setup key");
     await sleep(100);
-    assert.deepEqual(L.svc.selection.keys, sel, "a brief sync while ON leaves the selection alone");
+    assert.deepEqual(L.svc.selection.keys, sel, "a read of the show leaves the selection alone");
     // the stub drops the connection: cleared, and it stays cleared after the reconnect (Capture does not resend its selection)
     L.stub.drop();
     await waitFor(() => L.logs.some((l) => /CITP connection closed: selection cleared/.test(l)) || undefined, 2000, "cleared on close");
@@ -400,19 +359,33 @@ test("link (v0.7.2): the persistent connection closing clears the selection (dro
     assert.deepEqual(L.svc.selection.view().targets, []);
     await waitFor(() => L.show.connected || undefined, 3000, "reconnected");
     assert.deepEqual(L.svc.selection.keys, []);
-    // a new selection, then OFF: cleared again
-    L.stub.select([4242]);
-    await waitFor(() => L.svc.selection.keys.length === 1 || undefined, 2000, "selected again");
-    const before = L.logs.filter((l) => /selection cleared/.test(l)).length;
-    await L.link.stopPersistent();
-    assert.deepEqual(L.svc.selection.keys, []);
-    assert.equal(L.logs.filter((l) => /CITP connection closed: selection cleared/.test(l)).length, before + 1);
   } finally {
     await L.link.stop();
     await L.stub.close();
   }
 });
 
+test("link (v0.10.0): no Capture at start: back-off reconnect, 'Waiting for Capture' shown, the reason and 'retrying' logged once (no flood); the connection comes up when Capture appears", async () => {
+  const L = await makeLink();
+  const port = L.stub.port;
+  await L.stub.close();
+  let stub2: Awaited<ReturnType<typeof startPatchStub>> | undefined;
+  try {
+    await L.link.startPersistent();
+    await sleep(900); // 50 ms back-off doubling to 200 ms: several attempts
+    assert.ok(L.session.delays.length >= 4, `several attempts (${L.session.delays.length})`);
+    assert.equal(L.show.status, "error");
+    assert.match(L.show.error ?? "", /^Waiting for Capture: could not connect/);
+    assert.equal(L.logs.filter((l) => /could not connect to Capture's CITP port/.test(l)).length, 1, "the reason once");
+    assert.equal(L.logs.filter((l) => /retrying in/.test(l)).length, 1, "'retrying' once");
+    stub2 = await startPatchStub([{ mfr: "T", name: "Wash", mode: "Std", channels: 14, channel: 203, fixtureGuid: FXG, modeGuid: MD, instanceId: "00000000-0000-0000-0000-0000000000d1", identifier: 7 }], { showName: "LINK SHOW", port });
+    await waitFor(() => (L.show.connected && L.show.fixtures.length === 1) || undefined, 3000, "connected once Capture is there");
+    assert.equal(stub2.received.filter((m) => m.toString("latin1", 16, 24) === "SDMXSXSr").length, 1, "declared");
+  } finally {
+    await L.link.stop();
+    await stub2?.close();
+  }
+});
 test("service (v0.7.2): onLinkClosed clears the selection, logs it and keeps output (v0.9.0: Deck OFF no longer calls it — see integration-selection)", async () => {
   const show = new ShowModel({ libraryPath: "/x", open: () => ({ libPath: "x", readObjectByGuid: () => undefined, close: () => undefined }) as never });
   const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined });
@@ -431,19 +404,4 @@ test("service (v0.7.2): onLinkClosed clears the selection, logs it and keeps out
   assert.equal(engine.active, true, "output is kept");
 });
 
-test("link: a brief connection when Capture is not there fails once (the reason is shown) and does not keep retrying", async () => {
-  const L = await makeLink();
-  await L.stub.close();
-  try {
-    const t0 = Date.now();
-    await L.link.briefSync("start-up");
-    assert.ok(Date.now() - t0 < 1500, "gives up at once instead of waiting out the 2 s brief timeout");
-    assert.equal(L.session.delays.length, 0, "one attempt: no back-off wait, no second attempt");
-    assert.equal(L.show.status, "error");
-    assert.match(L.show.error ?? "", /could not connect/);
-    assert.equal(L.session.active, false, "no retry loop");
-    assert.match(L.logs.join("\n"), /brief sync \(start-up\): no fixture list after \d+ ms/);
-  } finally {
-    await L.link.stop();
-  }
-});
+

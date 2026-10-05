@@ -112,6 +112,41 @@ assert.deepEqual(got.at(-1).payload, { cmd: "autofill", keys: ["a1", "a2"], univ
 await page.click("#resync");
 assert.equal(got.at(-1).payload.cmd, "resync");
 await page.screenshot({ path: path.join(out, "fixtures-setup.png"), fullPage: true });
+// v0.10.0: Capture's patch is the source: read-only cells marked "from Capture", no auto-fill / Clear, one line at the top, shared slots
+assert.equal(await page.isVisible("#patch"), false, "typed mode: no patch line");
+assert.equal(await page.isVisible("#fill-sect"), true);
+const pview = {
+  ...view,
+  patch: { patched: 2, total: 5 },
+  fixtures: view.fixtures.map((f) =>
+    f.key === "a1" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["shares 1/285 with Ch 204"] }
+    : f.key === "a2" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["shares 1/285 with Ch 203"] }
+    : f.key === "s1" ? { ...f, addr: null, issues: ["Capture's patch: 17/1: universe not declared (1-16) — not controllable"] }
+    : f),
+};
+sock.send(JSON.stringify({ event: "sendToPropertyInspector", payload: { event: "setup", view: pview, error: null } }));
+await page.waitForTimeout(150);
+assert.equal(await page.textContent("#patch"), "Addresses come from Capture's patch (2 patched). Re-patch in Capture to change them.");
+assert.equal(await page.isVisible("#fill-sect"), false, "auto-fill hidden");
+assert.equal(await page.isVisible("#typed-hint"), false);
+for (const k of ["a1", "a2"]) {
+  assert.equal(await page.getAttribute(`.fx[data-key=${k}] .u`, "readonly"), "", `${k}: universe read-only`);
+  assert.equal(await page.getAttribute(`.fx[data-key=${k}] .a`, "readonly"), "", `${k}: address read-only`);
+  assert.equal(await page.isVisible(`.fx[data-key=${k}] .clear`), false, `${k}: no Clear`);
+  assert.equal(await page.isVisible(`.fx[data-key=${k}] .src`), true, `${k}: marked from Capture`);
+}
+assert.equal(await page.inputValue(".fx[data-key=a2] .a"), "285");
+assert.match(await page.textContent(".fx[data-key=a1] .st"), /Controllable \(1\/285–298\) · shares 1\/285 with Ch 204/);
+assert.match(await page.textContent(".fx[data-key=a2] .st"), /shares 1\/285 with Ch 203/);
+assert.match(await page.textContent(".fx[data-key=s1] .st"), /universe not declared \(1-16\)/);
+got.length = 0;
+await page.dispatchEvent(".fx[data-key=a2] .a", "change");
+assert.equal(got.filter((m) => m.payload?.cmd === "set" || m.payload?.cmd === "clear").length, 0, "read-only: nothing is sent");
+await page.screenshot({ path: path.join(out, "fixtures-setup-patch.png"), fullPage: true });
+// not connected: "Waiting for Capture"
+sock.send(JSON.stringify({ event: "sendToPropertyInspector", payload: { event: "setup", view: { ...view, status: "error", error: "Waiting for Capture: not connected (retrying)", connected: false }, error: null } }));
+await page.waitForTimeout(150);
+assert.match(await page.textContent("#show"), /^Waiting for Capture/);
 assert.deepEqual(errors, []);
 await browser.close();
 wss.close();

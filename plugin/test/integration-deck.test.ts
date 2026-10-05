@@ -1,10 +1,10 @@
 /**
  * End-to-end (Handoff 21): Deck Control on the REAL built plugin (bin/plugin.js) with a stub CITP server, a synthetic library, a UDP
  * listener for sACN and the fake Stream Deck application.
- *  - OFF at start-up: one brief connection (PNam → EnterShow → list → FixtureIdentify → LeaveShow → close), then NO socket to the stub's
- *    CITP port in the plugin process (read from /proc) and no sACN;
- *  - ON by the Deck Control key, by a knob turn, by a fixture key; Setup / Status / the Setup panel only make brief connections;
- *  - idle auto-OFF: termination frames, LeaveShow, close;
+ *  - v0.10.0 start-up: the persistent session with no Deck press (PNam → EnterShow → declaration → list → FixtureIdentify), held (/proc);
+ *    no sACN and no sACN socket (/proc) until the first fixture touch; Setup / Status / the Setup panel are list requests on it (one
+ *    connection for the whole run);
+ *  - ON by the Deck Control key, by a knob turn, by a fixture key; idle auto-OFF disarms only (v0.9.0);
  *  - resume after OFF → ON and after a plugin restart; push = fine, tap = home.
  */
 import test, { after, before } from "node:test";
@@ -110,6 +110,32 @@ const selectInCapture = async (): Promise<void> => {
 };
 const noSelection = (what: string): Promise<any> => waitStrip("sel", (f) => f.line1.value === "Click a light" && f.line2.value === "in Capture", what);
 
+/** v0.10.0: the plugin process's UDP sockets (/proc/net/udp*), or null where /proc is not available. The OSC client has one from the
+ * start; the sACN transport adds one on the first fixture touch. */
+function udpSocketsOfPlugin(): number | null {
+  const pid = deck.proc?.pid;
+  if (!pid || !fs.existsSync(`/proc/${pid}/fd`) || !fs.existsSync("/proc/net/udp")) return null;
+  const inodes = new Set<string>();
+  for (const fd of fs.readdirSync(`/proc/${pid}/fd`)) {
+    try {
+      const m = /^socket:\[(\d+)\]$/.exec(fs.readlinkSync(`/proc/${pid}/fd/${fd}`));
+      if (m) inodes.add(m[1]);
+    } catch {
+      /* closed meanwhile */
+    }
+  }
+  let n = 0;
+  for (const f of ["/proc/net/udp", "/proc/net/udp6"]) {
+    if (!fs.existsSync(f)) continue;
+    for (const line of fs.readFileSync(f, "utf8").split("\n").slice(1)) {
+      const c = line.trim().split(/\s+/);
+      if (c.length >= 10 && inodes.has(c[9])) n++;
+    }
+  }
+  return n;
+}
+let udpBaseline: number | null = null;
+
 /**
  * The plugin process's TCP connections to the stub's CITP port, read from /proc (null where /proc is not available).
  * Matches the process's socket inodes against /proc/net/tcp entries whose REMOTE port is the stub's port.
@@ -139,39 +165,51 @@ function citpSocketsOfPlugin(): number | null {
   return n;
 }
 
-test("start-up: Deck Control OFF — one brief connection (PNam → EnterShow → list → FixtureIdentify → LeaveShow → close), then no CITP socket in the plugin process and no sACN", async () => {
+test("v0.10.0 start-up: the persistent session opens and declares with no Deck press (PNam → LaserFeedList → EnterShow → SXSr + 16 SXUS → list → FixtureIdentify); held (/proc); no sACN and no sACN socket", async () => {
   deck.willAppear(A.deck, "deckkey", {});
   await waitDeck("deckkey", "off");
-  await deck.waitFor(() => /Fixtures: brief sync \(start-up\): \d+ ms, 1 fixture\(s\), connection closed/.test(deck.logText()) || undefined, 8000, "brief sync logged with its duration");
-  assert.deepEqual(codes(), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify), C(CAEX.LeaveShow)]);
+  await deck.waitFor(() => (citp.identifies.length === 1 && /CITP: declared sACN universes 1-16/.test(deck.logText())) || undefined, 8000, "declared and identified at start-up");
+  assert.deepEqual(codes().slice(0, 22), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), "SDMX:SXSr", ...Array(16).fill("SDMX:SXUS"), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify)]);
   assert.deepEqual(citp.identifies, [[[INST, ID]]]);
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 2000, "stub: connection closed");
+  assert.doesNotMatch(deck.logText(), /brief sync/, "no brief connection any more");
+  assert.doesNotMatch(deck.logText(), /deck control ON/, "Deck Control stays OFF");
+  await sleep(1800); // longer than the session's list period (1.5 s): the session is held, lists keep being asked for
+  assert.equal(citp.clients.size, 1, "held");
+  assert.equal(citp.of(CAEX.LeaveShow).length, 0);
+  assert.ok(citp.of(CAEX.FixtureListRequest).length >= 2, "periodic list requests on the held session");
   const socks = citpSocketsOfPlugin();
   if (process.platform === "linux") assert.notEqual(socks, null, "/proc is readable here");
-  if (socks !== null) assert.equal(socks, 0, "no TCP socket to the CITP port in the plugin process (/proc)");
-  const n = citp.received.length;
-  await sleep(1800); // longer than the session's list period (1.5 s) and back-off: nothing may happen while OFF
-  assert.equal(citp.received.length, n, "no reconnect, no list requests while OFF");
-  assert.equal(packets.length, 0, "no UDP to the sACN port");
+  if (socks !== null) assert.equal(socks, 1, "one TCP socket to the CITP port in the plugin process (/proc)");
+  assert.equal(packets.length, 0, "no sACN");
+  udpBaseline = udpSocketsOfPlugin();
   assert.ok(deck.lastImageRaw("deckkey").length > 0);
 });
 
-test("Setup panel / Setup key / Status key while OFF: a brief connection each (Deck Control stays OFF); the panel shows the Deck Control state and saves the idle time", async () => {
+test("v0.10.0: Setup panel / Setup key / Status key are list requests on the held session (exactly one connection, no Deck ON); the panel shows the Deck Control state and saves the idle time", async () => {
+  const enters = citp.of(CAEX.EnterShow).length;
+  const pnams = citp.received.filter((m) => m.toString("latin1", 16, 24) === "PINFPNam").length;
+  const lists0 = citp.of(CAEX.FixtureListRequest).length;
   deck.willAppear(A.setup, "setup", {});
   deck.inspectorAppeared(A.setup, "setup");
-  await deck.waitFor(() => /brief sync \(Setup panel\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Setup panel");
+  await deck.waitFor(() => /Fixtures: setup inspector opened/.test(deck.logText()) || undefined, 3000, "panel opened");
+  deck.sendToPlugin(A.setup, "setup", { cmd: "get" });
+  await deck.waitFor(() => (lastSetupView()?.view?.fixtures?.length === 1 ? true : undefined), 6000, "the panel lists the show (read at start-up)");
   deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST, universe: 1, address: ADDR });
   const v = (await deck.waitFor(() => (lastSetupView()?.view?.controllable === 1 ? lastSetupView() : undefined), 3000, "address saved")).view;
   assert.deepEqual(v.deck, { on: false, idleSeconds: 120 });
+  assert.equal(v.patch, null, "this stub sends Patched=0: typed addresses (fallback)");
+  assert.equal(v.connected, true);
   deck.keyDown(A.setup, "setup");
-  await deck.waitFor(() => /brief sync \(Setup key\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Setup key");
   deck.willAppear(A.status, "st", {});
   deck.keyDown(A.status, "st");
-  await deck.waitFor(() => /brief sync \(Status key\)/.test(deck.logText()) || undefined, 6000, "brief sync for the Status key");
+  await deck.waitFor(() => (citp.of(CAEX.FixtureListRequest).length >= lists0 + 3 ? true : undefined), 3000, "panel, Setup key and Status key each asked the held session");
   assert.doesNotMatch(deck.logText(), /deck control ON/, "none of these switches Deck Control ON");
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 2000, "closed again");
-  assert.equal(citp.identifies.length, 1, "identified once: later brief connections find the identifier");
+  assert.equal(citp.clients.size, 1);
+  assert.equal(citp.of(CAEX.EnterShow).length, enters, "no new EnterShow");
+  assert.equal(citp.received.filter((m) => m.toString("latin1", 16, 24) === "PINFPNam").length, pnams, "no new connection");
+  assert.equal(citp.identifies.length, 1, "identified once");
   assert.equal(packets.length, 0);
+  if (udpBaseline !== null) assert.equal(udpSocketsOfPlugin(), udpBaseline, "still no sACN socket (/proc)");
   // idle time: validated and saved
   deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 99999 });
   await deck.waitFor(() => /0 to 3600/.test(lastSetupView()?.error ?? "") || undefined, 3000, "range error");
@@ -195,7 +233,7 @@ test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Captur
   deck.dialRotate(A.a1, "a1", 10);
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.6 * 65535), "pan 60 %");
   assert.equal(slot(p, 6), 255, "intensity starts at home (never touched in this show)");
-  if (process.platform === "linux") assert.equal(citpSocketsOfPlugin(), 1, "the /proc check does see the connection while ON (so its 0 while OFF means something)");
+  if (udpBaseline !== null) assert.equal(udpSocketsOfPlugin(), udpBaseline + 1, "the first touch opened the sACN socket (/proc; so the baseline before it means something)");
   // no further activity: after 1 s it disarms by itself, and nothing else happens
   await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): knobs disarmed; output and the CITP connection keep running/.test(deck.logText()) || undefined, 5000, "idle OFF logged");
   await waitDeck("deckkey", "off");
@@ -273,7 +311,7 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   deck.globals = globals;
   packets.length = 0;
   await deck.start({ oscPort: capture.port, pluginDir, fixtures: path.join(here, "fixtures"), env: env() });
-  await deck.waitFor(() => /brief sync \(start-up\)/.test(deck.logText()) || undefined, 8000, "brief sync after restart");
+  await deck.waitFor(() => (/CITP: declared sACN universes 1-16/.test(deck.logText()) && /show "DECK SHOW": 1 fixture/.test(deck.logText())) || undefined, 8000, "session and list after restart");
   deck.willAppear(A.select, "sel", {}, "Encoder");
   deck.willAppear(A.a1, "a1", {}, "Encoder");
   await noSelection("a new process: nothing selected");

@@ -1,6 +1,6 @@
 // Handoff 26 (v0.8.0) unit tests: the SDMX universe declaration (byte vectors from the REAL Capture run of 2026-10-05,
 // reports/citp-sdmx.txt — literal hex, not the builder), the outgoing allowlist with and without `sdmxDeclare`, the ChBk / Capa decoder,
-// the persistent session's declaration order (and none on brief connections), the engine's overlay of Capture's levels, and the
+// the persistent session's declaration order (and the "declared" flag on FixtureLists, v0.10.0), the engine's overlay of Capture's levels, and the
 // service applying ChBk to configured fixtures (store, conflicts, Blind, unconfigured slots).
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -14,23 +14,24 @@ import {
   buildHeader,
   buildSxsr,
   buildSxus,
+  CitpFramer,
   decodeMessage,
   decodeSdmx,
   isAllowedOutgoing,
   isWellFormedDeclaration,
   type ChBk,
 } from "../src/fixtures/citp.ts";
+import net from "node:net";
 import { CitpSession } from "../src/fixtures/citpSession.ts";
 import { ValueMemory } from "../src/fixtures/deck.ts";
 import { DmxEngine, type Target } from "../src/fixtures/engine.ts";
-import { CitpLink } from "../src/fixtures/link.ts";
 import { loadChannels } from "../src/fixtures/modes.ts";
 import { buildModel } from "../src/fixtures/pages.ts";
 import { FixtureService } from "../src/fixtures/service.ts";
 import { SetupStore } from "../src/fixtures/setup.ts";
 import { ShowModel } from "../src/fixtures/show.ts";
 import { GlobalSettings } from "../src/lib/globals.ts";
-import { REAL_CAPA, buildChBk, buildModeBlock, buildObject, movingHead, startPatchStub, type SynthChannel } from "./fixtures/synth.ts";
+import { REAL_CAPA, buildChBk, buildEnterShowMessage, buildModeBlock, buildObject, buildPatchMessage, movingHead, startPatchStub, type SynthChannel } from "./fixtures/synth.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const hex = (h: string): Buffer => Buffer.from(h.replace(/\s+/g, ""), "hex");
@@ -242,34 +243,37 @@ test("persistent session: Capture's Capa is logged; after OUR EnterShow comes SX
   }
 });
 
-test("brief connections send no SDMX at all (session `once` and the link's briefSync); Capa is still only logged", async () => {
-  const stub = await startPatchStub([{ mfr: "M", name: "F", mode: "S", channels: 1, channel: 1, identifier: 5 }], { showName: "BRIEF" });
-  stub.sendCapa = true;
-  const logs: string[] = [];
-  const timing = { backoffMin: 100, backoffMax: 200, rerequestMs: 60_000, firstRetryMs: 60_000, discoverMs: 50 };
-  const s = new CitpSession({ host: "127.0.0.1", port: stub.port, timing, log: (l) => logs.push(l) });
+test("v0.10.0: a FixtureList event says whether it came after our SDMX declaration on this connection (only those can carry Capture's patch); the flag resets on a new connection", async () => {
+  const fixtures = [{ mfr: "M", name: "F", mode: "S", channels: 1, channel: 1, identifier: 5 }];
+  const conns: net.Socket[] = [];
+  const server = net.createServer((c) => {
+    conns.push(c);
+    const framer = new CitpFramer();
+    c.on("data", (d) => {
+      for (const m of framer.push(d).messages) {
+        // EnterShow and a list in ONE write: the list reaches the plugin before its declaration can have left
+        if (m.toString("latin1", 16, 24) === "PINFPNam") c.write(Buffer.concat([buildEnterShowMessage("FLAG"), buildPatchMessage(fixtures)]));
+        if (m.toString("latin1", 16, 24) === "SDMXSXUS" && m[24] === 15) c.write(buildPatchMessage(fixtures)); // right after the last SXUS
+      }
+    });
+    c.on("error", () => undefined);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const s = new CitpSession({ host: "127.0.0.1", port: (server.address() as net.AddressInfo).port, timing: { backoffMin: 50, backoffMax: 100, rerequestMs: 60_000, firstRetryMs: 60_000, discoverMs: 50 } });
+  const flags: boolean[] = [];
+  s.on("list", (e) => flags.push(e.declared));
+  s.start();
   try {
-    s.start({ once: true });
-    for (let i = 0; i < 50 && !stub.of(CAEX.FixtureListRequest).length; i++) await sleep(20);
-    await sleep(150);
-    await s.stop();
-    assert.ok(stub.of(CAEX.EnterShow).length >= 1, "it did enter the show");
-    assert.equal(stub.received.filter((m) => m.toString("latin1", 16, 20) === "SDMX").length, 0, "no SDMX on a brief connection");
-    assert.ok(logs.includes("SDMX Capa received: 2, 3, 4, 101, 102, 105"));
-    assert.ok(!logs.some((l) => /declared/.test(l)));
-    // through the link, as the plugin does it at start-up
-    const show = new ShowModel({ libraryPath: "/x", open: () => ({ libPath: "x", readObjectByGuid: () => undefined, close: () => undefined }) as never });
-    const engine = new DmxEngine({ transport: () => ({ send: () => undefined, close: async () => undefined }), setInterval: () => "H", clearInterval: () => undefined });
-    const svc = new FixtureService(show, new SetupStore(memGlobals().g), engine);
-    const s2 = new CitpSession({ host: "127.0.0.1", port: stub.port, timing });
-    const link = new CitpLink(s2, show, svc, () => undefined, undefined, 50, 2000);
-    const n0 = stub.received.length;
-    await link.briefSync("test");
-    assert.ok(stub.received.length > n0, "the brief connection happened");
-    assert.equal(stub.received.slice(n0).filter((m) => m.toString("latin1", 16, 20) === "SDMX").length, 0, "no SDMX from briefSync");
+    for (let i = 0; i < 100 && flags.length < 2; i++) await sleep(20);
+    assert.deepEqual(flags.slice(0, 2), [false, true], "the list that came with EnterShow: before the declaration; the one after the last SXUS: after");
+    const n = flags.length;
+    conns[0].destroy();
+    for (let i = 0; i < 100 && flags.length < n + 2; i++) await sleep(20);
+    assert.deepEqual(flags.slice(n, n + 2), [false, true], "the flag resets on a new connection and is set again after its declaration");
   } finally {
     await s.stop();
-    await stub.close();
+    for (const c of conns) c.destroy();
+    await new Promise<void>((r) => server.close(() => r()));
   }
 });
 

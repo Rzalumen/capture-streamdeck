@@ -792,7 +792,7 @@ test("showModel: not connected → status error with the reason; sync() asks for
   const m = new ShowModel({ reconnect: () => reconnects++, syncWaitMs: 30 });
   assert.equal(m.status, "idle");
   m.setConnected(false, "Capture not found");
-  assert.deepEqual([m.status, m.error], ["error", "Capture not found"]);
+  assert.deepEqual([m.status, m.error], ["error", "Waiting for Capture: Capture not found"], "v0.10.0: shown as waiting for Capture");
   await m.sync();
   assert.equal(reconnects, 1, "re-reading while not connected skips the back-off");
   assert.equal(m.status, "error");

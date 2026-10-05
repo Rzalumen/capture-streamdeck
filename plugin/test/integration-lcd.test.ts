@@ -69,7 +69,7 @@ test("start OFF: the four headers are the off line (grey on track) and the Deck 
   for (let i = 0; i < 4; i++) deck.willAppear(A.attr[i], ctx(i), {}, "Encoder");
   deck.willAppear(A.setup, "setup", {});
   deck.inspectorAppeared(A.setup, "setup");
-  await deck.waitFor(() => /brief sync \(Setup panel\): \d+ ms, 1 fixture/.test(deck.logText()) || undefined, 8000, "fixture list read");
+  await deck.waitFor(() => /show "[^"]*": 1 fixture/.test(deck.logText()) || undefined, 8000, "fixture list read (v0.10.0: by the start-up session)");
   deck.sendToPlugin(A.setup, "setup", { cmd: "set", key: INST, universe: 1, address: 444 });
   await waitHeaders((h) => h.join("|") === "DECK OFF|||", "off");
   assert.deepEqual(backgrounds(), [TRACK, TRACK, TRACK, TRACK]);

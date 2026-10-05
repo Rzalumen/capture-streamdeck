@@ -28,6 +28,9 @@
     .chtbl td.b, .chtbl td.p { color: #8a8a8a; white-space: nowrap; }
     .chtbl tr.fine td { color: #7a7a7a; }
     .chtbl tr.hid td { color: #5c5c5c; font-style: italic; }
+    .fx .l3 input[readonly] { color: #a8a8a8; background: #2a2a2a; }
+    .fx .l3 .src { flex: 0 0 auto; color: #7fbfff; font-size: 11px; }
+    .patchline { background: #1a2a3a; border: 1px solid #1f4a6b; color: #9ccaf0; padding: 6px 8px; border-radius: 3px; margin: 6px 0; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -44,12 +47,13 @@
     <span class="small">Disarm the knobs after</span><input id="idle-s" type="number" min="0" max="3600" step="1" value="120" />
     <span class="small">s without fixture activity (output keeps running; 0 = never)</span>
   </div>
-  <div class="hint full">Deck Control ON arms the knobs; OFF disarms them. The first ON connects to Capture as a console (it follows the selection and drives DMX), and the deck then stays connected: while OFF it keeps sending what Capture shows, and a change made in Capture (mouse, Control Pane) takes a channel back from the knob. Only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it.</div>
+  <div class="hint full">Deck Control ON arms the knobs; OFF disarms them. The deck connects to Capture as a console when the plugin starts (it follows the selection; no DMX until a fixture knob or key is used) and stays connected: while OFF it keeps sending what Capture shows, and a change made in Capture (mouse, Control Pane) takes a channel back from the knob. Only quitting the Stream Deck app (or Capture closing the show) lets go. Any fixture knob or key arms it.</div>
 
   <div class="sect">Fixtures</div>
   <div class="cbx"><input id="all" type="checkbox" /><label for="all">Show all fixtures (not only those with pan or tilt)</label></div>
   <div id="summary" class="small"></div>
 
+  <div id="fill-sect">
   <div class="sect">Auto-fill sequential</div>
   <div class="inline fill"><select id="fill-type"></select></div>
   <div class="inline fill" style="margin-top:6px">
@@ -58,9 +62,11 @@
     <button id="fill-go" style="flex:0 0 auto">Fill</button>
   </div>
   <div class="hint full">Gives every fixture of the chosen type (in Capture channel order) consecutive addresses from here, each starting right after the previous one's last channel; a fixture that would pass 512 starts the next universe.</div>
+  </div>
 
   <div class="sect">Addresses</div>
-  <div class="hint full">Universe 1–16, address 1–512. Capture does not send its patch over CITP, so enter the universe and address each fixture has in Capture. Saved per show name. Changing an address stops any running output.</div>
+  <div id="patch" class="patchline hidden"></div>
+  <div id="typed-hint" class="hint full">Universe 1–16, address 1–512. Capture's patch was not available, so enter the universe and address each fixture has in Capture. Saved per show name. Changing an address stops any running output.</div>
   <div id="list"></div>
 
   <script src="setup-core.js"></script>

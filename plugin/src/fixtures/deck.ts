@@ -1,10 +1,9 @@
 /**
  * Handoff 21 (v0.7) / Handoff 27 (v0.9.0): "Deck Control" (arming the knobs) and the remembered channel values.
  *
- *  - Before the first arm after plugin start: no CITP session is held and no DMX is sent. The fixture list is read with BRIEF
- *    connections (link.ts) at start-up, when the Setup panel opens and when Setup / Status is pressed.
- *  - The first arm (the Deck Control key, any fixture knob turn, strip tap, Home Light, ◀ Page / Page ▶) opens the persistent session:
- *    EnterShow, the SDMX declaration, DMX on first touch. v0.9.0: from then on NOTHING on the deck's side ends it. Disarming (the key,
+ *  - v0.10.0 (Handoff 28): the persistent session is opened at plugin start (runtime.ts), not by the first arm; no DMX is sent until
+ *    the first fixture touch. Arming (the Deck Control key, any fixture knob turn, strip tap, Home Light, ◀ Page / Page ▶) only lets
+ *    the knobs change values (its `start` hook is a no-op while the session is held). v0.9.0: NOTHING on the deck's side ends it. Disarming (the key,
  *    the idle timer, the hidden Release key) only stops the knobs and Home Light changing values: no Stream_Terminated, no LeaveShow,
  *    no close; output keeps running with the same values. Evidence (v0.8.0 log, Reza's Mac, 2026-10-05): the old OFF (termination
  *    ×3, LeaveShow, close) reset the deck-driven lights in Capture once the universes were declared.
@@ -137,7 +136,7 @@ export class ValueMemory {
 // ------------------------------------------------------------------ Deck Control
 
 export interface DeckOptions {
-  /** Start the persistent CITP session (after any brief connection in progress); a no-op while it is already held. */
+  /** Make sure the persistent CITP session is held (v0.10.0: it is, from plugin start; a no-op then). */
   start: () => Promise<void>;
   /** Called after a disarm (e.g. to save the remembered values). v0.9.0: disarming sends nothing and closes nothing. */
   afterOff?: () => Promise<void> | void;
@@ -208,8 +207,8 @@ export class DeckControl {
   }
 
   /**
-   * Arm (ON) or disarm (OFF). The flag changes at once. ON also makes sure the persistent CITP session is held (the first arm after
-   * plugin start opens it; later it is a no-op). v0.9.0: OFF only disarms: no termination frames, no LeaveShow, no close, and the
+   * Arm (ON) or disarm (OFF). The flag changes at once. ON also makes sure the persistent CITP session is held (v0.10.0: it is
+   * opened at plugin start, so this is a no-op). v0.9.0: OFF only disarms: no termination frames, no LeaveShow, no close, and the
    * selection stays (Capture's FixtureSelection keeps arriving on the connection).
    */
   setOn(on: boolean, why: string): Promise<void> {

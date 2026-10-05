@@ -135,11 +135,10 @@ test("select the spot in Capture → Page ▶ to Shutters → turn Attribute 2 �
   for (const k of ["a1", "a2", "a3", "a4"] as const) deck.willAppear(A[k], k, {}, "Encoder");
   deck.willAppear(A.prev, "prev", {});
   deck.willAppear(A.next, "next", {});
-  // Deck Control is OFF at start-up (no CITP link): Capture's selection only reaches the deck while it is ON
-  await deck.waitFor(() => citp.clients.size === 0 || undefined, 4000, "no CITP connection held while OFF (the Setup panel's brief connection has closed)");
+  // v0.10.0: the session is held from start-up (Deck Control only arms the knobs)
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "the start-up session is held");
   deck.willAppear(A.deck, "deckkey", {});
   deck.keyDown(A.deck, "deckkey");
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "Deck Control ON: persistent session");
   await deck.waitFor(() => citp.of(CAEX.FixtureListRequest).length >= 1 && deck.logText().includes("deck control ON (Deck Control key)") || undefined, 4000, "ON logged");
   await sleep(300);
   citp.select([ID.spot]);

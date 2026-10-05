@@ -121,7 +121,7 @@ test("setup: both fixtures addressed (Deck Control OFF); nothing selected; no DM
   deck.willAppear(A_.a1, "a1", {}, "Encoder");
   deck.willAppear(A_.setup, "setup", {});
   deck.inspectorAppeared(A_.setup, "setup");
-  await deck.waitFor(() => /brief sync \(Setup panel\): \d+ ms, 2 fixture/.test(deck.logText()) || undefined, 8000, "fixture list read");
+  await deck.waitFor(() => /show "[^"]*": 2 fixture/.test(deck.logText()) || undefined, 8000, "fixture list read (v0.10.0: by the start-up session)");
   deck.sendToPlugin(A_.setup, "setup", { cmd: "set", key: INST_A, universe: 1, address: ADDR_A });
   deck.sendToPlugin(A_.setup, "setup", { cmd: "set", key: INST_B, universe: 1, address: ADDR_B });
   await deck.waitFor(() => (lastSetupView()?.view?.controllable === 2 ? true : undefined), 3000, "A and B controllable");

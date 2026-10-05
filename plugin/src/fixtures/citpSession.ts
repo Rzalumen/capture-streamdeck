@@ -6,9 +6,9 @@
  * FixtureListRequest (on EnterShow, after 5 s if no list came, every 30 s while entered, and when asked), NACK (Reason 3) for
  * requests we do not serve, LeaveShow when we stop, and FixtureIdentify ONLY for fixtures the caller says are still at 0xffffffff
  * (`identify()` refuses every entry that is not in the caller's `allowed` set).
- * v0.8.0 (Handoff 26): on the PERSISTENT (Deck ON) session only, right after our EnterShow, the SDMX universe declaration (one SXSr
- * "BSRE1.31/1/1" + one SXUS per universe 1-16), once per connection, with `{sdmxDeclare: true}` on exactly those sends. Brief
- * (`once`) connections never send SDMX.
+ * v0.8.0 (Handoff 26): right after our EnterShow, the SDMX universe declaration (one SXSr "BSRE1.31/1/1" + one SXUS per universe
+ * 1-16), once per connection, with `{sdmxDeclare: true}` on exactly those sends. v0.10.0: the session is the only connection there is
+ * (the brief `once` connections are gone), opened at plugin start; a FixtureList event says whether it came after our declaration.
  * Never sent: FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace,
  * SDMX ChBk / ChLs / Capa / UNam / EnId (no DMX over CITP).
  *
@@ -65,6 +65,8 @@ export interface FixtureListEvent {
   /** FixtureList Type: 0 = the existing list, 1 = new fixtures, 2 = exchanged fixtures. */
   type: number | null;
   fixtures: CaexFixture[];
+  /** v0.10.0: received after our SDMX declaration on this connection (only such a list can carry Capture's patch). */
+  declared: boolean;
 }
 
 interface Events {
@@ -94,14 +96,17 @@ export class CitpSession {
   private handlers: { [K in keyof Events]: Events[K][] } = { state: [], show: [], leave: [], list: [], selection: [], modify: [], remove: [], levels: [] };
   private t: SessionTiming;
   private running = false;
-  private once = false;
+  /** v0.10.0: the "retrying" line is logged once per run of failed attempts, not on every retry. */
+  private retryNoted = false;
   private sock: net.Socket | undefined;
   private lastGood: { h: string; p: number } | undefined;
   private wake: (() => void) | undefined;
   private chain: Promise<void> = Promise.resolve();
   private weEntered = false;
-  /** v0.8.0: the universe declaration went out on this connection. */
+  /** v0.8.0: the universe declaration was queued on this connection. */
   private declared = false;
+  /** v0.10.0: every declaration message has been handed to the socket on this connection (FixtureLists after that may carry the patch). */
+  private declarationSent = false;
   /** Capture sent EnterShow on this connection and has not left. */
   entered = false;
   connected = false;
@@ -135,25 +140,16 @@ export class CitpSession {
     this.o.log?.(s);
   }
 
-  /** True while the connection loop runs (a persistent session, or a brief one-attempt connection). */
+  /** True while the connection loop runs. */
   get active(): boolean {
     return this.running;
   }
 
-  /**
-   * Start the connection loop. `once` (Handoff 21 brief connection): one connection attempt and no reconnect; the loop ends when that
-   * connection closes or fails.
-   */
-  start(opts: { once?: boolean } = {}): void {
+  /** Start the connection loop: connect, reconnect with back-off (2 s -> 30 s) until stop(). */
+  start(): void {
     if (this.running) return;
     this.running = true;
-    this.once = !!opts.once;
     this.loopDone = this.loop();
-  }
-
-  /** Resolves when the loop has ended (stop(), or a brief connection that closed / failed). */
-  whenStopped(): Promise<void> {
-    return this.loopDone;
   }
 
   /** Leave the show (when we entered), close and stop reconnecting. */
@@ -223,15 +219,16 @@ export class CitpSession {
         this.noteError(attempt, `CITP error: ${(e as Error).message}`);
       }
       if (!this.running) break;
-      if (this.once) {
-        this.running = false;
-        break;
-      }
       if (established) {
         delay = this.t.backoffMin;
         attempt = 0;
+        this.retryNoted = false;
       }
-      this.log(`retrying in ${delay < 1000 ? `${delay} ms` : `${delay / 1000} s`}`);
+      // v0.10.0: once per run of failed attempts (the reason itself is logged by noteError when it changes), not on every retry
+      if (!this.retryNoted) {
+        this.retryNoted = true;
+        this.log(`retrying in ${delay < 1000 ? `${delay} ms` : `${delay / 1000} s`} (then with back-off up to ${this.t.backoffMax / 1000} s; not logged again until connected)`);
+      }
       this.delays.push(delay);
       await this.sleep(delay);
       delay = Math.min(delay * 2, this.t.backoffMax);
@@ -304,6 +301,7 @@ export class CitpSession {
       this.entered = false;
       this.weEntered = false;
       this.declared = false;
+      this.declarationSent = false;
       this.gotList = false;
       const framer = new CitpFramer();
       const sourceKey = randomBytes(4).readUInt32LE(0);
@@ -320,7 +318,7 @@ export class CitpSession {
         if (!this.weEntered) {
           this.weEntered = true;
           void this.send("EnterShow", buildEnterShow(SYNC_NAME));
-          if (!this.once) this.declare();
+          this.declare();
         }
         this.requestList();
         clearTimers();
@@ -362,7 +360,7 @@ export class CitpSession {
               if (!this.entered) break; // an answer that was still on its way when Capture left the show
               if (dm.fixtures && !dm.fixtures.error) {
                 this.gotList = true;
-                this.emit("list", { type: dm.fixtures.type, fixtures: dm.fixtures.fixtures });
+                this.emit("list", { type: dm.fixtures.type, fixtures: dm.fixtures.fixtures, declared: this.declarationSent });
               } else this.log(`FixtureList did not decode: ${dm.fixtures?.error ?? "unknown error"}`);
               break;
             case CAEX.FixtureSelection:
@@ -407,10 +405,12 @@ export class CitpSession {
     if (this.declared) return;
     this.declared = true;
     const msgs = buildDeclaration(DECLARED_UNIVERSES);
+    const sock = this.sock;
     const sends = msgs.map((d) => this.send(d.label, d.buf, { sdmxDeclare: true }));
     void Promise.all(sends).then((ok) => {
       const n = ok.filter(Boolean).length;
       if (n === msgs.length) {
+        if (this.sock === sock) this.declarationSent = true;
         this.sent.declarations++;
         const u = DECLARED_UNIVERSES;
         this.log(`declared sACN universes ${u[0]}-${u[u.length - 1]} (SXSr + ${u.length} SXUS)`);

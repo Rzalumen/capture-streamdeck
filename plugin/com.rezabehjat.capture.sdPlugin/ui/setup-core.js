@@ -42,8 +42,16 @@
       if (document.activeElement !== $("idle-s")) $("idle-s").value = String(view.deck.idleSeconds);
     }
     const st = view.status;
+    // v0.10.0: Capture's patch is the source of the addresses: read-only cells, no auto-fill / Clear, one line at the top
+    const patch = view.patch || null;
+    document.body.classList.toggle("patchmode", !!patch);
+    $("patch").classList.toggle("hidden", !patch);
+    $("patch").textContent = patch ? "Addresses come from Capture's patch (" + patch.patched + " patched). Re-patch in Capture to change them." : "";
+    $("fill-sect").classList.toggle("hidden", !!patch);
+    $("typed-hint").classList.toggle("hidden", !!patch);
     $("show").textContent =
-      st === "ok" ? 'Show "' + (view.showName || "(unnamed)") + '" — ' + view.fixtures.length + " fixtures, " + view.controllable + " controllable" + (view.active ? ", output ON (universe " + view.universes.join(", ") + ")" : "")
+      view.connected === false ? "Waiting for Capture… (the plugin keeps trying to connect)"
+      : st === "ok" ? 'Show "' + (view.showName || "(unnamed)") + '" — ' + view.fixtures.length + " fixtures, " + view.controllable + " controllable" + (view.active ? ", output ON (universe " + view.universes.join(", ") + ")" : "")
       : st === "syncing" ? "Reading the show from Capture…"
       : st === "error" ? "The show could not be read: " + (view.error || "unknown error")
       : "The show has not been read yet.";
@@ -94,9 +102,11 @@
     u.type = "number"; u.min = "1"; u.max = "16"; u.className = "u";
     const a = el("input");
     a.type = "number"; a.min = "1"; a.max = "512"; a.className = "a";
-    const clear = el("button", "", "Clear");
+    const clear = el("button", "clear", "Clear");
     clear.style.flex = "0 0 auto";
+    const src = el("span", "src hidden", "from Capture");
     const commit = () => {
+      if (u.readOnly) return; // v0.10.0: Capture's patch
       const uv = u.value.trim(), av = a.value.trim();
       if (uv === "" && av === "") return toPlugin({ cmd: "clear", key: f.key });
       if (uv === "" || av === "") return; // wait for the other field
@@ -105,7 +115,7 @@
     u.onchange = commit;
     a.onchange = commit;
     clear.onclick = () => { u.value = ""; a.value = ""; toPlugin({ cmd: "clear", key: f.key }); };
-    l3.append(el("label", "", "Universe"), u, el("label", "", "Address"), a, clear);
+    l3.append(el("label", "", "Universe"), u, el("label", "", "Address"), a, clear, src);
     r.appendChild(l3);
     r.appendChild(el("div", "st"));
     const unp = el("div", "unproven hidden", "Check this type against Capture's patch view: the channel list parsed consistently, but the parser could not prove it is the only possible reading.");
@@ -149,15 +159,21 @@
     const r = document.querySelector('.fx[data-key="' + CSS.escape(f.key) + '"]');
     if (!r) return;
     const u = r.querySelector(".u"), a = r.querySelector(".a");
-    if (document.activeElement !== u) u.value = f.addr ? String(f.addr.universe) : "";
-    if (document.activeElement !== a) a.value = f.addr ? String(f.addr.address) : "";
+    const patch = !!view.patch;
+    u.readOnly = patch;
+    a.readOnly = patch;
+    r.querySelector(".clear").classList.toggle("hidden", patch);
+    r.querySelector(".src").classList.toggle("hidden", !(patch && f.fromCapture));
+    if (document.activeElement !== u || patch) u.value = f.addr ? String(f.addr.universe) : "";
+    if (document.activeElement !== a || patch) a.value = f.addr ? String(f.addr.address) : "";
     const st = r.querySelector(".st");
     st.className = "st";
     let text = "";
     if (f.issues.length) { st.classList.add("err"); text = "Not controllable: " + f.issues.join("; "); }
     else if (!f.parsed) { st.classList.add("err"); text = "Not controllable: channel list not read safely — " + f.parseError; }
     else if (f.controllable) { st.classList.add("ok"); text = "Controllable (" + f.addr.universe + "/" + f.addr.address + "–" + (f.addr.address + f.channelCount - 1) + ")"; }
-    else text = "No address yet";
+    else text = patch ? "Not patched in Capture" : "No address yet";
+    if (f.shared && f.shared.length) text += " · " + f.shared.join(" · ");
     if (rowError && rowError.key === f.key) { st.classList.remove("ok"); st.classList.add("err"); text = rowError.text; }
     if (f.parsed && f.notes.length) text += " · " + f.notes.length + " note(s) in the plugin log";
     st.textContent = text;

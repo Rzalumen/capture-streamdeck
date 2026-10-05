@@ -102,6 +102,15 @@ identifier yet a number (see 2).
    universe 1–16 and address 1–512, **saved as soon as you change a field**, per show name keyed by CaptureInstanceId. **Re-patching a fixture in Capture is picked up
    automatically** (FixtureModify with the patch bit): its universe and address (1-based) are stored if they fit and overlap nothing (`Fixtures: address from Capture Ch 203 -> 1/285`);
    Patched=0 clears the entry; a refused one is logged with the reason. *Auto-fill sequential* gives one type consecutive addresses. Overlaps and the 512 limit are reported and make a fixture non-controllable.
+   **v0.10.0 (Handoff 28): addresses from Capture's patch.** Once the plugin has declared its universes (at start-up), Capture's FixtureList carries
+   the real patch. A list received after the declaration with at least one Patched=1 fixture makes Capture's patch the source: every fixture gets
+   Capture's universe/address (Patched=0 = no address), stored marked as Capture's and replacing typed entries
+   (`Fixtures: address from Capture's patch Ch 202 SolaFrame 750 -> 1/444 (was 2/1, typed)`, `Fixtures: Capture's patch: 35 of 103 fixture(s) patched`).
+   The panel is then read-only: the cells are marked *from Capture*, *Auto-fill* and *Clear* are hidden, and a line at the top says
+   `Addresses come from Capture's patch (35 patched). Re-patch in Capture to change them.` Re-patching in Capture (FixtureModify) and Type 1/2 lists
+   update them. Two fixtures Capture patched on the same slots both stay controllable (a knob on either drives the shared slots; the rows say
+   `shares 1/285 with Ch 205`); the overlap refusal stays for typed entries only. A universe above 16 or a fixture past 512 is not controllable (logged).
+   If no list after the declaration carries any Patched=1, the typed entries are used exactly as before (logged once).
 6. **Dials** act on the fixtures selected in Capture. Attribute dials: rotate ±1 % per tick (16-bit aware), **push = fine (0.1 %) on/off**,
    **tap the touch strip = home that attribute** on the selected fixture(s) (v0.7; swapped from v0.5/v0.6); a long touch does nothing. **Fixtures: Home Selected** puts the selected fixture(s) — only — at full home (pan/tilt 50 %, intensity 100 %,
    additive colours full, the rest 0, as at first touch). A colour with several cells (`Red 1`…`Red 5`) is one knob: it moves every cell together and tapping its strip homes them all.
@@ -124,7 +133,12 @@ identifier yet a number (see 2).
 
 ### Deck Control (v0.7, Handoff 21)
 
-Any CITP console connection locks Capture's Control Pane, and closing it frees the pane again. So the deck no longer holds the link all the time:
+**v0.10.0:** the brief connections described here are gone: the persistent session (EnterShow, the SDMX declaration, the fixture list,
+FixtureIdentify, Capture's patch) is opened at plugin start and held until plugin exit; Setup, Status and the Setup panel ask it for a fresh
+list (`Waiting for Capture` while it is not connected; it keeps retrying with back-off, logged once). No sACN, and no sACN socket, until the first
+fixture touch. (A declared console that sends no DMX was proven harmless on Reza's Mac: the Control Pane mouse works, no popup.)
+
+Up to v0.9.0: any CITP console connection was thought to lock Capture's Control Pane, so the deck did not hold the link all the time:
 
 - **OFF (at start-up)**: no CITP session is held and no DMX is sent; command keys and the view dials work as usual. The fixture list (and the
   FixtureIdentify for new fixtures) is read over a **brief connection** — PNam → EnterShow → FixtureList → FixtureIdentify → LeaveShow → close — at
@@ -142,7 +156,8 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
 **v0.9.0 (Handoff 27): the deck stays a connected console; Deck Control only arms the knobs.** The OFF above (termination, LeaveShow, close) reset
 the deck-driven lights in Capture once the universes were declared (v0.8.0 log on Reza's Mac). Now:
 - The **first arm** after plugin start (Deck key, any fixture knob turn, strip tap, Home Light, ◀ Page / Page ▶) opens the persistent session as before:
-  EnterShow, the SDMX declaration, DMX on first touch. Before that, start-up / Setup / Status use brief connections exactly as above.
+  EnterShow, the SDMX declaration, DMX on first touch. Before that, start-up / Setup / Status use brief connections exactly as above
+  (v0.10.0: the session is opened at plugin start instead; see above).
 - **OFF = disarmed**: knobs and Home Light change no value. Nothing else happens: no Stream_Terminated, no LeaveShow, no close; output keeps going at
   40 fps with the same values, Capture's selection keeps arriving and stays on the deck, and ChBk from Capture keep landing in the frames and the store.
   The key, the idle timer (Setup: "Disarm the knobs after N s without fixture activity (output keeps running)") and the hidden Release key all only
