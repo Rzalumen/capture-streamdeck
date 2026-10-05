@@ -58,6 +58,9 @@ export class CitpLink {
         this.planner.reset();
         show.pendingIds = new Map();
       }
+      // v0.7.2: the persistent (ON) connection closed (OFF, Capture quit or reopened, dropped socket): its selection goes with it.
+      // `reason` is only set for a failed attempt (never connected); a brief connection ("brief") leaves the selection alone.
+      if (!c && !reason && this.mode === "on") svc.onLinkClosed("CITP connection closed");
     });
     session.on("show", (name) => {
       if (this.quiet) return;

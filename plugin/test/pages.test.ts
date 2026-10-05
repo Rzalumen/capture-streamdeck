@@ -228,7 +228,11 @@ test("service: page keys cycle (wrapping) the first selected fixture's pages; th
   select(f.s1);
   assert.equal(svc.pageName(), "Main", "and again when coming back");
   svc.onShowGone("test");
-  assert.equal(svc.pageName(), "Main", "nothing selected: the first controllable fixture's pages");
+  assert.equal(svc.pageName(), "", "nothing selected (v0.7.2: no fallback fixture): no page");
+  assert.equal(svc.pages().pages.length, 0);
+  assert.equal(svc.stepPage(1), false, "nothing to page");
+  select(f.s1);
+  assert.equal(svc.pageName(), "Main", "selected again: Main");
 });
 
 test("service: Attribute dials show the page's channel name and value; turn = ±1 % (16-bit aware), home that channel, a missing Main channel = —", async () => {

@@ -95,6 +95,14 @@ const strip = (ctx: string): any => deck.lastFeedback(ctx);
 const waitStrip = (ctx: string, pred: (fb: any) => boolean, what: string): Promise<any> => deck.waitFor(() => (deck.lastFeedback(ctx) && pred(deck.lastFeedback(ctx)) ? deck.lastFeedback(ctx) : undefined), 3000, what);
 const waitTitle = (ctx: string, t: string): Promise<unknown> => deck.waitFor(() => deck.sent(ctx, "setTitle").at(-1)?.payload.title === t || undefined, 4000, `title ${JSON.stringify(t)}`);
 
+/** v0.7.2: the deck drives only what Capture selected in this ON connection. Waits for the persistent session, then "clicks" Ch 203 in Capture. */
+const selectInCapture = async (): Promise<void> => {
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "persistent session");
+  citp.select([ID]);
+  await waitStrip("sel", (f) => f.line2.value.startsWith("Ch 203"), "selected in Capture: Ch 203");
+};
+const noSelection = (what: string): Promise<any> => waitStrip("sel", (f) => f.line1.value === "Click a light" && f.line2.value === "in Capture", what);
+
 /**
  * The plugin process's TCP connections to the stub's CITP port, read from /proc (null where /proc is not available).
  * Matches the process's socket inodes against /proc/net/tcp entries whose REMOTE port is the stub's port.
@@ -165,17 +173,21 @@ test("Setup panel / Setup key / Status key while OFF: a brief connection each (D
   assert.deepEqual((deck.globals as any).fixtureDeck, { idleSeconds: 1 });
 });
 
-test("ON by a knob turn: Deck Control switches ON, the knob drives the light at once, the persistent session connects; idle 1 s → OFF: termination ×3, LeaveShow, close", async () => {
+test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Capture selects a light; then the knob drives it; idle 1 s → OFF: termination ×3, LeaveShow, close, selection cleared", async () => {
   deck.willAppear(A.select, "sel", {}, "Encoder");
   for (const k of ["a1", "a2", "a3"] as const) deck.willAppear(A[k], k, {}, "Encoder");
-  await waitStrip("a1", (f) => f.name.value === "Pan", "Main page: Pan");
+  await noSelection("no selection yet: Click a light / in Capture");
   const leaves = citp.of(CAEX.LeaveShow).length;
+  const n0 = packets.length;
+  deck.dialRotate(A.a1, "a1", 10);
+  await waitTitle("deckkey", "Deck ON");
+  assert.match(deck.logText(), /Fixtures: deck control ON \(Attribute 1 dial\)/);
+  await selectInCapture();
+  assert.equal(packets.length, n0, "the turn before any selection sent no sACN at all");
+  await waitStrip("a1", (f) => f.name.value === "Pan", "Main page: Pan");
   deck.dialRotate(A.a1, "a1", 10);
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.6 * 65535), "pan 60 %");
   assert.equal(slot(p, 6), 255, "intensity starts at home (never touched in this show)");
-  await waitTitle("deckkey", "Deck ON");
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "persistent session");
-  assert.match(deck.logText(), /Fixtures: deck control ON \(Attribute 1 dial\)/);
   if (process.platform === "linux") assert.equal(citpSocketsOfPlugin(), 1, "the /proc check does see the connection while ON (so its 0 while OFF means something)");
   // no further activity: after 1 s it switches OFF by itself
   await deck.waitFor(() => (citp.of(CAEX.LeaveShow).length > leaves && citp.clients.size === 0) || undefined, 5000, "idle OFF: LeaveShow + close");
@@ -183,7 +195,9 @@ test("ON by a knob turn: Deck Control switches ON, the knob drives the light at 
   assert.equal(term.length, 3, "Stream_Terminated ×3");
   assert.equal(pan16(term[0]), Math.round(0.6 * 65535), "the termination frames carry the last values");
   await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): output terminated, LeaveShow sent, CITP connection closed/.test(deck.logText()) || undefined, 3000, "OFF logged");
+  assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
   await waitTitle("deckkey", "Deck OFF");
+  await noSelection("OFF: the selection is gone");
   const socks = citpSocketsOfPlugin();
   if (socks !== null) assert.equal(socks, 0, "after OFF no socket to the CITP port stays open (/proc)");
   const n = packets.length;
@@ -194,7 +208,13 @@ test("ON by a knob turn: Deck Control switches ON, the knob drives the light at 
 test("resume after OFF → ON: the next turn continues from 60 % (no snap to home); push = fine, tap = home that channel; ON/OFF by the Deck Control key; ON by a fixture key", async () => {
   deck.sendToPlugin(A.setup, "setup", { cmd: "idle", seconds: 0 }); // never, for the rest of the file
   await deck.waitFor(() => lastSetupView()?.view?.deck?.idleSeconds === 0 || undefined, 3000, "idle off");
-  assert.equal(strip("a1").value.value, "~60.0", "OFF: the strip shows the remembered value");
+  await noSelection("OFF: nothing selected");
+  const n0 = packets.length;
+  deck.dialRotate(A.a1, "a1", 5); // switches ON; moves nothing (no selection in this connection)
+  await waitTitle("deckkey", "Deck ON");
+  await selectInCapture();
+  assert.equal(packets.length, n0, "the turn before the selection sent nothing");
+  await waitStrip("a1", (f) => f.value.value === "~60.0", "selected: the strip shows the remembered value");
   deck.dialRotate(A.a1, "a1", 5);
   await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.65 * 65535), "65 %: resumed from 60 %, not from 50 %");
   // push = fine mode
@@ -216,12 +236,16 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
   await waitTitle("deckkey", "Deck OFF");
   await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "OFF by key: closed");
   assert.match(deck.logText(), /deck control OFF \(Deck Control key\)/);
-  // a fixture key switches it ON (Home Selected), and homes the light
+  // a fixture key switches it ON (Home Selected) but homes nothing: the selection went with OFF
   deck.willAppear(A.home, "home", {});
+  const n1 = packets.length;
   deck.keyDown(A.home, "home");
   await waitTitle("deckkey", "Deck ON");
-  await waitPacket((x) => !x.terminated && pan16(x) === 0x8000 && slot(x, 6) === 255, "Home Selected after ON");
   assert.match(deck.logText(), /deck control ON \(Home Selected key\)/);
+  await selectInCapture();
+  assert.equal(packets.length, n1, "Home with nothing selected sent nothing");
+  deck.keyDown(A.home, "home");
+  await waitPacket((x) => !x.terminated && pan16(x) === 0x8000 && slot(x, 6) === 255, "Home Selected once Capture selected the light");
   deck.dialRotate(A.a1, "a1", 25); // 75 %
   await waitPacket((x) => pan16(x) === Math.round(0.75 * 65535), "pan 75 %");
   deck.keyDown(A.deck, "deckkey"); // OFF: the values are saved
@@ -242,7 +266,13 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   packets.length = 0;
   await deck.start({ oscPort: capture.port, pluginDir, fixtures: path.join(here, "fixtures"), env: env() });
   await deck.waitFor(() => /brief sync \(start-up\)/.test(deck.logText()) || undefined, 8000, "brief sync after restart");
+  deck.willAppear(A.select, "sel", {}, "Encoder");
   deck.willAppear(A.a1, "a1", {}, "Encoder");
+  await noSelection("a new process: nothing selected");
+  deck.dialRotate(A.a1, "a1", -5); // switches ON, moves nothing
+  await deck.waitFor(() => /deck control ON \(Attribute 1 dial\)/.test(deck.logText()) || undefined, 3000, "ON");
+  await selectInCapture();
+  assert.equal(packets.length, 0, "the turn before the selection sent nothing");
   await waitStrip("a1", (f) => f.value.value === "~75.0", "the strip shows the stored value before any touch");
   deck.dialRotate(A.a1, "a1", -5);
   const p = await waitPacket((x) => !x.terminated && pan16(x) === Math.round(0.7 * 65535), "70 %: resumed from 75 %");
@@ -252,5 +282,4 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   assert.match(deck.logText(), /values migration \(v0\.7\.1\): removed the stored shutter\/strobe value\(s\) of channel\(s\) 7 for fixture/);
   deck.willAppear(A.deck, "deckkey2", {});
   await waitTitle("deckkey2", "Deck ON");
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 3000, "ON after the restart");
 });

@@ -367,6 +367,77 @@ test("link: ON holds the persistent session (selection arrives, list re-requeste
   }
 });
 
+test("link (v0.7.2): the persistent connection closing clears the selection (dropped socket, OFF); a brief connection never does", async () => {
+  const L = await makeLink();
+  try {
+    await L.link.briefSync("start-up");
+    // OFF: a hand-picked fixture survives a brief connection's close
+    await L.svc.setAddress(L.show.fixtures[0].key, { universe: 1, address: 1 });
+    L.svc.selection.step(1);
+    const picked = L.svc.selection.keys;
+    assert.equal(picked.length, 1);
+    await L.link.briefSync("Setup panel");
+    assert.equal(L.link.briefs.length, 2);
+    assert.deepEqual(L.svc.selection.keys, picked, "a brief connection's close leaves the selection alone");
+    assert.ok(!L.logs.some((l) => /selection cleared/.test(l)));
+    // ON: Capture selects; a brief sync while ON (only a list request) leaves it alone
+    await L.link.startPersistent();
+    await waitFor(() => L.show.connected || undefined, 2000, "connected");
+    L.stub.select([4242]);
+    await waitFor(() => L.logs.some((l) => /Capture selected Ch 204/.test(l)) || undefined, 2000, "selection followed");
+    const sel = L.svc.selection.keys;
+    assert.equal(sel.length, 1);
+    await L.link.briefSync("Setup key");
+    await sleep(100);
+    assert.deepEqual(L.svc.selection.keys, sel, "a brief sync while ON leaves the selection alone");
+    // the stub drops the connection: cleared, and it stays cleared after the reconnect (Capture does not resend its selection)
+    L.stub.drop();
+    await waitFor(() => L.logs.some((l) => /CITP connection closed: selection cleared/.test(l)) || undefined, 2000, "cleared on close");
+    assert.deepEqual(L.svc.selection.keys, []);
+    assert.deepEqual(L.svc.selection.view().targets, []);
+    await waitFor(() => L.show.connected || undefined, 3000, "reconnected");
+    assert.deepEqual(L.svc.selection.keys, []);
+    // a new selection, then OFF: cleared again
+    L.stub.select([4242]);
+    await waitFor(() => L.svc.selection.keys.length === 1 || undefined, 2000, "selected again");
+    const before = L.logs.filter((l) => /selection cleared/.test(l)).length;
+    await L.link.stopPersistent();
+    assert.deepEqual(L.svc.selection.keys, []);
+    assert.equal(L.logs.filter((l) => /CITP connection closed: selection cleared/.test(l)).length, before + 1);
+  } finally {
+    await L.link.stop();
+    await L.stub.close();
+  }
+});
+
+test("service (v0.7.2): onLinkClosed clears the selection, logs it and keeps output; Deck Control OFF calls it on every path (key, idle, Release)", async () => {
+  const steps: string[] = [];
+  const cleared: string[] = [];
+  let fire: (() => void) | undefined;
+  const deck = new DeckControl({
+    start: async () => void steps.push("start"),
+    stop: async () => void steps.push("stop"),
+    release: async () => void steps.push("release"),
+    onOff: (why) => void cleared.push(why),
+    log: () => undefined,
+    setTimer: (fn) => ((fire = fn), "T"),
+    clearTimer: () => (fire = undefined),
+  });
+  deck.activity("knob");
+  await deck.toggle("Deck Control key");
+  assert.deepEqual(cleared, ["deck control OFF"], "the key");
+  deck.activity("knob");
+  fire?.();
+  await deck.settled();
+  assert.deepEqual(cleared.length, 2, "idle");
+  deck.activity("knob");
+  await deck.setOn(false, "Release key");
+  assert.equal(cleared.length, 3, "Release");
+  await deck.setOn(false, "Release key");
+  assert.equal(cleared.length, 3, "already OFF: nothing");
+  assert.ok(steps.indexOf("release") > -1);
+});
+
 test("link: a brief connection when Capture is not there fails once (the reason is shown) and does not keep retrying", async () => {
   const L = await makeLink();
   await L.stub.close();

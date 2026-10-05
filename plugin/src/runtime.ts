@@ -105,6 +105,7 @@ class Runtime {
     start: () => this.link.startPersistent(),
     stop: () => this.link.stopPersistent(),
     release: () => this.fixtures.engine.release(),
+    onOff: (why) => this.fixtures.onLinkClosed(why),
     afterOff: () => this.memory.flush(),
     log: (l) => log.info(`Fixtures: ${l}`),
     globals: this.globals,

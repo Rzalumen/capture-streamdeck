@@ -265,12 +265,18 @@ test("several selected: ×2 on the strip, each fixture moves relative to its own
   assert.equal(strip("pan").mark.value.startsWith("×2"), true);
 });
 
-test("an empty selection keeps the last one, marked '(not selected in Capture)'; the knobs still work", async () => {
+test("an empty selection clears (v0.7.2): the strip reads 'Click a light / in Capture' and a turn moves nothing", async () => {
   citp.select([]);
-  const fb = await waitStrip("sel", (f) => f.note.value.includes("(not selected in Capture)"), "stale mark");
-  assert.equal(fb.line1.value, "Rogue R2X Wash ×2");
+  const fb = await waitStrip("sel", (f) => f.line1.value === "Click a light" && f.line2.value === "in Capture", "cleared");
+  assert.equal(fb.note.value, "");
+  await deck.waitFor(() => /Capture's selection is empty: nothing selected on the deck/.test(deck.logText()) || undefined, 2000, "logged");
+  await sleep(100);
+  const n0 = packets.length;
+  const before = packets.at(-1)!;
   deck.dialRotate(A.intensity, "int", -10);
-  await waitPacket((x) => slot(x, 285, 6) === Math.round(0.6 * 255) && slot(x, 299, 6) === Math.round(0.8 * 255), "still driving both");
+  await sleep(400);
+  const after = packets.slice(n0).filter((x) => !x.terminated);
+  assert.ok(after.every((x) => changed(before, x).length === 0), "no slot changed after the turn");
 });
 
 test("Home key: only the selected fixture goes home; tap the strip = home that attribute; push = fine (Handoff 21); long touch does nothing", async () => {
@@ -374,11 +380,19 @@ test("connection lost: the session reconnects with back-off, says PNam and Enter
   await deck.waitFor(() => citp.of(CAEX.EnterShow).length === 2, 3000, "EnterShow again");
   assert.match(deck.logText(), /CITP: connection to Capture closed/);
   assert.match(deck.logText(), /CITP: connected to 127\.0\.0\.1:/);
+  // v0.7.2: the selection went with the connection, and Capture does not resend it on reconnect: a turn moves nothing
+  assert.match(deck.logText(), /Fixtures: CITP connection closed: selection cleared/);
+  await waitStrip("sel", (f) => f.line1.value === "Click a light", "selection cleared by the drop");
+  const nr = packets.length;
+  const before = packets.at(-1)!;
+  deck.dialRotate(A.pan, "pan", 5);
+  await sleep(400);
+  assert.ok(packets.slice(nr).every((x) => changed(before, x).length === 0), "after the reconnect a turn changes no slot");
   // dropping the connection does not stop DMX (the user's output carries on); LeaveShow does
   const n0 = packets.length;
   citp.leaveShow();
   await deck.waitFor(() => packets.slice(n0).filter((p) => p.terminated).length >= 3, 3000, "output released on LeaveShow");
-  await waitStrip("sel", (f) => f.line1.value === "No fixture", "selection cleared, fixtures forgotten");
+  await waitStrip("sel", (f) => f.line1.value === "Click a light" && f.mark.value === "", "selection cleared, fixtures forgotten");
   // Capture enters its show again: the list comes back, the setup is still there, nothing is selected, no DMX
   const n1 = packets.length;
   citp.enterShow("E2E SHOW");
@@ -433,13 +447,22 @@ test("after Release a knob turn switches Deck Control ON again and RESUMES from 
   const pan0 = (slot(last, 285, 1) << 8) | slot(last, 285, 2);
   const int0 = slot(last, 285, 6);
   assert.ok(pan0 !== 0x8000 || int0 !== 255 || tilt0 !== 0x8000, "203 is somewhere other than home, so a snap would show");
+  // v0.7.2: Release (OFF) cleared the selection, so the turn that switches ON moves nothing
+  const nOn = packets.length;
+  deck.dialRotate(A.tilt, "tilt", -10);
+  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "the persistent session is back");
+  assert.match(deck.logText(), /Fixtures: deck control ON \(Tilt dial\)/);
+  assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
+  await waitStrip("sel", (f) => f.line1.value === "Click a light", "nothing selected after Release");
+  await sleep(200);
+  assert.equal(packets.length, nOn, "the turn before a selection sent nothing");
+  citp.select([IDS.r203]);
+  await waitStrip("sel", (f) => f.line2.value === "Ch 203 · 1/285", "203 selected in Capture");
   deck.dialRotate(A.tilt, "tilt", -10); // 203 again
   const want = Math.round((Math.round((tilt0 / 65535) * 10000) / 10000 - 0.1) * 65535);
   const p = await waitPacket((x) => !x.terminated && Math.abs(((slot(x, 285, 3) << 8) | slot(x, 285, 4)) - want) <= 7, "tilt resumed −10 %");
   assert.equal((slot(p, 285, 1) << 8) | slot(p, 285, 2), pan0, "pan where it was, not 50 %");
   assert.equal(slot(p, 285, 6), int0, "intensity where it was, not 100 %");
-  await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "the persistent session is back");
-  assert.match(deck.logText(), /Fixtures: deck control ON \(Tilt dial\)/);
   const n0 = packets.length;
   const leaves = citp.of(CAEX.LeaveShow).length;
   await sleep(300);

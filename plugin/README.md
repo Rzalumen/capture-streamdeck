@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.7.1 (beta)
+# Capture for Stream Deck+ — plugin v0.7.2 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -81,8 +81,12 @@ identifier yet a number (see 2).
    CaptureInstanceId bytes as received. A fixture that already has an identifier keeps it. Log: `Fixtures: identify: 98 of 101 fixture(s) already have an identifier; sending 3 new (100102–100104)`.
 3. **The deck follows Capture's selection**: click a fixture in Capture and the knobs drive it (several selected: they move together, each relative to its own value).
    **Fixture: Select** shows what is selected (model, `Ch 203 · 1/285`; for a fixture with Capture Channel 0 the position hint, `SL 1.3 · US 0.9`, and the
-   address on the small line below). A selected fixture with no address shows `No address — Setup`. When you deselect in Capture the last selection stays,
-   marked `(not selected in Capture)`. Turning the Select dial picks one controllable fixture by hand until Capture's next click.
+   address on the small line below). A selected fixture with no address shows `No address — Setup`. **v0.7.2: the deck drives only what Capture
+   selected during the current Deck Control ON connection.** There is no fallback fixture: with nothing selected the knobs and Home move nothing and
+   the strip reads `Click a light / in Capture`. Deselecting in Capture clears the deck selection; Deck Control OFF and the ON connection closing (Capture
+   quit or reopened the show, a dropped socket) clear it too (log: `Fixtures: deck control OFF: selection cleared`, `Fixtures: CITP connection closed:
+   selection cleared`); output is not released by that. Capture does not send its current selection when the deck connects: click the light again.
+   Brief connections (while OFF) never touch the selection. The Next Fixture key (and the Select dial) still pick one fixture by hand until Capture's next click.
 4. **Channel lists** come from the fixture's own object in `~/Library/Application Support/Capture 2026/Library.c2z` (read-only), parsed once per type with the
    safety rules of `research/` (exact counts must match Capture's ChannelCount, ambiguous parses are refused unless every candidate agrees on every channel the plugin writes).
    A type that does not parse safely is **never controllable**; the reason is in the Setup panel.

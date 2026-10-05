@@ -4,7 +4,7 @@ import test from "node:test";
 import { ALL_ATTRS, dialAttr, drivenSignature, homeValue, isAdditiveColourName, mapChannels, renderFixture, stepFraction, writeSlot } from "../src/fixtures/attrs.ts";
 import { DmxEngine, type Target, type Transport } from "../src/fixtures/engine.ts";
 import { parseDataPacket, OPT_TERMINATED } from "../src/fixtures/sacn.ts";
-import { Selection, STALE_NOTE, toTarget, type Controllable } from "../src/fixtures/selection.ts";
+import { Selection, toTarget, type Controllable } from "../src/fixtures/selection.ts";
 import type { ShowFixture } from "../src/fixtures/show.ts";
 import { IdentifyPlanner, FIRST_IDENTIFIER, MAX_ATTEMPTS, RESEND_AFTER_MS } from "../src/fixtures/identify.ts";
 import { UNIDENTIFIED, decodeFixtureModify, decodeMessage, isAllowedOutgoing, buildFixtureIdentify, buildFixtureListRequest, buildNack, buildLeaveShow, buildEnterShow, buildPNam, buildLaserFeedList, buildHeader, CAEX, type CaexFixture } from "../src/fixtures/citp.ts";
@@ -353,7 +353,8 @@ const selOf = (list: Controllable[], extra: ShowFixture[] = []) => new Selection
 test("selection: Capture's selection becomes the deck selection — single, several, strip texts", () => {
   const list = [ctl(1, "Rogue R2X Wash", "T1", 1, 1), ctl(2, "Rogue R2X Wash", "T1", 1, 100), ctl(3, "Spot", "T2", 1, 200), ctl(203, "Rogue R2X Wash", "T1", 1, 285)];
   const s = selOf(list);
-  assert.equal(s.view().primary!.fixture.key, "k1", "before any click: the first controllable fixture");
+  let v0 = s.view();
+  assert.deepEqual([v0.primary, v0.targets, v0.line1, v0.line2, v0.note, v0.mark, v0.count], [undefined, [], "Click a light", "in Capture", "", "", 4], "before any click: no fallback fixture");
   s.onCapture(["k203"]);
   let v = s.view();
   assert.deepEqual([v.line1, v.line2, v.note, v.mark], ["Rogue R2X Wash", "Ch 203 · 1/285", "", "4/4"]);
@@ -364,23 +365,31 @@ test("selection: Capture's selection becomes the deck selection — single, seve
   assert.deepEqual([v.line1, v.line2, v.mark], ["Rogue R2X Wash ×2", "Ch 2 +1", "×2"]);
   s.onCapture(["k1", "k3"]);
   assert.equal(s.view().line1, "2 fixtures", "mixed models");
-  assert.equal(s.view().stale, false);
 });
 
-test("selection: an empty Capture selection keeps the last one, marked; the next click replaces it; the Select dial picks one by hand until then", () => {
+test("selection: with no controllable fixture at all the empty view is the same", () => {
+  const s = selOf([], [plain(50, "Rogue R2X Wash", "T1", 203)]);
+  const v = s.view();
+  assert.deepEqual([v.primary, v.targets, v.line1, v.line2, v.count, v.uncontrollable], [undefined, [], "Click a light", "in Capture", 0, 0]);
+});
+
+test("selection: an empty Capture selection clears; the next click replaces it; the Select dial picks one by hand until then", () => {
   const list = [ctl(1, "A", "T", 1, 1), ctl(2, "A", "T", 1, 100), ctl(3, "A", "T", 1, 200)];
   const s = selOf(list);
   s.onCapture([]);
-  assert.equal(s.view().stale, false, "nothing was selected yet: nothing to mark");
+  assert.deepEqual(s.view().targets, []);
   s.onCapture(["k2"]);
   s.onCapture([]);
   let v = s.view();
-  assert.deepEqual(v.targets.map((c) => c.fixture.key), ["k2"], "still drives the last selection");
-  assert.equal(v.stale, true);
-  assert.equal(v.note, STALE_NOTE);
+  assert.deepEqual([v.targets, v.primary, v.line1, v.line2], [[], undefined, "Click a light", "in Capture"], "an empty selection clears");
+  assert.deepEqual(s.keys, []);
   s.step(1);
   v = s.view();
-  assert.deepEqual([v.primary!.fixture.key, v.stale, v.note], ["k3", false, ""], "manual choice is not 'stale'");
+  assert.deepEqual([v.primary!.fixture.key, v.note], ["k1", ""], "Select dial from nothing: the first fixture, by hand");
+  s.step(1);
+  assert.equal(s.view().primary!.fixture.key, "k2");
+  s.step(1);
+  assert.equal(s.view().primary!.fixture.key, "k3");
   s.step(1);
   assert.equal(s.view().primary!.fixture.key, "k1", "wraps");
   s.step(-1);
@@ -389,6 +398,9 @@ test("selection: an empty Capture selection keeps the last one, marked; the next
   assert.deepEqual(s.view().targets.map((c) => c.fixture.key), ["k1", "k2"], "Capture's next click overrides the manual choice");
   s.clear();
   assert.deepEqual(s.keys, []);
+  assert.deepEqual(s.view().targets, []);
+  s.step(-1);
+  assert.equal(s.view().primary!.fixture.key, "k3", "Select dial backwards from nothing: the last fixture");
 });
 
 test("selection: selected fixtures that are not controllable — none, or some; Capture Channel 0 shows the position hint", () => {
@@ -556,7 +568,12 @@ test("service: dials act on the selection — additive vs subtractive, missing a
   await svc.autoFill([show.fixtures[0].key], { universe: 1, address: 285 });
   await svc.setAddress(show.fixtures[2].key, { universe: 2, address: 1 });
   assert.deepEqual(svc.controllables().map((c) => c.fixture.channel), [5, 203]);
-  assert.equal(svc.selection.view().primary!.fixture.channel, 5, "nothing selected in Capture yet: the first controllable fixture");
+  assert.equal(svc.selection.view().primary, undefined, "nothing selected in Capture yet: no fixture");
+  assert.equal(svc.rotate("pan", 1, false), false, "nothing selected: a turn moves nothing");
+  assert.equal(svc.homeSelected(), false, "nothing selected: Home moves nothing");
+  assert.equal(e.tr.sent.length, 0);
+  svc.onSelectionEvent([show.fixtures[2].identifier]);
+  assert.equal(svc.selection.view().primary!.fixture.channel, 5);
   assert.equal(svc.readout("red-cyan").attr, "cyan");
   assert.equal(svc.readout("white").value, null);
   assert.equal(svc.rotate("white", 1, false), false);
@@ -596,8 +613,9 @@ test("service: Capture's selection events — single, several, empty, a fixture 
   svc.onSelectionEvent([ID.rogue203, ID.rogue204]);
   assert.deepEqual(svc.selection.view().targets.map((c) => c.fixture.channel), [203, 204]);
   svc.onSelectionEvent([]);
-  assert.deepEqual(svc.selection.view().targets.map((c) => c.fixture.channel), [203, 204], "empty: the last selection stays");
-  assert.equal(svc.selection.view().stale, true);
+  assert.deepEqual(svc.selection.view().targets, [], "empty: cleared");
+  assert.match(logs.at(-1)!, /Capture's selection is empty: nothing selected on the deck/);
+  assert.equal(svc.rotate("pan", 1, false), false, "nothing selected: nothing to drive");
   svc.onSelectionEvent([ID.mixer]);
   let v = svc.selection.view();
   assert.deepEqual([v.targets.length, v.line2, v.line1], [0, "No address — Setup", "Colour Mixer"], "selected but no address");
@@ -708,9 +726,26 @@ test("service: Capture's patch changes (FixtureModify, bit 0x01) — stored 1-ba
   assert.match(logs.at(-1)!, /not in the list/);
 });
 
+test("service (v0.7.2): onLinkClosed clears the selection and logs it but keeps output; after it a turn and Home move nothing", async () => {
+  const { svc, show, e, logs } = await makeService();
+  await svc.setAddress(show.fixtures[0].key, { universe: 1, address: 285 });
+  svc.onSelectionEvent([show.fixtures[0].identifier]);
+  assert.equal(svc.rotate("pan", 1, false), true);
+  assert.equal(e.engine.active, true);
+  svc.onLinkClosed("CITP connection closed");
+  assert.deepEqual(svc.selection.keys, []);
+  assert.equal(logs.at(-1), "CITP connection closed: selection cleared");
+  assert.equal(e.engine.active, true, "output is kept");
+  const before = JSON.stringify([...e.engine.slots(1)]);
+  assert.equal(svc.rotate("pan", 5, false), false);
+  assert.equal(svc.homeSelected(), false);
+  assert.equal(JSON.stringify([...e.engine.slots(1)]), before, "no slot changed");
+});
+
 test("service: Release stops output; moving the address of a fixture that is being driven releases it, an unrelated change does not", async () => {
   const { svc, show, e } = await makeService();
   await svc.setAddress(show.fixtures[0].key, { universe: 1, address: 285 });
+  svc.onSelectionEvent([show.fixtures[0].identifier]);
   svc.rotate("pan", 1, false);
   assert.equal(e.engine.active, true);
   const n = e.tr.sent.length;

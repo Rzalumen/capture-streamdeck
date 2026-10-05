@@ -141,6 +141,8 @@ export interface DeckOptions {
   stop: () => Promise<void>;
   /** Termination frames on every universe in use (DmxEngine.release). Must stop output synchronously before its first await. */
   release: () => Promise<void>;
+  /** Called synchronously when Deck Control switches OFF, by every path (key, idle, Release key): clears the selection (v0.7.2). */
+  onOff?: (why: string) => void;
   /** Called after OFF (e.g. to save the remembered values). */
   afterOff?: () => Promise<void> | void;
   log: (s: string) => void;
@@ -224,6 +226,7 @@ export class DeckControl {
       return this.chain;
     }
     this.disarm();
+    this.o.onOff?.("deck control OFF");
     // stop the DMX first, synchronously (release() clears the engine before its first await), then LeaveShow + close
     const released = this.o.release();
     this.emit();

@@ -292,6 +292,16 @@ export class FixtureService {
     this.emit();
   }
 
+  /**
+   * Deck Control OFF, or the persistent (ON) CITP connection closed for any reason: the selection belongs to that connection, so it
+   * goes. Output is NOT released here (a dropped connection keeps output, as in v0.5). Brief connections never call this.
+   */
+  onLinkClosed(why: string): void {
+    this.selection.clear();
+    this.log(`${why}: selection cleared`);
+    this.emit();
+  }
+
   /** FixtureSelection from Capture: the deck selection becomes exactly those fixtures (the controllable ones are driven). */
   onSelectionEvent(ids: number[]): void {
     const keys: string[] = [];
@@ -303,7 +313,7 @@ export class FixtureService {
     }
     if (!ids.length) {
       this.selection.onCapture([]);
-      this.log("Capture's selection is empty: keeping the last selection (marked not selected in Capture)");
+      this.log("Capture's selection is empty: nothing selected on the deck");
     } else {
       if (missing.length) {
         this.log(`Capture selected ${missing.length} fixture(s) not in the list (identifier ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? ", …" : ""}): asking for a fresh list`);
