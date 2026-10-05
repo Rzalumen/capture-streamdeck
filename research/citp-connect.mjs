@@ -6,12 +6,15 @@
 //   node research/citp-connect.mjs --sync         CAEX spec F show-sync handshake, 45 s (see below)
 //   node research/citp-connect.mjs --link         --sync PLUS announce as a lighting console and accept Capture's inbound TCP, 120 s (see below)
 //   node research/citp-connect.mjs --identify     --sync, then ONE FixtureIdentify giving every fixture an identifier, 90 s (see below). WRITES into the show: use a COPY.
+//   node research/citp-connect.mjs --sdmx         --link, logging every SDMX-layer message (Handoff 25), 120 s; add --declare to declare our sACN universes
 //
 // Read-only toward the show. The ONLY messages this script may ever send (enforced by isAllowedOutgoing() in
 // lib/citp.mjs, which refuses everything else) are: PINF/PNam, CAEX LaserFeedList (empty), EnterShow,
 // FixtureListRequest, NACK and LeaveShow. Nothing that changes the patch, selection, DMX or state is built
 // anywhere (no FixtureList/Modify/Remove/Identify/Selection/ConsoleStatus, no SetFixtureTransformationSpace).
 // EnterShow and LeaveShow are only ever sent in --sync.
+// Exceptions, each opt-in and checked by the same allowlist: --identify (ONE FixtureIdentify, Handoff 17) and --sdmx --declare (the
+// SDMX SXSr/SXUS universe declarations, Handoff 25; isAllowedOutgoing(msg, {sdmxDeclare: true})). No DMX is ever sent.
 //
 // --sync (CAEX spec F, rules of interaction): send PNam; answer Capture's GetLaserFeedList with an empty
 // LaserFeedList; when Capture sends EnterShow, send our own EnterShow then a FixtureListRequest (one retry
@@ -41,6 +44,17 @@
 //   Still never sent: FixtureList, FixtureModify, FixtureRemove, FixtureSelection, FixtureConsoleStatus, SetFixtureTransformationSpace. No DMX.
 //   Report: reports/citp-identify.txt with an "== Identify summary ==" block.
 //
+// --sdmx (Handoff 25): exactly the --link flow (announce as a console, outbound session, accept inbound, EnterShow, FixtureListRequest),
+//   and in addition:
+//   * EVERY message of the SDMX layer received on ANY connection (outbound TCP, inbound TCP, and the UDP announcement socket) is logged:
+//     time, connection tag, SDMX content type, full decode (lib/citp.mjs decodeSdmx, layouts and sources quoted there), raw hex always;
+//   * --declare (opt-in): after OUR EnterShow on a connection, declare where our DMX comes from: SDMX/SXSr "BSRE1.31/<first>/1" (base of a
+//     consecutive series; only when the universes are consecutive) and one SDMX/SXUS per universe (index u-1, "BSRE1.31/<u>/1").
+//     Universes 1-16, or --universes 1,2,5-8. Only these well-formed declarations pass isAllowedOutgoing(msg, {sdmxDeclare: true});
+//     without --declare the probe only listens (the allowlist refuses every SDMX message);
+//   * no DMX (never ChBk/ChLs), no FixtureIdentify, nothing else new on the wire.
+//   Report: reports/citp-sdmx.txt with an "== SDMX summary ==" block (counts by type, declaration sent yes/no, LEVEL DATA flagged).
+//
 // Test/dev options: --host <ip> --port <n> (skip discovery), --duration <s> or --seconds <s> (override log time),
 //   --announce-dest <ip:port> (--link: send the announcement ONLY there instead of the multicast groups),
 //   --report-dir <dir> (default ./reports), --citp-version <maj.min> (default 1.0; only bytes 4-5 change).
@@ -56,7 +70,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
   CAEX, CitpFramer, buildEnterShow, buildFixtureIdentify, buildFixtureListRequest, buildLaserFeedList, buildLeaveShow, buildNack, buildPNam,
-  buildPLoc, decodeMessage, formatFixtureTables, fourcc, hexOf, isAllowedOutgoing, textTable,
+  buildPLoc, buildSxsr, buildSxus, decodeMessage, parseUniverses, formatFixtureTables, fourcc, hexOf, isAllowedOutgoing, textTable,
 } from './lib/citp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -64,8 +78,8 @@ const argv = process.argv.slice(2);
 const flag = (n) => argv.includes(n);
 const opt = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
 
-const PHASE = flag('--identify') ? 'identify' : flag('--link') ? 'link' : flag('--sync') ? 'sync' : flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
-const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000, sync: 45000, link: 120000, identify: 90000 }[PHASE];
+const PHASE = flag('--sdmx') ? 'sdmx' : flag('--identify') ? 'identify' : flag('--link') ? 'link' : flag('--sync') ? 'sync' : flag('--caex') ? 'caex' : flag('--hello') ? 'hello' : 'observe';
+const DEFAULT_MS = { observe: 20000, hello: 30000, caex: 30000, sync: 45000, link: 120000, identify: 90000, sdmx: 120000 }[PHASE];
 const durArg = opt('--seconds') ?? opt('--duration');
 const DURATION_MS = durArg ? Math.round(parseFloat(durArg) * 1000) : DEFAULT_MS;
 const isIdentify = PHASE === 'identify';
@@ -80,10 +94,16 @@ const GROUPS = ['239.224.0.180', '224.0.0.180'];
 const CITP_UDP = 4809;
 const DISCOVER_MS = 5000;
 const PROBE_NAME = 'capture-streamdeck probe';
-const isLink = PHASE === 'link';
+const isSdmx = PHASE === 'sdmx';
+const isLink = PHASE === 'link' || isSdmx; // --sdmx is the --link flow plus SDMX logging (and, with --declare, the declaration)
+const DECLARE = isSdmx && flag('--declare');
+const UNIVERSES = isSdmx ? parseUniverses(opt('--universes') ?? '1-16') : [];
 
 const lines = [];
 const out = (s = '') => { lines.push(s); console.log(s); };
+/** --sdmx: every SDMX message in and out: {dir: 'in'|'out', at, tag, type, len, hex, decoded lines, levelLike} */
+const SDMX_LOG = [];
+const DECL = { sent: 0, refused: 0, sessions: [] };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const t0 = Date.now();
 const since = () => `+${((Date.now() - t0) / 1000).toFixed(2)}s`;
@@ -145,6 +165,16 @@ function tryConnect(host, port, timeoutMs = 3000) {
   });
 }
 
+/** --sdmx: one SDMX message, in or out, on any connection: logged in full (decode + raw hex) and kept for the summary. */
+function logSdmx(dir, tag, msg) {
+  const d = decodeMessage(msg, '      ');
+  const e = { dir, at: `+${((Date.now() - t0) / 1000).toFixed(2)}s ${new Date().toISOString().slice(11, 23)}Z`, tag, type: d.sub, len: msg.length, hex: hexOf(msg), lines: d.lines, levelLike: !!(d.sdmx && d.sdmx.levelLike) };
+  SDMX_LOG.push(e);
+  out(`  ${e.at} [${tag}] SDMX ${dir === 'in' ? 'RECEIVED' : 'SENT'} "${e.type}" (${e.len} bytes)${e.levelLike ? '   <<<<< LOOKS LIKE DMX LEVEL DATA >>>>>' : ''}`);
+  out(`      hex: ${e.hex}`);
+  d.lines.forEach((l) => out(l));
+}
+
 /** The ONLY UDP datagram --link may send: PINF/PLoc of Type "LightingConsole" (checked before every send). */
 function isConsoleAnnouncement(b) {
   return b.length > 30 && b.toString('latin1', 0, 4) === 'CITP' && b.toString('latin1', 16, 24) === 'PINFPLoc' && b.toString('latin1', 26, 41) === 'LightingConsole';
@@ -162,6 +192,7 @@ async function startAnnouncer({ ifaces, tcpPort, discover: wantDiscover, dest })
   const A = { sock, pkt, rounds: 0, ok: 0, fail: 0, bound: false, visualizer: null, waiters: [], timer: null, seenErr: new Set() };
   sock.on('error', (e) => out(`  announce socket error: ${errStr(e)}`));
   sock.on('message', (msg, rinfo) => {
+    if (isSdmx && msg.length >= 24 && msg.toString('latin1', 0, 4) === 'CITP' && msg.toString('latin1', 16, 20) === 'SDMX') logSdmx('in', `udp ${rinfo.address}:${rinfo.port}`, msg);
     if (msg.length < 4 || msg.toString('latin1', 0, 4) !== 'CITP' || A.visualizer) return;
     const d = decodeMessage(msg);
     if (d.ploc && d.ploc.type === 'Visualizer') {
@@ -211,6 +242,7 @@ async function main() {
   out(`CITP header version used for anything we send: ${VMAJ}.${VMIN};  log duration: ${DURATION_MS / 1000} s`);
   out(PHASE === 'observe' ? 'Sends: NOTHING.' : PHASE === 'hello' ? 'Sends: one PINF/PNam ("' + PROBE_NAME + '").'
     : PHASE === 'link' ? `Sends (only): UDP PINF/PLoc announcements (Type LightingConsole) every ${ANNOUNCE_MS / 1000} s; on TCP (outbound AND inbound connections): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest (every ${REREQUEST_MS / 1000} s), NACK (Reason 3), LeaveShow. No DMX.`
+    : isSdmx ? `Sends (only): what --link sends (UDP PLoc LightingConsole; PNam, empty LaserFeedList, EnterShow, FixtureListRequest every ${REREQUEST_MS / 1000} s, NACK 3, LeaveShow)${DECLARE ? `, and after our EnterShow on each connection the SDMX universe declaration for sACN universe(s) ${UNIVERSES.join(',')} (SXSr base + one SXUS each)` : '; NO SDMX (listen only; add --declare to declare our universes)'}. No DMX, no FixtureIdentify.`
     : PHASE === 'identify' ? 'Sends (only): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest (also every ' + REREQUEST_MS / 1000 + ' s), NACK (Reason 3), LeaveShow, and ONE FixtureIdentify (CAEX 5.6) after the first FixtureList. It writes an identifier into every fixture of the open show: use a COPY. No DMX.'
     : PHASE === 'sync' ? 'Sends (only): PINF/PNam, LaserFeedList (empty), EnterShow, FixtureListRequest, NACK (Reason 3), LeaveShow.'
     : 'Sends: PINF/PNam, then CAEX FixtureListRequest (0x00020200) only.');
@@ -333,11 +365,16 @@ async function main() {
     };
     const send = (label, buf) => new Promise((res) => {
       const isIdent = buf.length >= 24 && buf.toString('latin1', 16, 20) === 'CAEX' && buf.readUInt32LE(20) === CAEX.FixtureIdentify;
-      if (!isAllowedOutgoing(buf, { identify: isIdentify }) || (isIdent && ID.sent)) { if (isIdent) ID.refused++; lg(ses, `  ${since()} REFUSED to send ${label}: ${isIdent && ID.sent ? 'a FixtureIdentify was already sent (only one is ever allowed)' : 'not on the outgoing allowlist'} (${hexOf(buf, 32)})`); res(); return; }
+      const isSdmxOut = buf.length >= 24 && buf.toString('latin1', 16, 20) === 'SDMX';
+      if (isSdmxOut && !isAllowedOutgoing(buf, { sdmxDeclare: DECLARE })) DECL.refused++;
+      if (!isAllowedOutgoing(buf, { identify: isIdentify, sdmxDeclare: DECLARE }) || (isIdent && ID.sent)) { if (isIdent) ID.refused++; lg(ses, `  ${since()} REFUSED to send ${label}: ${isIdent && ID.sent ? 'a FixtureIdentify was already sent (only one is ever allowed)' : 'not on the outgoing allowlist'} (${hexOf(buf, 32)})`); res(); return; }
       if (isIdent) { ID.sent = true; ID.sentAt = since(); }
       if (ses.closing && !/LeaveShow/.test(label)) { lg(ses, `  ${since()} not sending ${label}: shutting down`); res(); return; }
-      lg(ses, `  ${since()} SEND ${label} (${buf.length} bytes): ${hexOf(buf)}`);
-      decodeMessage(buf, '      ').lines.forEach((l) => lg(ses, l));
+      if (isSdmxOut) { DECL.sent++; logSdmx('out', ses.tag, buf); }
+      else {
+        lg(ses, `  ${since()} SEND ${label} (${buf.length} bytes): ${hexOf(buf)}`);
+        decodeMessage(buf, '      ').lines.forEach((l) => lg(ses, l));
+      }
       sk.write(buf, (e) => { if (e) lg(ses, `  send error: ${errStr(e)}`); res(); });
     });
     // sends are queued so their order on the wire is the order they were decided in
@@ -450,7 +487,16 @@ async function main() {
         case CAEX.EnterShow:
           S.captureEnterShow++;
           lg(ses, `  ${at} -> Capture entered show ${JSON.stringify(dm.showName)}`);
-          if (!S.weEntered) { S.weEntered = true; ses.enqueue('CAEX EnterShow (ours)', buildEnterShow(PROBE_NAME, HDR_OPTS)); }
+          if (!S.weEntered) {
+            S.weEntered = true; ses.enqueue('CAEX EnterShow (ours)', buildEnterShow(PROBE_NAME, HDR_OPTS));
+            if (DECLARE && !ses.declared) {
+              ses.declared = true;
+              const consecutive = UNIVERSES.every((u, i) => i === 0 || u === UNIVERSES[i - 1] + 1);
+              if (consecutive) ses.enqueue(`SDMX SXSr (base universe ${UNIVERSES[0]} of ${UNIVERSES.length})`, buildSxsr(UNIVERSES[0], HDR_OPTS));
+              for (const u of UNIVERSES) ses.enqueue(`SDMX SXUS universe ${u}`, buildSxus(u, HDR_OPTS));
+              DECL.sessions.push({ tag: ses.tag, at, sxsr: consecutive, universes: UNIVERSES.length });
+            }
+          }
           ses.requestFixtures('Capture entered a show while we are in a show');
           return;
         case CAEX.FixtureList:
@@ -505,6 +551,7 @@ async function main() {
         lg(ses, `  ${since()} RECV message #${ses.msgCount}: ${m.length} bytes, layer="${fourcc(m, 16)}"` +
           `${fourcc(m, 16) === 'PINF' ? ` sub="${fourcc(m, 20)}"` : ''}`);
         lg(ses, `    hex(first 256): ${hexOf(m, 256)}${m.length > 256 ? ' ...' : ''}`);
+        if (isSdmx && fourcc(m, 16) === 'SDMX') { logSdmx('in', ses.tag || 'out', m); continue; }
         const dm = decodeMessage(m, '    ', { maxFixtures: synced ? 0 : 20 });
         dm.lines.forEach((l) => lg(ses, l));
         if (synced) handleSync(m, dm);
@@ -570,6 +617,23 @@ async function main() {
       }
       const any = sessions.some((x) => x.S.maxPatched > 0);
       out(`  Patched=1 seen in any FixtureList: ${any ? 'YES' : 'NO'}`);
+    }
+    if (isSdmx) {
+      const rx = SDMX_LOG.filter((e) => e.dir === 'in'), tx = SDMX_LOG.filter((e) => e.dir === 'out');
+      const byType = (xs) => Object.entries(xs.reduce((a, e) => ((a[e.type] = (a[e.type] || 0) + 1), a), {})).map(([k, v]) => `${k} x${v}`).join(', ');
+      const levels = rx.filter((e) => e.levelLike);
+      out('== SDMX summary ==');
+      out(`  SDMX messages RECEIVED: ${rx.length}${rx.length ? ` (${byType(rx)}; on: ${[...new Set(rx.map((e) => e.tag))].join(', ')})` : ' -- no SDMX received on any connection'}`);
+      out(`  declaration sent: ${DECLARE ? (DECL.sent ? `YES, ${DECL.sent} message(s) (${byType(tx)}) for sACN universe(s) ${UNIVERSES.join(',')}, on ${DECL.sessions.map((x) => `${x.tag} at ${x.at}`).join('; ')}` : 'NO (--declare was given, but we never entered a show: Capture sent no EnterShow)') : 'NO (listen only; --declare not given)'}${DECL.refused ? `; REFUSED by the allowlist: ${DECL.refused}` : ''}`);
+      if (levels.length) {
+        out('  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+        out(`  !!! LEVEL DATA: ${levels.length} SDMX message(s) carrying channel-sized payloads (ChBk / ChLs / unknown with a body) !!!`);
+        levels.slice(0, 20).forEach((e) => out(`  !!!   ${e.at} [${e.tag}] "${e.type}" ${e.len} bytes`));
+        out('  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+      } else out('  level data (ChBk / ChLs / anything channel-sized): NONE received');
+      out('  all SDMX messages, in order:');
+      if (!SDMX_LOG.length) out('    (none)');
+      SDMX_LOG.forEach((e) => { out(`    ${e.at} ${e.dir === 'in' ? '<-' : '->'} [${e.tag}] "${e.type}" ${e.len} bytes${e.levelLike ? '  LEVEL DATA' : ''}`); out(`      hex: ${e.hex}`); e.lines.slice(3).forEach((l) => out(`  ${l}`)); });
     }
     if (isIdentify) {
       const first = ID.first, ver = ID.reports.find((r) => r.kind === 'verify');

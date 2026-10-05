@@ -146,6 +146,131 @@ export function buildFixtureIdentify(items, opts) {
   return Buffer.concat([buildHeader(HEADER_SIZE + body.length, 'CAEX', opts), body]);
 }
 
+// ------------------------------------------------------------------ SDMX layer (Handoff 25, research only)
+//
+// SOURCES. The current CITP specification (bitbucket.org/lars_wernlund/citp, linked from citp-protocol.org -> lewlight.com/citp-protocol)
+// cannot be fetched from here (robots.txt / proxy policy), so the SDMX layouts come from three secondary sources that agree:
+//  * "CITP protocol suite specification" PA14 (Capture Sweden, 2004-08-21, techref.info/web/prod/cap/data/citp.pdf), SDMX section:
+//      struct CITP_SDMX_Header { struct CITP_Header CITPHeader; unsigned long ContentType; }   // CITP ContentType "SDMX"; "The SMDX
+//      protocol is not internally versioned."  Messages there: EnId, UNam, ChBk.
+//  * jwarwick/citp-lib Library/CITPDefines.h: COOKIE_SDMX 0x584d4453 'SDMX', COOKIE_SDMX_ENID 'EnId', COOKIE_SDMX_UNAM 'UNam',
+//      COOKIE_SDMX_CHBK 'ChBk', COOKIE_SDMX_SXSR 0x72535853 'SXSr' (cookies are the 4 ASCII bytes in wire order);
+//      struct CITP_SDMX_SXSr { CITP_SDMX_Header CITPSDMXHeader; ucs1 ConnectionString[]; }   // "DMX-source connection string"
+//      struct CITP_SDMX_ChBk { ...; uint8 Blind; uint8 UniverseIndex; uint16 FirstChannel; uint16 ChannelCount; uint8 ChannelLevels[]; }
+//  * nannou-org "citp" Rust crate, src/protocol/sdmx.rs (docs.rs/citp), which carries the later messages with the spec's doc text:
+//      Capa  "Capabilities message ... sent by a peer to the remote peer upon connect": u16 CapabilityCount, u16 Capabilities[]
+//            (1 ChLs channel list, 2 SXSr external source, 3 SXUS per-universe external sources, 101 Art-Net, 102 BSR E1.31,
+//             103 ETC Net2, 104 MA-Net external sources)
+//      UNam  u8 UniverseIndex (0-based), ucs1 UniverseName
+//      EnId  ucs1 Identifier
+//      ChBk  u8 Blind, u8 UniverseIndex (0-based), u16 FirstChannel (0-based), u16 ChannelCount, u8 ChannelLevels[ChannelCount]
+//      ChLs  u16 ChannelLevelCount, { u8 UniverseIndex, u16 Channel, u8 ChannelLevel }[]   ("only ... if the remote peer has
+//            acknowledged supporting it in a Capabilities message")
+//      SXSr  "Set External Source ... can be sent as an alternative to sending ChBk messages when DMX can be received over another
+//            protocol. In the event of handling multiple universes, the external source specified should be treated as the base
+//            universe of a consecutive series of universes."  ucs1 ConnectionString
+//      SXUS  "Set External Universe Source ... functions like the Set External Source message, but on a universe level rather than a
+//            global level."  u8 UniverseIndex (0-based), ucs1 ConnectionString ("as the SXSr message")
+//    Connection strings: "ArtNet/<net>/<universe>/<channel>", "BSRE1.31/<universe>/<channel>" ("BSRE1.31/1/1 is the first channel of
+//    the first universe"), "EtcNet2/<channel>", "MANet/<type>/<universe>/<channel>".
+// All integers little-endian; ucs1 = null-terminated 8-bit string.
+
+export const SDMX = { Capa: 'Capa', UNam: 'UNam', EnId: 'EnId', ChBk: 'ChBk', ChLs: 'ChLs', SXSr: 'SXSr', SXUS: 'SXUS' };
+export const SDMX_CAPS = { 1: 'ChLs channel list', 2: 'SXSr external source', 3: 'SXUS per-universe external sources', 101: 'Art-Net external sources', 102: 'BSR E1.31 external sources', 103: 'ETC Net2 external sources', 104: 'MA-Net external sources' };
+/** The sACN connection string for the first channel of `universe` (1-based sACN universe number). */
+export const sacnConnectionString = (universe) => `BSRE1.31/${universe}/1`;
+const SACN_CS = /^BSRE1\.31\/([1-9]\d{0,4})\/1$/;
+const MAX_SACN_UNIVERSE = 63999;
+
+function sdmxMessage(type, body, opts) {
+  return Buffer.concat([buildHeader(HEADER_SIZE + 4 + body.length, 'SDMX', opts), Buffer.from(type, 'latin1'), body]);
+}
+const ucs1Buf = (s) => Buffer.concat([Buffer.from(s, 'latin1'), Buffer.from([0])]);
+function checkUniverse(u) {
+  if (!Number.isInteger(u) || u < 1 || u > MAX_SACN_UNIVERSE) throw new RangeError(`sACN universe must be 1..${MAX_SACN_UNIVERSE}, got ${u}`);
+}
+/**
+ * SDMX/SXSr (Set External Source): CITP header ("SDMX") + "SXSr" + ucs1 ConnectionString. `universe` is the BASE of a consecutive series
+ * ("BSRE1.31/<universe>/1").
+ */
+export function buildSxsr(universe, opts) {
+  checkUniverse(universe);
+  return sdmxMessage(SDMX.SXSr, ucs1Buf(sacnConnectionString(universe)), opts);
+}
+/**
+ * SDMX/SXUS (Set External Universe Source): CITP header ("SDMX") + "SXUS" + u8 UniverseIndex (0-based) + ucs1 ConnectionString.
+ * Capture universe `universe` (1-based) takes its DMX from sACN universe `universe`: index universe-1, "BSRE1.31/<universe>/1".
+ */
+export function buildSxus(universe, opts) {
+  checkUniverse(universe);
+  if (universe > 256) throw new RangeError('SXUS UniverseIndex is a u8: universes 1..256 only');
+  return sdmxMessage(SDMX.SXUS, Buffer.concat([Buffer.from([universe - 1]), ucs1Buf(sacnConnectionString(universe))]), opts);
+}
+
+/** "1-16" (default), or --universes "1,2,5-8" -> sorted unique sACN universe numbers. */
+export function parseUniverses(spec = '1-16') {
+  const out = new Set();
+  for (const part of String(spec).split(',').map((x) => x.trim()).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) throw new Error(`--universes: cannot read "${part}" (use e.g. 1-16 or 1,2,5-8)`);
+    const a = Number(m[1]), b = Number(m[2] ?? m[1]);
+    if (a < 1 || b > 256 || a > b) throw new Error(`--universes: "${part}" is outside 1-256`);
+    for (let u = a; u <= b; u++) out.add(u);
+  }
+  if (!out.size) throw new Error('--universes: no universe given');
+  return [...out].sort((x, y) => x - y);
+}
+/** Exactly one of our own declaration messages, well-formed (declared size = real size, one sACN connection string, nothing after it). */
+export function isWellFormedDeclaration(msg) {
+  if (msg.length < HEADER_SIZE + 4 + 2 || msg.toString('latin1', 0, 4) !== 'CITP' || msg.toString('latin1', 16, 20) !== 'SDMX') return false;
+  if (msg.readUInt32LE(8) !== msg.length || msg.readUInt16LE(12) !== 1 || msg.readUInt16LE(14) !== 0) return false;
+  const type = msg.toString('latin1', 20, 24);
+  let p = HEADER_SIZE + 4, index = null;
+  if (type === SDMX.SXUS) index = msg[p++];
+  else if (type !== SDMX.SXSr) return false;
+  const z = ucs1z(msg, p);
+  if (!z || z.next !== msg.length) return false;
+  const m = SACN_CS.exec(z.s);
+  if (!m) return false;
+  const u = Number(m[1]);
+  if (u < 1 || u > MAX_SACN_UNIVERSE) return false;
+  return index === null || index === u - 1;
+}
+
+/** SDMX body decode (receiving side): structured result + printable lines. Never throws. */
+export function decodeSdmx(msg, indent = '    ') {
+  const lines = [];
+  const r = { type: fourcc(msg, 20), lines, levels: null };
+  const c = new Cur(msg, HEADER_SIZE + 4);
+  try {
+    switch (r.type) {
+      case SDMX.Capa: { const n = c.u16(); r.caps = []; for (let i = 0; i < n; i++) r.caps.push(c.u16()); lines.push(`${indent}SDMX Capa: ${n} capabilit${n === 1 ? 'y' : 'ies'}: ${r.caps.map((x) => `${x} (${SDMX_CAPS[x] ?? 'unknown'})`).join(', ') || 'none'}`); break; }
+      case SDMX.UNam: { r.universeIndex = c.u8(); const z = ucs1z(msg, c.p); if (!z) throw new RangeError('unterminated ucs1 UniverseName'); c.p = z.next; r.name = z.s; lines.push(`${indent}SDMX UNam: UniverseIndex=${r.universeIndex} (universe ${r.universeIndex + 1}) Name=${JSON.stringify(r.name)}`); break; }
+      case SDMX.EnId: { const z = ucs1z(msg, c.p); if (!z) throw new RangeError('unterminated ucs1 Identifier'); c.p = z.next; r.identifier = z.s; lines.push(`${indent}SDMX EnId: Identifier=${JSON.stringify(r.identifier)}`); break; }
+      case SDMX.ChBk: {
+        r.blind = c.u8(); r.universeIndex = c.u8(); r.firstChannel = c.u16(); const n = c.u16();
+        r.levels = [...c.bytes(n)];
+        lines.push(`${indent}SDMX ChBk (DMX LEVELS): Blind=${r.blind} UniverseIndex=${r.universeIndex} (universe ${r.universeIndex + 1}) FirstChannel=${r.firstChannel} (address ${r.firstChannel + 1}) ChannelCount=${n}`);
+        lines.push(`${indent}  levels: ${r.levels.slice(0, 64).join(' ')}${n > 64 ? ` ... (${n - 64} more)` : ''}`);
+        break;
+      }
+      case SDMX.ChLs: {
+        const n = c.u16(); r.levels = [];
+        for (let i = 0; i < n; i++) r.levels.push({ universeIndex: c.u8(), channel: c.u16(), level: c.u8() });
+        lines.push(`${indent}SDMX ChLs (DMX LEVELS): ${n} channel level(s): ${r.levels.slice(0, 32).map((x) => `u${x.universeIndex + 1}/${x.channel + 1}=${x.level}`).join(' ')}${n > 32 ? ' ...' : ''}`);
+        break;
+      }
+      case SDMX.SXSr: { const z = ucs1z(msg, c.p); if (!z) throw new RangeError('unterminated ucs1 ConnectionString'); c.p = z.next; r.connectionString = z.s; lines.push(`${indent}SDMX SXSr (Set External Source): ConnectionString=${JSON.stringify(r.connectionString)}`); break; }
+      case SDMX.SXUS: { r.universeIndex = c.u8(); const z = ucs1z(msg, c.p); if (!z) throw new RangeError('unterminated ucs1 ConnectionString'); c.p = z.next; r.connectionString = z.s; lines.push(`${indent}SDMX SXUS (Set External Universe Source): UniverseIndex=${r.universeIndex} (universe ${r.universeIndex + 1}) ConnectionString=${JSON.stringify(r.connectionString)}`); break; }
+      default: lines.push(`${indent}SDMX "${r.type}": not a message we know; body (${msg.length - HEADER_SIZE - 4} byte(s)): ${hexOf(msg.subarray(HEADER_SIZE + 4), 64)}`); r.unknown = true;
+    }
+    if (c.left > 0 && !r.unknown) lines.push(`${indent}  (${c.left} byte(s) after the decoded fields: ${hexOf(msg.subarray(c.p), 32)})`);
+  } catch (e) { r.error = e.message; lines.push(`${indent}SDMX ${r.type} decode stopped: ${e.message} (raw hex is logged)`); }
+  // "looks like level data": ChBk/ChLs, or an unknown SDMX message with a body big enough to hold channels
+  r.levelLike = !!(r.levels && r.levels.length) || !!(r.unknown && msg.length - HEADER_SIZE - 4 >= 8);
+  return r;
+}
+
 /**
  * The ONLY messages the probe may ever put on the wire: PINF/PNam and these CAEX codes. Anything else
  * (FixtureList, FixtureModify, FixtureRemove, FixtureIdentify, FixtureSelection, FixtureConsoleStatus,
@@ -156,10 +281,14 @@ export const ALLOWED_OUTGOING_CAEX = new Set([
 ]);
 /**
  * `identify: true` (citp-connect --identify only) additionally allows ONE well-formed FixtureIdentify. By default it is refused, as before.
+ * `sdmxDeclare: true` (citp-connect --sdmx --declare only, Handoff 25) additionally allows our well-formed SDMX SXSr / SXUS universe
+ * declarations (an sACN connection string "BSRE1.31/<u>/1"; SXUS index = u-1) and nothing else of the SDMX layer: never ChBk / ChLs
+ * (DMX levels), Capa, UNam or EnId. By default every SDMX message is refused.
  */
-export function isAllowedOutgoing(msg, { identify = false } = {}) {
+export function isAllowedOutgoing(msg, { identify = false, sdmxDeclare = false } = {}) {
   if (msg.length < HEADER_SIZE + 4 || msg.toString('latin1', 0, 4) !== 'CITP') return false;
   const layer = msg.toString('latin1', 16, 20);
+  if (layer === 'SDMX') return sdmxDeclare && isWellFormedDeclaration(msg);
   if (layer === 'PINF') return msg.toString('latin1', 20, 24) === 'PNam';
   if (layer === 'CAEX') {
     const code = msg.readUInt32LE(20);
@@ -361,6 +490,10 @@ export function decodeMessage(msg, indent = '    ', { maxFixtures = 20 } = {}) {
         default: lines.push(`${indent}CAEX body not decoded (${msg.length - HEADER_SIZE - 4} byte(s)): ${hexOf(msg.subarray(HEADER_SIZE + 4), 32)}`);
       }
     } catch (e) { lines.push(`${indent}CAEX decode stopped: ${e.message} (raw hex is logged above)`); }
+  } else if (r.layer === 'SDMX' && msg.length >= HEADER_SIZE + 4) {
+    const d = decodeSdmx(msg, indent);
+    r.sub = d.type; r.sdmx = d;
+    lines.push(`${indent}SDMX ContentType "${d.type}"`, ...d.lines);
   } else {
     r.sub = fourcc(msg, 20);
     lines.push(`${indent}layer not decoded here; next 8 bytes (20-27): ${hexOf(msg.subarray(20, 28))}`);
