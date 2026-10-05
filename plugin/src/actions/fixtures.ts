@@ -1,7 +1,7 @@
 import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type PropertyInspectorDidAppearEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, FIXTURE_SELECT_UUID, FIXTURE_DIALS, fixtureKey } from "../catalog/fixtures.js";
 import type { DialId } from "../fixtures/attrs.js";
-import { fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl } from "../lib/render.js";
+import { attrStripFeedback, deckKeySvg, deckState, fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl, type HeaderInput } from "../lib/render.js";
 import { runSetupCommand, type SetupCommand } from "../fixtures/setupCommands.js";
 import { rt } from "../runtime.js";
 import { draw, Flasher, logEvent } from "./util.js";
@@ -10,6 +10,20 @@ const svc = () => rt.fixtures;
 /** Fixture activity that sends no DMX (fine mode, Setup, Status): restarts the idle timer while Deck Control is ON, never switches it ON. */
 const keepAlive = (why: string): void => {
   if (rt.deck.on) rt.deck.activity(why);
+};
+
+/** v0.7.3 (Handoff 24): the Deck state and what the header line of the Attribute strips / the Deck key show. */
+export const deckHeader = (): HeaderInput => {
+  const v = svc().selection.view();
+  const pg = svc().pages();
+  return {
+    state: deckState(rt.deck.on, v.targets.length > 0),
+    line1: v.line1,
+    line2: v.line2,
+    page: svc().pageName(),
+    pageIndex: pg.index,
+    pageCount: pg.pages.length,
+  };
 };
 
 // ------------------------------------------------------------------ Fixture: Select
@@ -148,13 +162,15 @@ export class FixtureSlotDial extends SingletonAction {
     super();
     this.manifestId = uuid;
     svc().onChange(() => this.redrawAll());
+    // v0.7.3: the header line shows the Deck state, so it changes the moment Deck Control turns ON/OFF
+    rt.deck.onChange(() => this.redrawAll());
   }
   private redrawAll(): void {
     for (const c of this.ctxs.values()) this.view(c);
   }
   private view(c: Ctx): void {
     const r = svc().attrReadout(this.slot);
-    const fb = fixtureStripFeedback({ name: stripName(r.label), value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched });
+    const fb = attrStripFeedback({ name: stripName(r.label), value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched, slot: this.slot, header: deckHeader() });
     c.action.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
   }
   override onWillAppear(ev: WillAppearEvent): void {
@@ -296,7 +312,7 @@ export class FixturesRelease extends FixtureKey {
   }
 }
 
-/** Fixtures: Home Selected — the selected fixture(s) only, at full home (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
+/** Fixtures: Home Light (v0.7.3; was "Home Selected", same UUID) — the selected fixture(s) only, at full home (pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0). */
 export class FixturesHome extends FixtureKey {
   constructor() {
     super(FIXTURE_KEY_UUIDS.home, fixtureKey(FIXTURE_KEY_UUIDS.home));
@@ -347,15 +363,31 @@ export class FixturesPage extends FixtureKey {
   }
 }
 
-/** Fixtures: Deck Control (Handoff 21) — ON (amber, "Deck ON") holds the CITP link and drives DMX; OFF (grey, "Deck OFF") frees Capture's Control Pane. */
+/**
+ * Fixtures: Deck Control (Handoff 21; v0.7.3 look). The whole key is the state colour: grey "DECK OFF", amber "CLICK A LIGHT" (ON, nothing
+ * selected in Capture), green "DECK ON" + "Ch …" (driving). No Stream Deck title (the image carries the text). Redraws on Deck changes
+ * and on selection changes (click ↔ driving).
+ */
 export class FixturesDeck extends FixtureKey {
+  private titled = new Set<string>();
   constructor() {
     super(FIXTURE_KEY_UUIDS.deck, fixtureKey(FIXTURE_KEY_UUIDS.deck));
     rt.deck.onChange(() => this.redrawAll());
   }
   protected view(c: KeyCtx): void {
-    const on = rt.deck.on;
-    draw(c.action, { icon: this.def.icon, label: on ? "Deck ON" : "Deck OFF", active: on, tone: on ? "accent" : "normal", dim: !on });
+    const v = svc().selection.view();
+    const state = deckState(rt.deck.on, v.targets.length > 0);
+    const p = v.primary?.fixture;
+    const ch = p ? (p.channel ? `Ch ${p.channel}` : p.name.slice(0, 10)) : "";
+    c.action.setImage(svgDataUrl(deckKeySvg(state, v.targets.length > 1 ? `${ch} +${v.targets.length - 1}` : ch))).catch((e) => rt.log.warn("setImage failed", e));
+    if (!this.titled.has(c.action.id)) {
+      this.titled.add(c.action.id);
+      c.action.setTitle("").catch((e) => rt.log.warn("setTitle failed", e));
+    }
+  }
+  override onWillDisappear(ev: WillDisappearEvent): void {
+    this.titled.delete(ev.action.id);
+    super.onWillDisappear(ev);
   }
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     const to = !rt.deck.on;

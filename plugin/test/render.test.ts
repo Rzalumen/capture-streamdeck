@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COLORS, fixtureStripFeedback, keySvg, mix, selectStripFeedback, stripFeedback } from "../src/lib/render.ts";
+import { COLORS, attrStripFeedback, deckKeySvg, deckState, fixtureStripFeedback, headerText, keySvg, mix, selectStripFeedback, stripFeedback, type HeaderInput } from "../src/lib/render.ts";
 import { ICONS, iconForCommand, iconSvg } from "../src/lib/icons.ts";
 
 test("mix at 35 % over the background", () => {
@@ -64,4 +64,87 @@ test("strip feedback: value greyed with ~ until sent; offline dims and says Offl
   assert.equal(off.mark.value, "Offline");
   assert.equal(off.mark.color, COLORS.red);
   assert.equal(off.name.color, "#" + off.name.color.slice(1).toUpperCase());
+});
+
+// ------------------------------------------------------------------ v0.7.3 (Handoff 24): Deck state on the LCD and the Deck key
+
+const H = (state: HeaderInput["state"], o: Partial<HeaderInput> = {}): HeaderInput => ({ state, line1: "Rogue R2X Wash", line2: "Ch 202 · 1/444", page: "Main", pageIndex: 0, pageCount: 8, ...o });
+const GREY_TEXT = mix(COLORS.text, COLORS.bg, 0.6);
+
+test("deckState: off when Deck Control is OFF; click when ON with nothing to drive; driving otherwise", () => {
+  assert.equal(COLORS.on, "#3DD68C");
+  assert.equal(deckState(false, false), "off");
+  assert.equal(deckState(false, true), "off", "OFF wins even with a selection");
+  assert.equal(deckState(true, false), "click");
+  assert.equal(deckState(true, true), "driving");
+});
+
+test("header text per dial slot: off / click / driving (single, ×2 same model, several models, Ch 0 position hint, long model clipped, page n/N)", () => {
+  assert.deepEqual([0, 1, 2, 3].map((i) => headerText(i, H("off"))), ["DECK OFF", "", "", ""]);
+  assert.deepEqual([0, 1, 2, 3].map((i) => headerText(i, H("click"))), ["CLICK A LIGHT", "Click a light", "in Capture", ""]);
+  assert.deepEqual([0, 1, 2, 3].map((i) => headerText(i, H("driving"))), ["DECK ON", "Ch 202 · 1/444", "Rogue R2X Wash", "Main 1/8"]);
+  assert.deepEqual([1, 2].map((i) => headerText(i, H("driving", { line1: "Rogue R2X Wash ×2", line2: "Ch 202 +1" }))), ["Ch 202 +1", "Rogue R2X Wash ×2"]);
+  assert.deepEqual([1, 2].map((i) => headerText(i, H("driving", { line1: "3 fixtures", line2: "Ch 201 +2" }))), ["Ch 201 +2", "3 fixtures"]);
+  assert.equal(headerText(1, H("driving", { line2: "SL 1.3 · US 0.9" })), "SL 1.3 · US 0.9", "Capture Channel 0: the position hint");
+  const long = headerText(2, H("driving", { line1: "Robe Robin MegaPointe Profile" }));
+  assert.equal(long, "Robe Robin MegaPo…");
+  assert.equal(long.length, 18);
+  assert.equal(headerText(2, H("driving", { line1: "Exactly18Character" })), "Exactly18Character", "18 characters: not clipped");
+  assert.equal(headerText(3, H("driving", { page: "Shutters 1/3", pageIndex: 4, pageCount: 8 })), "Shutters 1/3 5/8");
+  assert.equal(headerText(3, H("driving", { page: "" })), "", "no page: empty");
+});
+
+test("header colours: the background runs across all four strips in the state colour", () => {
+  const fb = (state: HeaderInput["state"], slot: number) => attrStripFeedback({ name: "Pan", value: 0.5, fine: false, multi: 1, untouched: false, slot, header: H(state) }).header as { value: string; color: string; background: string };
+  for (const slot of [0, 1, 2, 3]) {
+    assert.deepEqual([fb("off", slot).background, fb("off", slot).color], [COLORS.track, GREY_TEXT], `off ${slot}`);
+    assert.deepEqual([fb("click", slot).background, fb("click", slot).color], [COLORS.accent, COLORS.bg], `click ${slot}`);
+    assert.deepEqual([fb("driving", slot).background, fb("driving", slot).color], [COLORS.on, COLORS.bg], `driving ${slot}`);
+  }
+});
+
+test("attrStripFeedback: the body is fixtureStripFeedback's for the same input (— dimmed, ~ untouched, ×N), only FINE takes the state colour", () => {
+  const cases = [
+    { name: "Pan", value: 0.5, fine: false, multi: 1, untouched: false },
+    { name: "Pan", value: 0.5, fine: false, multi: 1, untouched: true },
+    { name: "Intensity", value: null, fine: false, multi: 1, untouched: true },
+    { name: "Red 1", value: 0.25, fine: false, multi: 3, untouched: false },
+    { name: "Tilt", value: null, fine: true, multi: 2, untouched: false },
+  ];
+  for (const st of ["off", "click", "driving"] as const)
+    for (const c of cases) {
+      const { header, ...body } = attrStripFeedback({ ...c, slot: 1, header: H(st) });
+      assert.ok(header);
+      assert.deepEqual(body, fixtureStripFeedback(c), `${st} ${JSON.stringify(c)}`);
+    }
+  const fine = (st: HeaderInput["state"]) => (attrStripFeedback({ name: "Pan", value: 0.5, fine: true, multi: 1, untouched: false, slot: 0, header: H(st) }).mark as { value: string; color: string });
+  assert.deepEqual(fine("driving"), { value: "FINE", color: COLORS.on });
+  assert.deepEqual(fine("click"), { value: "FINE", color: COLORS.accent });
+  assert.deepEqual(fine("off"), { value: "FINE", color: GREY_TEXT }, "off: the grey of the off line (the track colour would not show on the dark strip)");
+  const { mark, ...rest } = attrStripFeedback({ name: "Pan", value: 0.5, fine: true, multi: 1, untouched: false, slot: 0, header: H("driving") });
+  const { mark: m0, ...rest0 } = fixtureStripFeedback({ name: "Pan", value: 0.5, fine: true, multi: 1, untouched: false });
+  void mark;
+  void m0;
+  delete (rest as Record<string, unknown>).header;
+  assert.deepEqual(rest, rest0, "with FINE on, everything but the mark colour is unchanged");
+});
+
+test("deckKeySvg: a full-size background rect in the state colour and the state's text", () => {
+  const bgOf = (svg: string) => /^<svg[^>]*><rect x="0" y="0" width="144" height="144" fill="(#[0-9A-F]{6})"\/>/.exec(svg)?.[1];
+  const texts = (svg: string) => [...svg.matchAll(/<text[^>]*fill="(#[0-9A-F]{6})"[^>]*>([^<]*)<\/text>/g)].map((m) => [m[2], m[1]]);
+  const off = deckKeySvg("off");
+  assert.equal(bgOf(off), COLORS.track);
+  assert.deepEqual(texts(off), [["DECK", GREY_TEXT], ["OFF", GREY_TEXT]]);
+  const click = deckKeySvg("click", "Ch 202");
+  assert.equal(bgOf(click), COLORS.accent);
+  assert.deepEqual(texts(click), [["CLICK", COLORS.bg], ["A LIGHT", COLORS.bg]], "click ignores the channel text");
+  const drv = deckKeySvg("driving", "Ch 202");
+  assert.equal(bgOf(drv), COLORS.on);
+  assert.deepEqual(texts(drv), [["DECK ON", COLORS.bg], ["Ch 202", COLORS.bg]]);
+  for (const svg of [off, click, drv]) {
+    assert.match(svg, /width="144" height="144" viewBox="0 0 144 144"/);
+    for (const m of svg.matchAll(/font-size="(\d+)"/g)) assert.ok(Number(m[1]) >= 14 && Number(m[1]) <= 36, m[1]);
+    assert.ok(!svg.includes("<g"), "no icon: text only");
+  }
+  assert.deepEqual(texts(deckKeySvg("driving")).map((t) => t[0]), ["DECK ON"]);
 });

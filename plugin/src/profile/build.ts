@@ -102,7 +102,7 @@ function buildPage(page: Page, o: BuildOptions, plugin: { Name: string; UUID: st
     const m = actionOf(k.uuid);
     const image = put("key", k.icon);
     // v0.5: the key shows its name as Stream Deck title text; the plugin no longer draws labels into the key images.
-    const states = m.States.map(() => state(image, k.title, true));
+    const states = m.States.map(() => state(image, k.title, k.showTitle ?? true));
     return { ActionID: seed(pos, k.uuid), LinkedTitle: true, Name: m.Name, Plugin: plugin, Resources: null, Settings: {}, State: 0, States: states, UUID: k.uuid };
   };
 

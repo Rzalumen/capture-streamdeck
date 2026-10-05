@@ -187,20 +187,26 @@ test("dials: every page has its own four; standard set everywhere, View set on V
   for (const p of layout.pages) if (!isFixturesPage(p)) for (const d of p.dials.values()) assert.ok(NUMBER_PROPERTIES.some((n) => dialUuid(n) === d.uuid));
 });
 
-test("Fixtures folder (v0.7.1): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture; dials Attribute 1 · 2 · 3 · 4", () => {
+test("Fixtures folder (v0.7.3): ONE page at fixed positions — Back · Setup · (empty) · Deck Control / Home Light · (empty) · ◀ Page · Page ▶; no Status, no Next Fixture; dials Attribute 1 · 2 · 3 · 4", () => {
   const { pages } = chain(folder("Fixtures"));
   assert.equal(pages.length, 1);
   const p = pages[0];
   const U = "com.rezabehjat.capture";
   assert.equal(p.keys.get("0,0")?.type, "back");
-  const pos = ["1,0", "2,0", "3,0", "0,1", "1,1", "2,1", "3,1"];
-  assert.deepEqual(pos.map((x) => (p.keys.get(x) as { uuid: string }).uuid), ["fixtures.setup", "fixtures.deck", "fixtures.home", "fixtures.status", "fixtures.page-prev", "fixtures.page-next", "fixtures.next"].map((k) => `${U}.${k}`));
-  assert.deepEqual(pos.map((x) => titleOf(p.keys.get(x))), ["Setup", "Deck OFF", "Home Selected", "Status", "◀ Page", "Page ▶", "Next Fixture"]);
-  assert.equal(p.keys.size, 8, "every key slot used");
+  const at = (x: string): string | undefined => (p.keys.get(x) as { uuid?: string } | undefined)?.uuid;
+  assert.deepEqual(
+    Object.fromEntries(["1,0", "2,0", "3,0", "0,1", "1,1", "2,1", "3,1"].map((x) => [x, at(x) ?? null])),
+    { "1,0": `${U}.fixtures.setup`, "2,0": null, "3,0": `${U}.fixtures.deck`, "0,1": `${U}.fixtures.home`, "1,1": null, "2,1": `${U}.fixtures.page-prev`, "3,1": `${U}.fixtures.page-next` },
+  );
+  assert.deepEqual(["1,0", "0,1", "2,1", "3,1"].map((x) => titleOf(p.keys.get(x))), ["Setup", "Home Light", "◀ Page", "Page ▶"]);
+  const deckKey = p.keys.get("3,0") as { title: string; showTitle?: boolean };
+  assert.deepEqual([deckKey.title, deckKey.showTitle], ["", false], "the Deck key draws its own state: no title");
+  assert.equal(p.keys.size, 6, "Back + five keys, two empty slots");
   assert.equal(p.parent, layout.home);
   assert.deepEqual(DIAL_POSITIONS.map((x) => p.dials.get(x)!.uuid.slice(`${U}.fixture.`.length)), ["attr1", "attr2", "attr3", "attr4"], "the Select dial left the page");
   assert.deepEqual(DIAL_POSITIONS.map((x) => p.dials.get(x)!.title), ["Attribute 1", "Attribute 2", "Attribute 3", "Attribute 4"]);
-  assert.ok(!layout.pages.some((x) => [...x.keys.values()].some((k) => k.type === "action" && k.uuid === `${U}.fixtures.release`)), "Release is not in the profile");
+  for (const gone of ["release", "status", "next"])
+    assert.ok(!layout.pages.some((x) => [...x.keys.values()].some((k) => k.type === "action" && k.uuid === `${U}.fixtures.${gone}`)), `${gone} is not in the profile`);
   assert.ok(!layout.pages.some((x) => x.path.startsWith("fixtures/")));
 });
 
@@ -312,7 +318,7 @@ test("every action UUID is one of ours (visible, not a generic configurable one)
         seen.add(a.UUID);
         assert.ok(ours.has(a.UUID) || a.UUID === OPEN_CHILD_UUID || a.UUID === BACK_UUID, a.UUID);
         if (ours.has(a.UUID)) {
-          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.7.2.0" });
+          assert.deepEqual(a.Plugin, { Name: "Capture", UUID: "com.rezabehjat.capture", Version: "0.7.3.0" });
           assert.deepEqual(a.Settings, {}, "named actions carry no settings: nothing to choose");
         }
       }
@@ -339,10 +345,13 @@ test("every key in the profile shows its name as title text (ShowTitle true) and
     for (const c of pm.Controllers)
       for (const a of Object.values(c.Actions)) {
         for (const s of a.States) {
-          assert.equal(s.ShowTitle, c.Type === "Keypad", `${a.UUID} on ${c.Type}`);
+          // v0.7.3: the Deck Control key is the one exception — it draws its state into its image, no title
+          const deckKey = a.UUID === "com.rezabehjat.capture.fixtures.deck";
+          assert.equal(s.ShowTitle, c.Type === "Keypad" && !deckKey, `${a.UUID} on ${c.Type}`);
           if (c.Type === "Keypad") keys++;
           assert.equal(s.TitleAlignment, "bottom");
-          assert.ok(s.Title.length > 0);
+          if (deckKey) assert.equal(s.Title, "");
+          else assert.ok(s.Title.length > 0);
         }
         if (a.UUID === OPEN_CHILD_UUID) assert.equal(a.Name, "Create Folder");
         if (a.UUID === BACK_UUID) assert.equal(a.Name, "Parent Folder");
@@ -361,6 +370,27 @@ test("the profile checker refuses a key that hides its title", () => {
   }
   assert.ok(changed);
   assert.ok(checkProfile(bad, manifest).some((e) => /does not show its title/.test(e)));
+});
+
+test("the profile checker allows a hidden/empty title on the Deck Control key only (v0.7.3): any other key on the Fixtures page is refused", () => {
+  const files = readZip(zip);
+  const U = "com.rezabehjat.capture.fixtures";
+  for (const other of ["setup", "home", "page-prev", "page-next"]) {
+    const bad = new Map(files);
+    let changed = false;
+    for (const [n, buf] of bad) {
+      if (!buf || !/\/manifest\.json$/.test(n) || !buf.toString("utf8").includes(`"${U}.${other}"`)) continue;
+      const pm = JSON.parse(buf.toString("utf8"));
+      for (const c of pm.Controllers) for (const a of Object.values(c.Actions) as any[]) if (a.UUID === `${U}.${other}`) for (const st of a.States) Object.assign(st, { ShowTitle: false, Title: "" });
+      bad.set(n, Buffer.from(JSON.stringify(pm)));
+      changed = true;
+    }
+    assert.ok(changed, other);
+    const errs = checkProfile(bad, manifest);
+    assert.ok(errs.some((e) => e.includes(`${U}.${other}`) && /does not show its title/.test(e)), `${other}: ShowTitle false refused`);
+    assert.ok(errs.some((e) => e.includes(`${U}.${other}`) && /has no title text/.test(e)), `${other}: empty title refused`);
+  }
+  assert.deepEqual(checkProfile(files, manifest), [], "the generated profile (Deck key without a title) passes");
 });
 
 test("images are our own art: every PNG in the zip is byte-identical to a file in profile-art/, named by its content hash", () => {

@@ -85,6 +85,13 @@ after(async () => {
 
 const lastSetupView = (): any => deck.received.filter((m) => m.event === "sendToPropertyInspector" && m.payload?.event === "setup").at(-1)?.payload;
 const waitStrip = (ctx: string, pred: (fb: any) => boolean, what: string): Promise<any> => deck.waitFor(() => (deck.lastFeedback(ctx) && pred(deck.lastFeedback(ctx)) ? deck.lastFeedback(ctx) : undefined), 3000, what);
+/** v0.7.3: the Deck key draws its state into its image (no title): grey = off, amber = click a light, green = driving. */
+const deckKeyState = (ctx: string): "off" | "click" | "driving" | "" => {
+  const m = /^<svg[^>]*><rect[^>]*fill="(#[0-9A-F]{6})"/i.exec(deck.lastImageRaw(ctx));
+  return m ? (({ "#2A2E33": "off", "#F5B82E": "click", "#3DD68C": "driving" }) as Record<string, "off" | "click" | "driving">)[m[1].toUpperCase()] ?? "" : "";
+};
+const waitDeck = (ctx: string, want: "off" | "on" | "click" | "driving"): Promise<unknown> =>
+  deck.waitFor(() => { const s = deckKeyState(ctx); return (want === "on" ? s === "click" || s === "driving" : s === want) || undefined; }, 4000, `Deck key ${want}`);
 const waitTitle = (ctx: string, t: string): Promise<unknown> => deck.waitFor(() => deck.sent(ctx, "setTitle").at(-1)?.payload.title === t || undefined, 4000, `title ${JSON.stringify(t)}`);
 const live = (from: number): ParsedPacket[] => packets.slice(from).filter((p) => !p.terminated);
 /** Universe-1 slots (1-based) that differ between two frames. */
@@ -118,14 +125,14 @@ test("setup: both fixtures addressed (Deck Control OFF); nothing selected; no DM
   deck.sendToPlugin(A_.setup, "setup", { cmd: "set", key: INST_A, universe: 1, address: ADDR_A });
   deck.sendToPlugin(A_.setup, "setup", { cmd: "set", key: INST_B, universe: 1, address: ADDR_B });
   await deck.waitFor(() => (lastSetupView()?.view?.controllable === 2 ? true : undefined), 3000, "A and B controllable");
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await noSelection("nothing selected yet");
   assert.equal(packets.length, 0);
 });
 
 test("ON, select B, turn Pan: only B's slots change", async () => {
   deck.keyDown(A_.deck, "deckkey");
-  await waitTitle("deckkey", "Deck ON");
+  await waitDeck("deckkey", "on");
   await selectB();
   assert.equal(packets.length, 0, "selecting sends nothing");
   deck.dialRotate(A_.a1, "a1", 10);
@@ -136,14 +143,14 @@ test("ON, select B, turn Pan: only B's slots change", async () => {
 
 test("OFF; ON by a knob turn: nothing moves, no fallback to A and no carry-over of B; the strip reads 'Click a light / in Capture'", async () => {
   deck.keyDown(A_.deck, "deckkey");
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "closed");
   assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
   await noSelection("OFF cleared the selection");
   // in Capture the user now clicks and moves A with the mouse: the deck sees none of it (no connection)
   const n0 = packets.length;
   deck.dialRotate(A_.a1, "a1", 5);
-  await waitTitle("deckkey", "Deck ON");
+  await waitDeck("deckkey", "on");
   await deck.waitFor(() => citp.clients.size === 1 || undefined, 4000, "persistent session");
   await sleep(500);
   assert.equal(packets.length, n0, "no sACN packet at all after the turn (nothing selected in this connection)");

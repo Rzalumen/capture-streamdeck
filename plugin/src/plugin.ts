@@ -38,7 +38,7 @@ for (let k = 1; k <= SHOW_POSITION_COUNT; k++) streamDeck.actions.registerAction
 for (const p of NUMBER_PROPERTIES) streamDeck.actions.registerAction(new NamedDial(dialUuid(p), p));
 for (const p of BOOL_PROPERTIES) streamDeck.actions.registerAction(new NamedToggle(toggleUuid(p), p));
 
-// Fixture control: Select + Attribute 1–3 (v0.6) + the named attribute dials, and the Setup / Release / Home Selected / Status / ◀ Page / Page ▶ keys.
+// Fixture control: Select + Attribute 1–4 + the named attribute dials, and the Setup / Release / Home Light / Status / ◀ Page / Page ▶ / Deck Control / Next Fixture keys.
 streamDeck.actions.registerAction(new FixtureSelect());
 for (const a of fixtureSlotDialActions()) streamDeck.actions.registerAction(a);
 for (const a of fixtureDialActions()) streamDeck.actions.registerAction(a);

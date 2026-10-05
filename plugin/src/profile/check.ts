@@ -5,6 +5,10 @@
 import type { Manifest } from "../catalog/manifest.js";
 import { BACK_UUID, COMMAND_SLOTS, DIAL_POSITIONS, KEY_POSITIONS_ALL, OPEN_CHILD_UUID } from "./layout.js";
 import { PLUGIN_UUID } from "./build.js";
+import { FIXTURE_KEY_UUIDS } from "../catalog/fixtures.js";
+
+/** v0.7.3: the only key allowed without a visible Stream Deck title (it draws its state into its image). */
+const DECK_CONTROL_UUID = FIXTURE_KEY_UUIDS.deck;
 
 const UPPER = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/;
 const LOWER = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -139,7 +143,8 @@ export function checkProfile(files: Map<string, Buffer | null>, manifest: Manife
         if (m && a.States?.length !== m.States.length) err(`${at} ${pos}: ${u} has ${a.States?.length} states, the manifest ${m.States.length}`);
       }
       // v0.5: every KEY shows its name as Stream Deck title text (the plugin no longer draws labels into key images)
-      if (pad[pos] === a) {
+      // v0.7.3: except the Deck Control key, which draws its state (DECK OFF / CLICK A LIGHT / DECK ON Ch …) into its image
+      if (pad[pos] === a && u !== DECK_CONTROL_UUID) {
         for (const s of a.States ?? []) {
           if (s.ShowTitle !== true) err(`${at} ${pos}: key ${u} does not show its title (ShowTitle must be true)`);
           if (!s.Title) err(`${at} ${pos}: key ${u} has no title text`);

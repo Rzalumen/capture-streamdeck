@@ -7,11 +7,11 @@
  *  - Every child page: Back at "0,0"; commands fill "1,0" → "3,0" → "0,1" → "3,1" (7 slots) in catalog order.
  *  - More than 7 commands: the 7th slot ("3,1") becomes a "More ▸" folder to the next page (which has its own Back).
  *  - Dials: every page has its own four. Standard set everywhere; View pages get the View set; the Look folder the Flare set.
- *  - Fixtures (v0.6, Handoff 20; v0.7 Deck Control replaces Release; v0.7.1 Next Fixture + Attribute 4): one page, Back · Setup · Deck Control · Home Selected · Status ·
- *    ◀ Page · Page ▶ · Next Fixture; dials Attribute 1 · 2 · 3 · 4 (the attribute pages are cycled by the page keys, not by profile pages). The four fixed-dial pages are gone.
+ *  - Fixtures (v0.7.3, Handoff 24): one page at fixed positions — row 0: Back · Setup · (empty) · Deck Control; row 1: Home Light · (empty) ·
+ *    ◀ Page · Page ▶; dials Attribute 1 · 2 · 3 · 4 (the attribute pages are cycled by the page keys). Status and Next Fixture left the profile.
  */
 import { CATEGORIES, ENTRIES, actionName, type CatalogEntry } from "../catalog/index.js";
-import { FIXTURE_ATTR_DIALS, PROFILE_FIXTURE_KEYS } from "../catalog/fixtures.js";
+import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, PROFILE_FIXTURE_KEY_POSITIONS, fixtureKey } from "../catalog/fixtures.js";
 import { CONNECTION_UUID, CONNECTION_NAME, SHOW_POSITION_COUNT, STORE_MODIFIER_NAME, STORE_MODIFIER_UUID, showPositionName, showPositionUuid, toggleActionName } from "../catalog/extras.js";
 import { uuidOf } from "../catalog/index.js";
 import { BOOL_PROPERTIES, NUMBER_PROPERTIES } from "../lib/properties.js";
@@ -37,7 +37,7 @@ export type DialSet = keyof typeof DIAL_SETS;
 
 /** A key as the layout describes it. `icon` is an icon name from src/lib/icons.ts. */
 export type Key =
-  | { type: "action"; uuid: string; name: string; title: string; icon: string }
+  | { type: "action"; uuid: string; name: string; title: string; icon: string; showTitle?: boolean }
   | { type: "folder"; title: string; icon: string; child: Page }
   | { type: "back"; title: string; icon: string };
 export interface Dial {
@@ -185,12 +185,19 @@ function fixtureDials(): Map<string, Dial> {
   return m;
 }
 
-/** Fixtures folder (v0.7.1): ONE page — Back · Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture, dials Attribute 1–4. */
+/**
+ * Fixtures folder (v0.7.3): explicit positions — "0,0" Back · "1,0" Setup · "3,0" Deck Control / "0,1" Home Light · "2,1" ◀ Page · "3,1" Page ▶;
+ * dials Attribute 1–4. The Deck key draws its state into its image: no Stream Deck title (ShowTitle false, empty title).
+ */
 function buildFixtures(parent: Page, pages: Page[]): Page {
   const page: Page = { id: uuidFrom("fixtures"), path: "fixtures", parent, keys: new Map(), dials: fixtureDials() };
   pages.push(page);
   page.keys.set("0,0", { type: "back", title: "Back", icon: "back" });
-  PROFILE_FIXTURE_KEYS.forEach((k, i) => page.keys.set(COMMAND_SLOTS[i], { type: "action", uuid: k.uuid, name: k.name, title: k.title, icon: k.icon }));
+  for (const [pos, uuid] of PROFILE_FIXTURE_KEY_POSITIONS) {
+    const k = fixtureKey(uuid);
+    const deck = uuid === FIXTURE_KEY_UUIDS.deck;
+    page.keys.set(pos, { type: "action", uuid: k.uuid, name: k.name, title: deck ? "" : k.title, icon: k.icon, ...(deck ? { showTitle: false } : {}) });
+  }
   return page;
 }
 

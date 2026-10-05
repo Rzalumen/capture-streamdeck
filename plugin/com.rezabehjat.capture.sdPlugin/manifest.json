@@ -1,6 +1,6 @@
 {
   "Name": "Capture",
-  "Version": "0.7.2.0",
+  "Version": "0.7.3.0",
   "Author": "Reza Behjat",
   "Actions": [
     {
@@ -2692,10 +2692,10 @@
       ]
     },
     {
-      "Name": "Fixtures: Home Selected",
+      "Name": "Fixtures: Home Light",
       "UUID": "com.rezabehjat.capture.fixtures.home",
       "Icon": "imgs/icons/fx-home",
-      "Tooltip": "Puts the selected fixture(s) (only) at full home: pan/tilt 50 %, intensity 100 %, additive colours full, the rest 0.",
+      "Tooltip": "Puts the light selected in Capture back to its home values (pan/tilt 50 %, intensity 100 %, shutter open, additive colours full, the rest 0).",
       "Controllers": [
         "Keypad"
       ],
@@ -2711,6 +2711,7 @@
       "UUID": "com.rezabehjat.capture.fixtures.status",
       "Icon": "imgs/icons/fx-status",
       "Tooltip": "Shows the show name, how many fixtures are controllable and whether DMX output is active. Press to read the show again.",
+      "VisibleInActionsList": false,
       "Controllers": [
         "Keypad"
       ],
@@ -2725,14 +2726,14 @@
       "Name": "Fixtures: Deck Control",
       "UUID": "com.rezabehjat.capture.fixtures.deck",
       "Icon": "imgs/icons/fx-deck",
-      "Tooltip": "Deck Control ON (amber, \"Deck ON\"): the deck holds the CITP link to Capture (follows the selection, drives DMX); Capture's Control Pane is locked while ON. OFF (grey, \"Deck OFF\"): no link, no DMX, the Control Pane works. Any fixture knob or key switches it ON; it switches OFF after the idle time set in Setup.",
+      "Tooltip": "Press to switch Deck Control ON/OFF. The key's colour says the state: grey = OFF (no link to Capture, no DMX, Capture's Control Pane works); amber = ON, click a light in Capture; green = ON and driving the light shown (Ch …). Capture's Control Pane is locked while ON. Any fixture knob or key switches it ON; it switches OFF after the idle time set in Setup.",
       "Controllers": [
         "Keypad"
       ],
       "States": [
         {
           "Image": "imgs/keys/fx-deck",
-          "ShowTitle": true
+          "ShowTitle": false
         }
       ]
     },
@@ -2756,6 +2757,7 @@
       "UUID": "com.rezabehjat.capture.fixtures.next",
       "Icon": "imgs/icons/fx-next",
       "Tooltip": "Selects the next controllable fixture (like turning the Select dial); Capture's next click overrides it. The title shows the fixture now selected.",
+      "VisibleInActionsList": false,
       "Controllers": [
         "Keypad"
       ],
@@ -2818,7 +2820,7 @@
         }
       ],
       "Encoder": {
-        "layout": "layouts/dial.json",
+        "layout": "layouts/attr.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
           "Push": "Fine mode",
@@ -2842,7 +2844,7 @@
         }
       ],
       "Encoder": {
-        "layout": "layouts/dial.json",
+        "layout": "layouts/attr.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
           "Push": "Fine mode",
@@ -2866,7 +2868,7 @@
         }
       ],
       "Encoder": {
-        "layout": "layouts/dial.json",
+        "layout": "layouts/attr.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
           "Push": "Fine mode",
@@ -2890,7 +2892,7 @@
         }
       ],
       "Encoder": {
-        "layout": "layouts/dial.json",
+        "layout": "layouts/attr.json",
         "TriggerDescription": {
           "Rotate": "Adjust",
           "Push": "Fine mode",

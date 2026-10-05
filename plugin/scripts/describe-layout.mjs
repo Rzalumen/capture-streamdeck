@@ -7,7 +7,7 @@ const dialNames = (p) => [...p.dials.values()].map((d) => d.title).join(" · ");
 function walk(page, depth) {
   const here = [...page.keys.entries()];
   const names = page === layout.home ? [...page.keys.values()] : COMMAND_SLOTS.filter((s) => page.keys.has(s)).map((s) => page.keys.get(s));
-  out.push(`${"  ".repeat(depth)}- **${page.path}** — ${names.map((k) => k.title).join(" · ")}   \n${"  ".repeat(depth)}  dials: ${dialNames(page)}`);
+  out.push(`${"  ".repeat(depth)}- **${page.path}** — ${names.map((k) => k.title || (k.name ?? "").replace(/^Fixtures: /, "")).join(" · ")}   \n${"  ".repeat(depth)}  dials: ${dialNames(page)}`);
   for (const [, k] of here) if (k.type === "folder") walk(k.child, depth + 1);
 }
 walk(layout.home, 0);

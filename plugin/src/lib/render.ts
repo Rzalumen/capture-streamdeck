@@ -7,6 +7,8 @@ export const COLORS = {
   accent: "#F5B82E",
   red: "#E5484D",
   track: "#2A2E33",
+  /** v0.7.3: Deck Control ON and driving a light. */
+  on: "#3DD68C",
 } as const;
 
 /** Blend `fg` over `bg` at `alpha` (used to get "35 % opacity" on surfaces that can't do opacity). */
@@ -237,4 +239,87 @@ export function fixtureStatusSvg(v: FixtureStatusView): string {
     warn +
     `</svg>`
   );
+}
+
+// ------------------------------------------------------------------ Deck state: LCD header line + Deck key (v0.7.3, Handoff 24)
+
+/** off = Deck Control OFF; click = ON with nothing selected (selection.view().targets empty); driving = ON with something to drive. */
+export type DeckState = "off" | "click" | "driving";
+export const deckState = (on: boolean, driving: boolean): DeckState => (!on ? "off" : driving ? "driving" : "click");
+
+/** The state's colours: background of the header line / Deck key, and the text on it. */
+export function deckColors(state: DeckState): { bg: string; fg: string } {
+  if (state === "off") return { bg: COLORS.track, fg: mix(COLORS.text, COLORS.bg, 0.6) };
+  return { bg: state === "click" ? COLORS.accent : COLORS.on, fg: COLORS.bg };
+}
+
+/** What the header line needs (from the deck, the selection and the pages). */
+export interface HeaderInput {
+  state: DeckState;
+  /** selection.view().line1 (model, "Model ×2", "3 fixtures") */
+  line1: string;
+  /** selection.view().line2 ("Ch 202 · 1/444", "Ch 202 +2", position hint) */
+  line2: string;
+  /** current page's title ("Main", "Shutters 1/3"); "" when none */
+  page: string;
+  /** 0-based page index and page count */
+  pageIndex: number;
+  pageCount: number;
+}
+
+export const clipText = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/** Header text for dial slot 0–3 (left to right): together the four make one status line across the LCD. */
+export function headerText(slot: number, h: HeaderInput): string {
+  if (h.state === "off") return slot === 0 ? "DECK OFF" : "";
+  if (h.state === "click") return ["CLICK A LIGHT", "Click a light", "in Capture", ""][slot] ?? "";
+  switch (slot) {
+    case 0:
+      return "DECK ON";
+    case 1:
+      return h.line2;
+    case 2:
+      return clipText(h.line1, 18);
+    case 3:
+      return h.page ? `${h.page} ${h.pageIndex + 1}/${h.pageCount}` : "";
+    default:
+      return "";
+  }
+}
+
+/**
+ * Feedback for layouts/attr.json (the four Fixture: Attribute dials): the coloured header line (`header`, a text item with a
+ * `background`) plus the body exactly as fixtureStripFeedback, except FINE is drawn in the state colour.
+ */
+export function attrStripFeedback(s: FixtureStripState & { slot: number; header: HeaderInput }): Record<string, unknown> {
+  const body = fixtureStripFeedback(s);
+  const c = deckColors(s.header.state);
+  const fineColor = s.header.state === "off" ? c.fg : c.bg;
+  const mark = body.mark as { value: string; color: string };
+  return {
+    header: { value: headerText(s.slot, s.header), color: c.fg, background: c.bg },
+    ...body,
+    mark: s.fine && s.value !== null ? { value: mark.value, color: fineColor } : mark,
+  };
+}
+
+/** The Deck Control key (144×144): the whole background in the state colour, big centred text. */
+export function deckKeySvg(state: DeckState, chText = ""): string {
+  const c = deckColors(state);
+  const lines = state === "off" ? ["DECK", "OFF"] : state === "click" ? ["CLICK", "A LIGHT"] : chText ? ["DECK ON", chText] : ["DECK ON"];
+  // keySvg's charW sizing, with a wider per-character width for these heavy capitals (charW alone let "DECK ON" touch the edges)
+  const size = (t: string): number => Math.max(14, Math.min(36, Math.floor(124 / (t.length * (charW + 0.12)))));
+  const sizes = lines.map(size);
+  const gap = 8;
+  const total = sizes.reduce((a, b) => a + b, 0) + gap * (lines.length - 1);
+  let y = (KEY - total) / 2;
+  const texts = lines
+    .map((t, i) => {
+      y += sizes[i];
+      const el = `<text x="72" y="${Math.round(y - sizes[i] * 0.12)}" text-anchor="middle" font-family="${FONT}" font-size="${sizes[i]}" font-weight="800" fill="${c.fg}">${esc(t)}</text>`;
+      y += gap;
+      return el;
+    })
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${KEY}" height="${KEY}" viewBox="0 0 ${KEY} ${KEY}"><rect x="0" y="0" width="${KEY}" height="${KEY}" fill="${c.bg}"/>${texts}</svg>`;
 }

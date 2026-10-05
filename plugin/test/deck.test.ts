@@ -261,7 +261,7 @@ test("service: every fixture knob turn / tap-home / fixture key goes through Dec
   svc.rotate("pan", 1, false);
   svc.home("pan");
   svc.rotateSelect(1);
-  assert.deepEqual(calls, ["Attribute 1 dial", "Attribute 2 dial", "Home Selected key", "Page key", "Pan dial", "Pan dial", "Select dial"]);
+  assert.deepEqual(calls, ["Attribute 1 dial", "Attribute 2 dial", "Home Light key", "Page key", "Pan dial", "Pan dial", "Select dial"]);
   svc.onSelectionEvent([701]);
   assert.equal(svc.pageName(), "Main");
   assert.deepEqual([0, 1, 2].map((i) => svc.attrReadout(i).label), ["Pan", "Tilt", "Intensity"]);

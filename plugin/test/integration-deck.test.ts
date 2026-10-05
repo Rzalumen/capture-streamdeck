@@ -93,6 +93,13 @@ const waitPacket = async (pred: (p: ParsedPacket) => boolean, what: string): Pro
 };
 const strip = (ctx: string): any => deck.lastFeedback(ctx);
 const waitStrip = (ctx: string, pred: (fb: any) => boolean, what: string): Promise<any> => deck.waitFor(() => (deck.lastFeedback(ctx) && pred(deck.lastFeedback(ctx)) ? deck.lastFeedback(ctx) : undefined), 3000, what);
+/** v0.7.3: the Deck key draws its state into its image (no title): grey = off, amber = click a light, green = driving. */
+const deckKeyState = (ctx: string): "off" | "click" | "driving" | "" => {
+  const m = /^<svg[^>]*><rect[^>]*fill="(#[0-9A-F]{6})"/i.exec(deck.lastImageRaw(ctx));
+  return m ? (({ "#2A2E33": "off", "#F5B82E": "click", "#3DD68C": "driving" }) as Record<string, "off" | "click" | "driving">)[m[1].toUpperCase()] ?? "" : "";
+};
+const waitDeck = (ctx: string, want: "off" | "on" | "click" | "driving"): Promise<unknown> =>
+  deck.waitFor(() => { const s = deckKeyState(ctx); return (want === "on" ? s === "click" || s === "driving" : s === want) || undefined; }, 4000, `Deck key ${want}`);
 const waitTitle = (ctx: string, t: string): Promise<unknown> => deck.waitFor(() => deck.sent(ctx, "setTitle").at(-1)?.payload.title === t || undefined, 4000, `title ${JSON.stringify(t)}`);
 
 /** v0.7.2: the deck drives only what Capture selected in this ON connection. Waits for the persistent session, then "clicks" Ch 203 in Capture. */
@@ -134,7 +141,7 @@ function citpSocketsOfPlugin(): number | null {
 
 test("start-up: Deck Control OFF — one brief connection (PNam → EnterShow → list → FixtureIdentify → LeaveShow → close), then no CITP socket in the plugin process and no sACN", async () => {
   deck.willAppear(A.deck, "deckkey", {});
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await deck.waitFor(() => /Fixtures: brief sync \(start-up\): \d+ ms, 1 fixture\(s\), connection closed/.test(deck.logText()) || undefined, 8000, "brief sync logged with its duration");
   assert.deepEqual(codes(), ["PINF:PNam", C(CAEX.LaserFeedList), C(CAEX.EnterShow), C(CAEX.FixtureListRequest), C(CAEX.FixtureIdentify), C(CAEX.LeaveShow)]);
   assert.deepEqual(citp.identifies, [[[INST, ID]]]);
@@ -180,7 +187,7 @@ test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Captur
   const leaves = citp.of(CAEX.LeaveShow).length;
   const n0 = packets.length;
   deck.dialRotate(A.a1, "a1", 10);
-  await waitTitle("deckkey", "Deck ON");
+  await waitDeck("deckkey", "on");
   assert.match(deck.logText(), /Fixtures: deck control ON \(Attribute 1 dial\)/);
   await selectInCapture();
   assert.equal(packets.length, n0, "the turn before any selection sent no sACN at all");
@@ -196,7 +203,7 @@ test("ON by a knob turn: Deck Control switches ON but moves NOTHING until Captur
   assert.equal(pan16(term[0]), Math.round(0.6 * 65535), "the termination frames carry the last values");
   await deck.waitFor(() => /Fixtures: deck control OFF \(idle 1 s\): output terminated, LeaveShow sent, CITP connection closed/.test(deck.logText()) || undefined, 3000, "OFF logged");
   assert.match(deck.logText(), /Fixtures: deck control OFF: selection cleared/);
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await noSelection("OFF: the selection is gone");
   const socks = citpSocketsOfPlugin();
   if (socks !== null) assert.equal(socks, 0, "after OFF no socket to the CITP port stays open (/proc)");
@@ -211,7 +218,7 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
   await noSelection("OFF: nothing selected");
   const n0 = packets.length;
   deck.dialRotate(A.a1, "a1", 5); // switches ON; moves nothing (no selection in this connection)
-  await waitTitle("deckkey", "Deck ON");
+  await waitDeck("deckkey", "on");
   await selectInCapture();
   assert.equal(packets.length, n0, "the turn before the selection sent nothing");
   await waitStrip("a1", (f) => f.value.value === "~60.0", "selected: the strip shows the remembered value");
@@ -233,15 +240,15 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
   await waitPacket((x) => pan16(x) === Math.round(0.7 * 65535), "pan 70 %");
   // the key: OFF
   deck.keyDown(A.deck, "deckkey");
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "OFF by key: closed");
   assert.match(deck.logText(), /deck control OFF \(Deck Control key\)/);
   // a fixture key switches it ON (Home Selected) but homes nothing: the selection went with OFF
   deck.willAppear(A.home, "home", {});
   const n1 = packets.length;
   deck.keyDown(A.home, "home");
-  await waitTitle("deckkey", "Deck ON");
-  assert.match(deck.logText(), /deck control ON \(Home Selected key\)/);
+  await waitDeck("deckkey", "on");
+  assert.match(deck.logText(), /deck control ON \(Home Light key\)/);
   await selectInCapture();
   assert.equal(packets.length, n1, "Home with nothing selected sent nothing");
   deck.keyDown(A.home, "home");
@@ -249,7 +256,7 @@ test("resume after OFF → ON: the next turn continues from 60 % (no snap to hom
   deck.dialRotate(A.a1, "a1", 25); // 75 %
   await waitPacket((x) => pan16(x) === Math.round(0.75 * 65535), "pan 75 %");
   deck.keyDown(A.deck, "deckkey"); // OFF: the values are saved
-  await waitTitle("deckkey", "Deck OFF");
+  await waitDeck("deckkey", "off");
   await deck.waitFor(() => (deck.globals as any).fixtureValues?.["DECK SHOW"]?.[INST]?.ch0 === 0.75 || undefined, 3000, "values saved in the global settings");
   await deck.waitFor(() => citp.clients.size === 0 || undefined, 3000, "closed");
 });
@@ -281,5 +288,5 @@ test("resume after a plugin restart: a new plugin process starts OFF and the fir
   assert.match(deck.logText(), /values migration \(v0\.7\.1\): 1 stored fixture\(s\) will lose their stored shutter\/strobe values/);
   assert.match(deck.logText(), /values migration \(v0\.7\.1\): removed the stored shutter\/strobe value\(s\) of channel\(s\) 7 for fixture/);
   deck.willAppear(A.deck, "deckkey2", {});
-  await waitTitle("deckkey2", "Deck ON");
+  await waitDeck("deckkey2", "on");
 });

@@ -115,8 +115,10 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     Icon: iconPath(k.icon),
     Tooltip: k.tooltip,
     ...(k.pi ? { PropertyInspectorPath: FIXTURES_PI } : {}),
+    // v0.7.3: Status and Next Fixture are hidden from the actions list (keys placed by hand keep working); the Deck key draws its own text
+    ...("hidden" in k && k.hidden ? { VisibleInActionsList: false } : {}),
     Controllers: ["Keypad"],
-    States: [{ Image: keyPath(k.icon), ShowTitle: true }],
+    States: [{ Image: keyPath(k.icon), ShowTitle: !("showTitle" in k && k.showTitle === false) }],
   }));
   const fixtureSelect: ManifestAction = {
     Name: FIXTURE_SELECT.name,
@@ -139,7 +141,8 @@ export function buildManifest(base: Manifest, packageVersion: string): Manifest 
     Controllers: ["Encoder"],
     States: [{ Image: keyPath(d.icon), ShowTitle: false }],
     Encoder: {
-      layout: "layouts/dial.json",
+      // v0.7.3: the Attribute dials' strip has the coloured Deck status line on top (layouts/attr.json); dial.json is unchanged
+      layout: "layouts/attr.json",
       TriggerDescription: { Rotate: "Adjust", Push: "Fine mode", Touch: "Home channel" },
       background: "imgs/actions/dial/strip-background",
     },

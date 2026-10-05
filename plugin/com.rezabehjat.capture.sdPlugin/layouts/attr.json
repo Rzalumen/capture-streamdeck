@@ -1,0 +1,119 @@
+{
+  "id": "com.rezabehjat.capture.attr",
+  "controller": "Encoder",
+  "items": [
+    {
+      "key": "header",
+      "type": "text",
+      "rect": [
+        0,
+        0,
+        200,
+        20
+      ],
+      "font": {
+        "size": 13,
+        "weight": 800
+      },
+      "color": "#8A8D91",
+      "background": "#2A2E33",
+      "alignment": "center",
+      "text-overflow": "ellipsis",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "name",
+      "type": "text",
+      "rect": [
+        10,
+        24,
+        120,
+        18
+      ],
+      "font": {
+        "size": 14,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "mark",
+      "type": "text",
+      "rect": [
+        132,
+        24,
+        58,
+        18
+      ],
+      "font": {
+        "size": 13,
+        "weight": 700
+      },
+      "color": "#F5B82E",
+      "alignment": "right",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "value",
+      "type": "text",
+      "rect": [
+        10,
+        42,
+        130,
+        32
+      ],
+      "font": {
+        "size": 26,
+        "weight": 700
+      },
+      "color": "#E8E8E8",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "unit",
+      "type": "text",
+      "rect": [
+        142,
+        50,
+        48,
+        22
+      ],
+      "font": {
+        "size": 16,
+        "weight": 600
+      },
+      "color": "#8A8D91",
+      "alignment": "left",
+      "value": "",
+      "zOrder": 1
+    },
+    {
+      "key": "bar",
+      "type": "bar",
+      "rect": [
+        10,
+        82,
+        180,
+        10
+      ],
+      "subtype": 0,
+      "range": {
+        "min": 0,
+        "max": 100
+      },
+      "value": 0,
+      "bar_bg_c": "#2A2E33",
+      "bar_fill_c": "#F5B82E",
+      "border_w": 0,
+      "bar_border_c": "#2A2E33",
+      "zOrder": 1
+    }
+  ]
+}

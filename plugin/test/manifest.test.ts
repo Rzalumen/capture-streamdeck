@@ -88,10 +88,10 @@ test("every image the manifest names exists (PNG and @2x)", () => {
   }
 });
 
-test("version: package.json, src/version.ts and manifest agree (v0.7.2.0)", () => {
+test("version: package.json, src/version.ts and manifest agree (v0.7.3.0)", () => {
   assert.equal(pkg.version, VERSION);
   assert.equal(built.Version, `${VERSION}.0`);
-  assert.equal(built.Version, "0.7.2.0");
+  assert.equal(built.Version, "0.7.3.0");
   assert.equal(built.UUID, "com.rezabehjat.capture");
 });
 
@@ -121,7 +121,10 @@ test("the action list contains no configurable actions: the six generic ones are
   assert.deepEqual(visible.filter((a) => GENERIC.includes(a.UUID)).map((a) => a.UUID), []);
   // what remains visible is a named action: catalog command, Show Position k, Look toggle, Store Modifier, Connection, dial
   for (const a of visible) assert.match(a.UUID, /^com\.rezabehjat\.capture\.(cmd\.[a-z]+\.[a-z0-9-]+|showpos\.[1-8]|toggle\.[a-z-]+|dial\.[a-z-]+|fixture\.[a-z0-9-]+|fixtures\.[a-z-]+|store|connection)$/, a.UUID);
-  assert.equal(visible.length, built.Actions.length - GENERIC.length);
+  // v0.7.3 (Handoff 24): Fixtures: Status and Fixtures: Next Fixture are hidden too (kept so keys placed by hand keep working)
+  const HIDDEN_FIXTURE_KEYS = ["com.rezabehjat.capture.fixtures.status", "com.rezabehjat.capture.fixtures.next"];
+  for (const u of HIDDEN_FIXTURE_KEYS) assert.equal(built.Actions.find((x) => x.UUID === u)?.VisibleInActionsList, false, `${u} hidden, still in the manifest`);
+  assert.equal(visible.length, built.Actions.length - GENERIC.length - HIDDEN_FIXTURE_KEYS.length);
   assert.equal(built.Actions.length, 177, "v0.6: + Attribute 1–3 dials, ◀ Page and Page ▶ keys; v0.7: + Deck Control; v0.7.1: + Attribute 4, Next Fixture");
 });
 
@@ -129,7 +132,8 @@ test("the handoff's named actions exist, visible, with the handoff's names", () 
   const names = new Set(visible.map((a) => a.Name));
   for (let k = 1; k <= 8; k++) assert.ok(names.has(`Camera: Show Position ${k}`), `Show Position ${k}`);
   for (let k = 1; k <= 5; k++) for (const n of [`Camera: Position ${k}`, `Camera: Store Position ${k}`]) assert.ok(names.has(n), n);
-  for (const n of ["Camera: Store Modifier", "Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection", "Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixture: Select", "Fixture: Pan", "Fixture: Tilt", "Fixture: Intensity", "Fixture: Zoom", "Fixture: Focus", "Fixture: Iris", "Fixture: Red|Cyan", "Fixture: Green|Magenta", "Fixture: Blue|Yellow", "Fixture: White", "Fixture: Attribute 1", "Fixture: Attribute 2", "Fixture: Attribute 3", "Fixtures: ◀ Page", "Fixtures: Page ▶", "Fixtures: Deck Control", "Fixture: Attribute 4", "Fixtures: Next Fixture"]) assert.ok(names.has(n), n);
+  for (const n of ["Camera: Store Modifier", "Look: Auto Exposure", "Look: Laser Flicker", "Status: Connection", "Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Light", "Fixture: Select", "Fixture: Pan", "Fixture: Tilt", "Fixture: Intensity", "Fixture: Zoom", "Fixture: Focus", "Fixture: Iris", "Fixture: Red|Cyan", "Fixture: Green|Magenta", "Fixture: Blue|Yellow", "Fixture: White", "Fixture: Attribute 1", "Fixture: Attribute 2", "Fixture: Attribute 3", "Fixtures: ◀ Page", "Fixtures: Page ▶", "Fixtures: Deck Control", "Fixture: Attribute 4"]) assert.ok(names.has(n), n);
+  for (const n of ["Fixtures: Status", "Fixtures: Next Fixture", "Fixtures: Home Selected"]) assert.ok(!names.has(n), `${n}: not in the actions list (v0.7.3)`);
   for (const a of visible) assert.ok(!/^(Capture Command|Capture Tab|Camera Slot|Show Position|View Dial|View Toggle)$/.test(a.Name), a.Name);
 });
 
@@ -159,20 +163,34 @@ test("fixture actions: the dials are Encoder actions with the dial/select layout
   assert.equal(dials.length, 14, "Attribute 1–4 (v0.7.1) + the 10 named dials kept for hand-placed layouts");
   assert.deepEqual(dials.slice(0, 4).map((a) => a.Name), ["Fixture: Attribute 1", "Fixture: Attribute 2", "Fixture: Attribute 3", "Fixture: Attribute 4"]);
   for (const a of dials) {
-    assert.equal((a.Encoder as { layout: string }).layout, "layouts/dial.json");
+    // v0.7.3: the four Attribute dials use attr.json (with the Deck status line); the named dials keep dial.json
+    assert.equal((a.Encoder as { layout: string }).layout, a.UUID.includes(".fixture.attr") ? "layouts/attr.json" : "layouts/dial.json", a.UUID);
     assert.equal(a.PropertyInspectorPath, undefined, a.UUID);
     const td = (a.Encoder as { TriggerDescription: Record<string, string | undefined> }).TriggerDescription;
     const touch = a.UUID.includes(".fixture.attr") ? "Home channel" : "Home attribute";
     assert.deepEqual([td.Push, td.Touch, td.LongTouch], ["Fine mode", touch, undefined], "Handoff 21: push = fine, tap = home, no long touch");
   }
   const keys = built.Actions.filter((a) => a.UUID.startsWith("com.rezabehjat.capture.fixtures."));
-  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Selected", "Fixtures: Status", "Fixtures: Deck Control", "Fixtures: ◀ Page", "Fixtures: Next Fixture", "Fixtures: Page ▶"]);
+  assert.deepEqual(keys.map((a) => a.Name), ["Fixtures: Setup", "Fixtures: Release", "Fixtures: Home Light", "Fixtures: Status", "Fixtures: Deck Control", "Fixtures: ◀ Page", "Fixtures: Next Fixture", "Fixtures: Page ▶"]);
+  assert.equal(keys.find((a) => a.Name === "Fixtures: Home Light")!.UUID, "com.rezabehjat.capture.fixtures.home", "renamed, same UUID");
   assert.match(keys.find((a) => a.Name === "Fixtures: Release")!.Tooltip, /switches Deck Control OFF/, "Release kept for compatibility");
   for (const a of keys) {
     assert.deepEqual(a.Controllers, ["Keypad"]);
-    assert.equal(a.States[0].ShowTitle, true);
+    // v0.7.3: the Deck key draws its state into its image (ShowTitle false); every other key shows its title
+    assert.equal(a.States[0].ShowTitle, a.Name !== "Fixtures: Deck Control", a.Name);
   }
-  for (const f of ["layouts/select.json", "layouts/dial.json", "ui/fixtures.html", "ui/fixtures.js"]) assert.ok(fs.existsSync(path.join(sd, f)), f);
+  for (const f of ["layouts/select.json", "layouts/dial.json", "layouts/attr.json", "ui/fixtures.html", "ui/fixtures.js"]) assert.ok(fs.existsSync(path.join(sd, f)), f);
+  // v0.7.3: attr.json = dial.json's body moved down + a full-width header text item with a background (Elgato layout: text items take `background`)
+  const attr = JSON.parse(fs.readFileSync(path.join(sd, "layouts/attr.json"), "utf8")) as { items: { key: string; type: string; rect: number[]; background?: string }[] };
+  assert.deepEqual(attr.items.map((i) => [i.key, i.type, i.rect]), [
+    ["header", "text", [0, 0, 200, 20]],
+    ["name", "text", [10, 24, 120, 18]],
+    ["mark", "text", [132, 24, 58, 18]],
+    ["value", "text", [10, 42, 130, 32]],
+    ["unit", "text", [142, 50, 48, 22]],
+    ["bar", "bar", [10, 82, 180, 10]],
+  ]);
+  assert.ok(attr.items[0].background, "the header has a background colour");
 });
 
 test("the manifest declares the bundled profile for Stream Deck+ (DeviceType 7), editable, and the file exists", () => {

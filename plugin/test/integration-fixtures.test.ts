@@ -202,9 +202,9 @@ test("key titles: the key's name is its Stream Deck title; the image carries no 
   deck.willAppear(A.home, "home");
   deck.willAppear(A.release, "rel");
   await deck.waitFor(() => deck.sent("home", "setTitle").length > 0 && deck.sent("rel", "setTitle").length > 0, 3000, "titles");
-  assert.equal(deck.sent("home", "setTitle").at(-1)!.payload.title, "Home Selected");
+  assert.equal(deck.sent("home", "setTitle").at(-1)!.payload.title, "Home Light", "v0.7.3: Home Selected was renamed Home Light");
   assert.equal(deck.sent("rel", "setTitle").at(-1)!.payload.title, "Release");
-  assert.ok(!deck.lastImageRaw("home").includes("Home Selected"), "the label is not drawn into the image");
+  assert.ok(!deck.lastImageRaw("home").includes("Home Light"), "the label is not drawn into the image");
   assert.ok(!/<text/.test(deck.lastImageRaw("home")));
 });
 

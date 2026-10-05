@@ -17,7 +17,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 - **Dials** — every page has its own four. HOME and every folder: Exposure · Ambient · Bloom · White Balance. The View
   pages: Contrast · Saturation · Fill · Hue Clamp. The Look folder: Flare · Flare Streaks · Flare Angle · Flare Size.
   The **Fixtures** folder has its own sets (below).
-- **Every key shows its name as Stream Deck title text** (v0.5, `ShowTitle: true`), including folder, *Back* and *More ▸*. The plugin draws only the icon,
+- **Every key shows its name as Stream Deck title text** (v0.5, `ShowTitle: true`), including folder, *Back* and *More ▸* — except **Deck Control** (v0.7.3), which draws its state (DECK OFF / CLICK A LIGHT / DECK ON + Ch) into its own coloured image. The plugin draws only the icon,
   dimming, flash text (“Stored”, “Hold”) and badges into the key image, and sets dynamic names (“Store 1”, position names) as the key's title.
 
 ## What is where
@@ -31,7 +31,7 @@ another Capture build the profile with `CAPTURE_APP_PATH`, see the README).
 | Patch & Focus | the Patch & Focus category |
 | Windows | **Tabs** (6) first, then the Navigate and Window categories |
 | File | the File category |
-| Fixtures | one page (v0.7.1): **Setup · Deck Control · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture** (the Fixtures: keys; Release is no longer in the profile). Dials: **Attribute 1 · 2 · 3 · 4** (the Select dial left the page); the attribute pages (Main, then Colour · Beam · Shutters · Gobo/FX · Other in order, 4 channels on every page — built from the selected fixture's channels) are cycled with ◀ Page / Page ▶, not with profile pages |
+| Fixtures | one page (v0.7.3) at fixed positions — row 0: **Back · Setup · (empty) · Deck Control**; row 1: **Home Light · (empty) · ◀ Page · Page ▶**. Status and Next Fixture are no longer in the profile (nor in the actions list; keys placed by hand keep working). Dials: **Attribute 1 · 2 · 3 · 4**; their strips carry a coloured status line across the LCD (grey DECK OFF / amber CLICK A LIGHT / green DECK ON · Ch · model · page). The attribute pages (Main, then Colour · Beam · Shutters · Gobo/FX · Other) are cycled with ◀ Page / Page ▶ |
 
 Camera Position 1–5 and Store Modifier share one page (Camera › Positions ▸), so holding Store Modifier while pressing a
 position works without changing page. Edit has four pages (25 commands, including the four *Edit › Model* items).
@@ -92,7 +92,7 @@ position works without changing page. Edit has four pages (25 commands, includin
     dials: Exposure · Ambient · Bloom · White Balance
     - **file/2** — Export Project · Export Model · Export Fixture Data · Export Focus Sheets · Export Documentation · Export Presentation   
       dials: Exposure · Ambient · Bloom · White Balance
-  - **fixtures** — Setup · Deck OFF · Home Selected · Status · ◀ Page · Page ▶ · Next Fixture   
+  - **fixtures** — Setup · Deck Control · Home Light · ◀ Page · Page ▶   
     dials: Attribute 1 · Attribute 2 · Attribute 3 · Attribute 4
 
 ## Changing it

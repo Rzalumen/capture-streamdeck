@@ -1,4 +1,4 @@
-# Capture for Stream Deck+ — plugin v0.7.2 (beta)
+# Capture for Stream Deck+ — plugin v0.7.3 (beta)
 
 An interface to **Capture** (macOS lighting visualizer): keys fire Capture's own menu commands and tabs and
 recall camera positions; dials adjust the view settings over OSC. UUID `com.rezabehjat.capture`,
@@ -123,6 +123,18 @@ Any CITP console connection locks Capture's Control Pane, and closing it frees t
   after a restart) a fixture starts from those values; the home values are used only for channels never touched in that show. Home Selected and the strip
   tap store the home values.
 - **Knob gestures**: **push = fine mode (0.1 %) on/off; tap the strip = home that channel**. (Before v0.7 it was the other way round.)
+
+### Deck status on the LCD and the Deck key (v0.7.3, Handoff 24)
+
+- The four **Fixture: Attribute** dials use `layouts/attr.json`: the channel readout as before, under a coloured **status line** (a text item
+  with a `background`, which Elgato's layout reference documents for text items) that runs across the four strips:
+  grey `DECK OFF` · amber `CLICK A LIGHT · Click a light · in Capture` · green `DECK ON · Ch 202 · 1/444 · model · Main 1/8`.
+  FINE is drawn in the state colour. `layouts/dial.json` (the view dials, the named fixture dials) is unchanged.
+- **Fixtures: Deck Control** draws its state into the whole key: grey DECK OFF, amber CLICK A LIGHT, green DECK ON + `Ch …`. It has no
+  Stream Deck title (the only key in the profile without one).
+- **Fixtures: Home Selected** is now called **Fixtures: Home Light** (same UUID, same behaviour).
+- **Status** and **Next Fixture** left the profile and the actions list (`VisibleInActionsList: false`); keys placed by hand keep working.
+- The Fixtures page: row 0 Back · Setup · (empty) · Deck Control; row 1 Home Light · (empty) · ◀ Page · Page ▶.
 
 ### Home values, hidden channels, fewer pages (v0.7.1, Handoff 22)
 

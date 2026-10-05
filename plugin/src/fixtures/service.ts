@@ -457,7 +457,7 @@ export class FixtureService {
 
   /** Home key: the selected fixtures (only) at full home, the same defaults as at first touch. */
   homeSelected(): boolean {
-    this.deck?.activity("Home Selected key");
+    this.deck?.activity("Home Light key");
     const v = this.selection.view();
     if (!v.targets.length) return false;
     this.engine.home(v.targets.map(toTarget));
