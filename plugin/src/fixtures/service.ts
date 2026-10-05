@@ -10,10 +10,10 @@
  */
 import { dialAttr, stepFraction, homeValue, type AttrId, type DialId } from "./attrs.js";
 import type { CaexFixture, ChBk, ModifyItem } from "./citp.js";
-import type { DmxEngine, ParamTarget, Target } from "./engine.js";
-import { GROUP_LABEL, pageTitle, sameParam, type Page, type Param } from "./pages.js";
+import { attrParams, type DmxEngine, type ParamTarget, type Target } from "./engine.js";
+import { GROUP_LABEL, pageTitle, sameParam, type FixtureModel, type Page, type Param } from "./pages.js";
 import { Selection, toTarget, type Controllable } from "./selection.js";
-import { MAX_UNIVERSE, autoFill, checkSetup, sharedNotes, showKey, validateAddress, type Address, type SetupEntry, type SetupStore } from "./setup.js";
+import { MAX_UNIVERSE, autoFill, checkSetup, sharedNotes, showKey, validateAddress, type Address, type Axis, type SetupEntry, type SetupStore } from "./setup.js";
 import { positionHint, type ShowModel } from "./show.js";
 
 /** v0.10.0: what the Setup commands answer while the addresses come from Capture's patch. */
@@ -59,8 +59,12 @@ export interface SetupFixtureView {
   controllable: boolean;
   /** v0.10.0: the address was taken from Capture's patch. */
   fromCapture: boolean;
-  /** v0.10.0: "shares 1/285 with Ch 205" (Capture's patch puts this fixture on slots another fixture uses too). */
+  /** v0.10.0 / v0.12.0: "⚠ patch conflict with Ch 205 at 1/285 — fix in Capture" (Capture's patch puts this fixture on slots another fixture uses too). */
   shared: string[];
+  /** v0.12.0: the axes this fixture's type has (Main page Pan / Tilt): the Setup panel shows an Invert toggle for each. */
+  axes: Axis[];
+  invertPan: boolean;
+  invertTilt: boolean;
 }
 /** One row of a type's channel list in the Setup panel (Handoff 20 §5). */
 export interface SetupChannelView {
@@ -109,6 +113,8 @@ export interface AttrReadout {
   multi: number;
   /** "Shutters 1/3" (or "" with no fixture). */
   page: string;
+  /** v0.12.0: the first selected fixture has this parameter's knob direction inverted (the strip label gets " ⇄"). */
+  inverted: boolean;
 }
 
 export interface DialReadout {
@@ -121,6 +127,8 @@ export interface DialReadout {
   touched: boolean;
   /** How many fixtures the dial drives (> 1: several selected; the value shown is the first one's). */
   multi: number;
+  /** v0.12.0: the first selected fixture has this dial's axis inverted. */
+  inverted: boolean;
 }
 
 export interface StatusView {
@@ -132,6 +140,21 @@ export interface StatusView {
   active: boolean;
   universes: number[];
 }
+
+/**
+ * v0.12.0 (Handoff 31): a type's Pan and Tilt parameters, as the existing classifier puts them on the Main page (dial 1 = the first pan,
+ * dial 2 = the first tilt; a coarse/fine pair is one parameter). A second pan/tilt channel (on Other) is not an axis.
+ */
+export function axisParams(model: FixtureModel): { pan: Param | null; tilt: Param | null } {
+  const main = model.pages.find((p) => p.group === "main");
+  return { pan: main?.params[0] ?? null, tilt: main?.params[1] ?? null };
+}
+/** "pan" / "tilt" when `p` is that axis of the type, else null. */
+export function axisOf(model: FixtureModel, p: Param): Axis | null {
+  const a = axisParams(model);
+  return a.pan && (a.pan === p || a.pan.id === p.id) ? "pan" : a.tilt && (a.tilt === p || a.tilt.id === p.id) ? "tilt" : null;
+}
+const AXIS_LABEL: Record<Axis, string> = { pan: "Pan", tilt: "Tilt" };
 
 const DIAL_LABEL: Record<DialId, string> = { pan: "Pan", tilt: "Tilt", intensity: "Intensity", zoom: "Zoom", focus: "Focus", iris: "Iris", "red-cyan": "Red|Cyan", "green-magenta": "Green|Magenta", "blue-yellow": "Blue|Yellow", white: "White" };
 const ATTR_LABEL: Record<AttrId, string> = { pan: "Pan", tilt: "Tilt", intensity: "Intensity", zoom: "Zoom", focus: "Focus", iris: "Iris", red: "Red", green: "Green", blue: "Blue", white: "White", cyan: "Cyan", magenta: "Magenta", yellow: "Yellow" };
@@ -282,6 +305,7 @@ export class FixtureService {
           controllable: ctl.has(f.key),
           fromCapture: saved[f.key]?.src === "capture",
           shared: shared.get(f.key) ?? [],
+          ...this.invertView(f.key, t?.ok ? t.model : undefined),
         };
       })
       .sort((a, b) => a.channel - b.channel);
@@ -645,7 +669,7 @@ export class FixtureService {
     this.emit();
   }
 
-  /** Fixtures that share slots in Capture's patch: one log line per pair, once per show. */
+  /** Fixtures that share slots in Capture's patch (v0.12.0: logged as a patch conflict): one log line per pair, once per show. */
   private logShared(): void {
     const entries = this.entries().filter((e) => e.addr.src === "capture");
     for (let i = 0; i < entries.length; i++)
@@ -657,7 +681,7 @@ export class FixtureService {
         const pair = [a.key, b.key].sort().join("|");
         if (this.patchState.sharedLogged.has(pair)) continue;
         this.patchState.sharedLogged.add(pair);
-        this.log(`Capture's patch: ${a.short} and ${b.short} share ${a.addr.universe}/${Math.max(a.addr.address, b.addr.address)} (both stay controllable; a knob on either drives the shared slots)`);
+        this.log(`patch conflict in Capture: ${a.short} and ${b.short} both at ${a.addr.universe}/${Math.max(a.addr.address, b.addr.address)} (fix the patch in Capture)`);
       }
   }
 
@@ -773,19 +797,24 @@ export class FixtureService {
 
   readout(dial: DialId): DialReadout {
     const v = this.selection.view();
-    const none = (): DialReadout => ({ attr: null, label: DIAL_LABEL[dial], value: null, touched: false, multi: v.targets.length });
+    const none = (): DialReadout => ({ attr: null, label: DIAL_LABEL[dial], value: null, touched: false, multi: v.targets.length, inverted: false });
     if (!v.primary) return none();
     const attr = dialAttr(v.primary.map, dial);
     if (!attr) return none();
-    return { attr, label: ATTR_LABEL[attr], value: this.engine.value(toTarget(v.primary), attr) ?? null, touched: this.engine.isTouched(v.primary.fixture.key), multi: v.targets.length };
+    const t = toTarget(v.primary);
+    const inverted = attrParams(t, attr).some((p) => this.inverted(t, p));
+    return { attr, label: ATTR_LABEL[attr], value: this.engine.value(t, attr) ?? null, touched: this.engine.isTouched(v.primary.fixture.key), multi: v.targets.length, inverted };
   }
 
-  /** Rotate an attribute dial: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value. */
+  /**
+   * Rotate an attribute dial: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value. v0.12.0: on a fixture whose
+   * Pan / Tilt is inverted, that axis moves the other way (coarse and fine; the value sent is the true value).
+   */
   rotate(dial: DialId, ticks: number, fine: boolean): boolean {
     if (!ticks) return false;
     this.deck?.activity(`${DIAL_LABEL[dial]} dial`);
     const g = this.groups(dial);
-    for (const [attr, ts] of g) this.engine.setEach(ts, attr, (cur) => stepFraction(cur, ticks, fine));
+    for (const [attr, ts] of g) this.engine.adjust(ts.map((t) => ({ target: t, params: attrParams(t, attr) })), (cur, p, t) => stepFraction(cur, this.knobTicks(t, p, ticks), fine));
     return g.size > 0;
   }
 
@@ -862,16 +891,58 @@ export class FixtureService {
     const page = this.pages().page;
     const { param } = this.attrItems(slot);
     const pageText = page ? pageTitle(page) : "";
-    if (!param || !v.primary) return { param: null, label: page ? (page.placeholders?.[slot] ?? GROUP_LABEL[page.group]) : `Attribute ${slot + 1}`, value: null, touched: false, multi: v.targets.length, page: pageText };
+    if (!param || !v.primary) return { param: null, label: page ? (page.placeholders?.[slot] ?? GROUP_LABEL[page.group]) : `Attribute ${slot + 1}`, value: null, touched: false, multi: v.targets.length, page: pageText, inverted: false };
     const t = toTarget(v.primary);
-    return { param, label: param.name, value: this.engine.paramValue(t, param), touched: this.engine.isTouched(t.key), multi: v.targets.length, page: pageText };
+    return { param, label: param.name, value: this.engine.paramValue(t, param), touched: this.engine.isTouched(t.key), multi: v.targets.length, page: pageText, inverted: this.inverted(t, param) };
   }
 
-  /** Turn Attribute dial `slot`: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value; fixtures without a channel of that name are skipped. */
+  /**
+   * Turn Attribute dial `slot`: ±1 % per tick (0.1 % fine), each selected fixture relative to its own value; fixtures without a channel
+   * of that name are skipped. v0.12.0: an inverted Pan / Tilt moves the other way on that fixture (coarse and fine, the 16-bit pair as a
+   * whole); the value sent and shown is always the true value.
+   */
   attrRotate(slot: number, ticks: number, fine: boolean): boolean {
     if (!ticks) return false;
     this.deck?.activity(`Attribute ${slot + 1} dial`);
-    return this.engine.adjust(this.attrItems(slot).items, (cur) => stepFraction(cur, ticks, fine));
+    return this.engine.adjust(this.attrItems(slot).items, (cur, p, t) => stepFraction(cur, this.knobTicks(t, p, ticks), fine));
+  }
+
+  // ------------------------------------------------------------------ v0.12.0: Pan / Tilt invert (Handoff 31)
+
+  /** True when this parameter is the fixture's Pan or Tilt and that axis is inverted for the fixture (by key) in this show. */
+  inverted(t: Target, p: Param): boolean {
+    const axis = axisOf(t.model, p);
+    if (!axis) return false;
+    const inv = this.setup.invert(this.show.showName, t.key);
+    return axis === "pan" ? inv.invertPan : inv.invertTilt;
+  }
+
+  /** The ticks a knob turn applies to this parameter of this fixture: negated for an inverted axis (the knob direction only). */
+  private knobTicks(t: Target, p: Param, ticks: number): number {
+    return this.inverted(t, p) ? -ticks : ticks;
+  }
+
+  /** The Setup row's invert fields: which axes the type has, and the flags. */
+  private invertView(key: string, model: FixtureModel | undefined): { axes: Axis[]; invertPan: boolean; invertTilt: boolean } {
+    const a = model ? axisParams(model) : { pan: null, tilt: null };
+    const axes: Axis[] = [...(a.pan ? (["pan"] as const) : []), ...(a.tilt ? (["tilt"] as const) : [])];
+    return { axes, ...this.setup.invert(this.show.showName, key) };
+  }
+
+  /**
+   * Setup panel: invert one axis of one fixture (stored per show, per fixture key). Allowed while Capture's patch is the source (it is
+   * not an address). Logs `Ch 202 SolaFrame 750: Pan inverted` / `… Pan normal`. Returns an error text, or null when saved.
+   */
+  async setInvert(key: string, axis: Axis, on: boolean): Promise<string | null> {
+    if (axis !== "pan" && axis !== "tilt") return "axis must be pan or tilt";
+    const f = this.show.fixtures.find((x) => x.key === key);
+    if (!f) return "unknown fixture (read the show again)";
+    const t = this.show.types.get(f.typeKey);
+    if (!t?.ok || !t.model || !axisParams(t.model)[axis]) return `${AXIS_LABEL[axis]}: this fixture type has no ${AXIS_LABEL[axis]} channel`;
+    const err = await this.setup.setInvert(this.show.showName, key, axis, on === true);
+    if (err) return err;
+    this.log(`Ch ${f.channel} ${f.name}: ${AXIS_LABEL[axis]} ${on === true ? "inverted" : "normal"}`);
+    return null;
   }
 
   /** Press Attribute dial `slot`: that channel to its home value on every selected fixture that has it. */

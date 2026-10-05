@@ -108,8 +108,11 @@ identifier yet a number (see 2).
    (`Fixtures: address from Capture's patch Ch 202 SolaFrame 750 -> 1/444 (was 2/1, typed)`, `Fixtures: Capture's patch: 35 of 103 fixture(s) patched`).
    The panel is then read-only: the cells are marked *from Capture*, *Auto-fill* and *Clear* are hidden, and a line at the top says
    `Addresses come from Capture's patch (35 patched). Re-patch in Capture to change them.` Re-patching in Capture (FixtureModify) and Type 1/2 lists
-   update them. Two fixtures Capture patched on the same slots both stay controllable (a knob on either drives the shared slots; the rows say
-   `shares 1/285 with Ch 205`); the overlap refusal stays for typed entries only. A universe above 16 or a fixture past 512 is not controllable (logged).
+   update them. Two fixtures Capture patched on the same slots both stay controllable (a knob on either drives the shared slots). v0.12.0
+   (Handoff 31): two intelligent fixtures can never share DMX, so this is shown as a **patch conflict** to fix in Capture: both rows say
+   `⚠ patch conflict with Ch 205 at 1/285 — fix in Capture`, logged once per pair as
+   `Fixtures: patch conflict in Capture: Ch 203 and Ch 205 both at 1/285 (fix the patch in Capture)` (before: `shares 1/285 with Ch 205`);
+   the overlap refusal stays for typed entries only. A universe above 16 or a fixture past 512 is not controllable (logged).
    If no list after the declaration carries any Patched=1, the typed entries are used exactly as before (logged once).
 6. **Dials** act on the fixtures selected in Capture. Attribute dials: rotate ±1 % per tick (16-bit aware), **push = fine (0.1 %) on/off**,
    **tap the touch strip = home that attribute** on the selected fixture(s) (v0.7; swapped from v0.5/v0.6); a long touch does nothing. **Fixtures: Home Selected** puts the selected fixture(s) — only — at full home (pan/tilt 50 %, intensity 100 %,
@@ -170,6 +173,19 @@ the deck-driven lights in Capture once the universes were declared (v0.8.0 log o
   `Fixtures: Capture took Ch 201 "Pan" (knob 83.0 % -> Capture 74.9 %)`, at most once per parameter per second (`(+N more not logged)`).
   Ownership survives arm/disarm and reconnects and is cleared with the show. Several single-slot ChBk for one fixture within 50 ms are logged as one line
   (`Fixtures: Capture levels u1: 31 slot(s) -> Ch 202 (burst)`); every message is still applied.
+
+### Pan / Tilt invert (v0.12.0, Handoff 31)
+
+Per fixture, the **knob direction** of Pan and/or Tilt can be inverted, so lights hung in different orientations move the same visible way
+for the same knob turn.
+- Setup panel: each row whose type has Pan and/or Tilt (the Main page's Pan and Tilt, i.e. the first pan / tilt channel; a coarse/fine pair is
+  one) has **Invert Pan** / **Invert Tilt** toggles, only for the axes the type has. They stay editable while the addresses come from Capture's patch.
+- Stored per show and per fixture key (not per address: a re-patch keeps it) in the global settings (`fixtureInvert`), default off.
+- Effect: on an inverted axis the knob delta is negated, in coarse and fine mode, for the 16-bit pair as a whole. Nothing else changes: the
+  values stored and the DMX sent are always the true value (the strip shows the true DMX %), home values, strip-tap home, ChBk handling and
+  the last-move-wins rule are as before. With several fixtures selected, each moves its own way.
+- Strip: the inverted parameter's label gets ` ⇄` (`Pan ⇄`).
+- Log: `Fixtures: Ch 202 SolaFrame 750: Pan inverted` / `Fixtures: Ch 202 SolaFrame 750: Pan normal`.
 
 ### Wake (v0.11.0, Handoff 30)
 

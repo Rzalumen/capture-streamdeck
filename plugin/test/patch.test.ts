@@ -100,19 +100,20 @@ test("fallback: lists before the declaration are ignored; a declared list with n
   assert.deepEqual(ctl(R.svc), ["Ch 202 1/1", "Ch 203 1/100"], "typed entries work as before");
 });
 
-test("overlap from Capture's patch: both fixtures stay controllable, both Setup rows say 'shares', logged once; a knob on either drives the shared slots", async () => {
+test("overlap from Capture's patch: both fixtures stay controllable; v0.12.0: both Setup rows say '⚠ patch conflict … fix in Capture', logged once per pair as a patch conflict; a knob on either drives the shared slots", async () => {
   const R = await rig();
   await R.list([fx(1, 203, [1, 285]), fx(2, 205, [1, 285]), fx(3, 204, [1, 229])]);
   assert.deepEqual(ctl(R.svc), ["Ch 203 1/285", "Ch 204 1/229", "Ch 205 1/285"]);
   const v = R.svc.setupView();
-  assert.deepEqual(v.fixtures.find((f) => f.channel === 203)!.shared, ["shares 1/285 with Ch 205"]);
-  assert.deepEqual(v.fixtures.find((f) => f.channel === 205)!.shared, ["shares 1/285 with Ch 203"]);
+  assert.deepEqual(v.fixtures.find((f) => f.channel === 203)!.shared, ["⚠ patch conflict with Ch 205 at 1/285 — fix in Capture"]);
+  assert.deepEqual(v.fixtures.find((f) => f.channel === 205)!.shared, ["⚠ patch conflict with Ch 203 at 1/285 — fix in Capture"]);
   assert.deepEqual(v.fixtures.find((f) => f.channel === 204)!.shared, []);
   assert.deepEqual(v.fixtures.find((f) => f.channel === 203)!.issues, []);
-  assert.equal(R.logs.filter((l) => /share 1\/285/.test(l)).length, 1);
-  assert.ok(R.logs.includes("Capture's patch: Ch 203 and Ch 205 share 1/285 (both stay controllable; a knob on either drives the shared slots)") || R.logs.includes("Capture's patch: Ch 205 and Ch 203 share 1/285 (both stay controllable; a knob on either drives the shared slots)"), R.logs.join("\n"));
+  assert.equal(R.logs.filter((l) => /patch conflict in Capture/.test(l)).length, 1);
+  assert.ok(R.logs.includes("patch conflict in Capture: Ch 203 and Ch 205 both at 1/285 (fix the patch in Capture)") || R.logs.includes("patch conflict in Capture: Ch 205 and Ch 203 both at 1/285 (fix the patch in Capture)"), R.logs.join("\n"));
+  assert.ok(!R.logs.some((l) => /share 1\/285/.test(l)), "the old wording is gone");
   await R.list([fx(1, 203, [1, 285]), fx(2, 205, [1, 285]), fx(3, 204, [1, 229])]);
-  assert.equal(R.logs.filter((l) => /share 1\/285/.test(l)).length, 1, "not again");
+  assert.equal(R.logs.filter((l) => /patch conflict in Capture/.test(l)).length, 1, "not again (once per pair)");
   // a knob on 203, then on 205: the shared slots carry the last move
   R.svc.onSelectionEvent([901]);
   R.svc.attrRotate(0, 10, false); // 203 pan 60 %

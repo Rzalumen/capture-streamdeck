@@ -25,14 +25,14 @@ const { chromium } = require(require.resolve("playwright", { paths: [execSync("n
 const out = process.argv[2] ?? "/tmp/pi-shots";
 fs.mkdirSync(out, { recursive: true });
 const url = "file://" + path.resolve("com.rezabehjat.capture.sdPlugin/ui/fixtures.html");
-const fx = (key, channel, name, extra = {}) => ({ key, channel, manufacturer: "M", name, mode: "Std", channelCount: 14, typeKey: "T1", position: "SL 4.0 · DS 2.0 · H 6.0", hasPanTilt: true, parsed: true, parseError: null, notes: [], addr: null, issues: [], controllable: false, ...extra });
+const fx = (key, channel, name, extra = {}) => ({ key, channel, manufacturer: "M", name, mode: "Std", channelCount: 14, typeKey: "T1", position: "SL 4.0 · DS 2.0 · H 6.0", hasPanTilt: true, parsed: true, parseError: null, notes: [], addr: null, issues: [], controllable: false, axes: ["pan", "tilt"], invertPan: false, invertTilt: false, ...extra });
 const view = {
   status: "ok", error: null, showName: "Test Show", controllable: 1, active: false, universes: [],
   blackoutWarning: "While output is on, every universe you touch is sent in full: all slots that are not set by a fixture you touched are 0. That BLACKS OUT anything else on that universe, including fixtures that are not set up here.",
   fixtures: [
-    fx("a1", 203, "Rogue R2X Wash", { addr: { universe: 1, address: 285 }, controllable: true }),
+    fx("a1", 203, "Rogue R2X Wash", { addr: { universe: 1, address: 285 }, controllable: true, invertPan: true }),
     fx("a2", 204, "Rogue R2X Wash"),
-    fx("b1", 9, "Par Can", { hasPanTilt: false, typeKey: "T2" }),
+    fx("b1", 9, "Par Can", { hasPanTilt: false, typeKey: "T2", axes: [] }),
     fx("c1", 12, "Odd Fixture", { parsed: false, parseError: "mode block has 3 channel(s) but Capture's fixture list says ChannelCount=14", hasPanTilt: false, typeKey: "T3" }),
     fx("s1", 207, "Framing Spot", { channelCount: 37, typeKey: "T4", unproven: true, addr: { universe: 1, address: 420 } }),
   ],
@@ -117,6 +117,21 @@ await page.fill("#fill-u", "2");
 await page.fill("#fill-a", "10");
 await page.click("#fill-go");
 assert.deepEqual(got.at(-1).payload, { cmd: "autofill", keys: ["a1", "a2"], universe: 2, address: 10 });
+// v0.12.0 (Handoff 31): Invert Pan / Invert Tilt per row, for the axes the type has
+assert.equal(await page.isVisible(".fx[data-key=a1] .inv-pan"), true);
+assert.equal(await page.isVisible(".fx[data-key=a1] .inv-tilt"), true);
+assert.equal(await page.isChecked(".fx[data-key=a1] .inv-pan input"), true, "a1 has Pan inverted");
+assert.equal(await page.isChecked(".fx[data-key=a1] .inv-tilt input"), false);
+assert.equal(await page.textContent(".fx[data-key=a1] .inv-pan"), " Invert Pan");
+assert.equal(await page.textContent(".fx[data-key=a1] .inv-tilt"), " Invert Tilt");
+got.length = 0;
+await page.check(".fx[data-key=a2] .inv-tilt input");
+assert.deepEqual(got.at(-1).payload, { cmd: "invert", key: "a2", axis: "tilt", on: true });
+await page.uncheck(".fx[data-key=a1] .inv-pan input");
+assert.deepEqual(got.at(-1).payload, { cmd: "invert", key: "a1", axis: "pan", on: false });
+await page.check("#all");
+assert.equal(await page.isVisible(".fx[data-key=b1] .inv"), false, "a type without Pan/Tilt: no toggles");
+await page.uncheck("#all");
 await page.click("#resync");
 assert.equal(got.at(-1).payload.cmd, "resync");
 await page.screenshot({ path: path.join(out, "fixtures-setup.png"), fullPage: true });
@@ -127,8 +142,8 @@ const pview = {
   ...view,
   patch: { patched: 2, total: 5 },
   fixtures: view.fixtures.map((f) =>
-    f.key === "a1" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["shares 1/285 with Ch 204"] }
-    : f.key === "a2" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["shares 1/285 with Ch 203"] }
+    f.key === "a1" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["⚠ patch conflict with Ch 204 at 1/285 — fix in Capture"] }
+    : f.key === "a2" ? { ...f, addr: { universe: 1, address: 285, src: "capture" }, fromCapture: true, controllable: true, shared: ["⚠ patch conflict with Ch 203 at 1/285 — fix in Capture"], axes: ["pan"] }
     : f.key === "s1" ? { ...f, addr: null, issues: ["Capture's patch: 17/1: universe not declared (1-16) — not controllable"] }
     : f),
 };
@@ -144,8 +159,18 @@ for (const k of ["a1", "a2"]) {
   assert.equal(await page.isVisible(`.fx[data-key=${k}] .src`), true, `${k}: marked from Capture`);
 }
 assert.equal(await page.inputValue(".fx[data-key=a2] .a"), "285");
-assert.match(await page.textContent(".fx[data-key=a1] .st"), /Controllable \(1\/285–298\) · shares 1\/285 with Ch 204/);
-assert.match(await page.textContent(".fx[data-key=a2] .st"), /shares 1\/285 with Ch 203/);
+assert.equal(await page.textContent(".fx[data-key=a1] .st"), "Controllable (1/285–298)");
+// v0.12.0: the overlap is a patch conflict, on its own line on both rows
+assert.equal(await page.textContent(".fx[data-key=a1] .conflict"), "⚠ patch conflict with Ch 204 at 1/285 — fix in Capture");
+assert.equal(await page.textContent(".fx[data-key=a2] .conflict"), "⚠ patch conflict with Ch 203 at 1/285 — fix in Capture");
+assert.equal(await page.isVisible(".fx[data-key=s1] .conflict"), false, "no conflict, no line");
+// v0.12.0: the invert toggles stay editable in patch mode (the addresses are read-only); a type with Pan only shows Invert Pan only
+assert.equal(await page.isVisible(".fx[data-key=a2] .inv-pan"), true);
+assert.equal(await page.isVisible(".fx[data-key=a2] .inv-tilt"), false, "Pan only: no Invert Tilt");
+assert.equal(await page.isEnabled(".fx[data-key=a1] .inv-pan input"), true);
+got.length = 0;
+await page.check(".fx[data-key=a1] .inv-tilt input");
+assert.deepEqual(got.at(-1).payload, { cmd: "invert", key: "a1", axis: "tilt", on: true }, "sent in patch mode");
 assert.match(await page.textContent(".fx[data-key=s1] .st"), /universe not declared \(1-16\)/);
 got.length = 0;
 await page.dispatchEvent(".fx[data-key=a2] .a", "change");

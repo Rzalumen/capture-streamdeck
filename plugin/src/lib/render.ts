@@ -166,6 +166,15 @@ export interface FixtureStripState {
   untouched: boolean;
 }
 
+/**
+ * Strip title of an Attribute dial: the channel name, shortened to what fits the strip's name field (15 characters). v0.12.0 (Handoff 31):
+ * an inverted Pan / Tilt gets " ⇄" after its name ("Pan ⇄"), within the same 15 characters; nothing else on the strip changes.
+ */
+export function stripLabel(name: string, inverted = false): string {
+  if (!inverted) return name.length > 15 ? `${name.slice(0, 14)}…` : name;
+  return name.length > 13 ? `${name.slice(0, 12)}… ⇄` : `${name} ⇄`;
+}
+
 /** Feedback for layouts/dial.json on the fixture attribute dials: name, value in %, bar, marks ×N / FINE / ~. */
 export function fixtureStripFeedback(s: FixtureStripState): Record<string, unknown> {
   const grey = mix(COLORS.text, COLORS.bg, 0.5);

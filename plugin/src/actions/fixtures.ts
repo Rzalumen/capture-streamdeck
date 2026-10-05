@@ -1,7 +1,7 @@
 import streamDeck, { type DialAction, type DialDownEvent, type DialRotateEvent, type KeyAction, type KeyDownEvent, type PropertyInspectorDidAppearEvent, type SendToPluginEvent, SingletonAction, type TouchTapEvent, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import { FIXTURE_ATTR_DIALS, FIXTURE_KEY_UUIDS, FIXTURE_SELECT_UUID, FIXTURE_DIALS, fixtureKey } from "../catalog/fixtures.js";
 import type { DialId } from "../fixtures/attrs.js";
-import { attrStripFeedback, deckKeySvg, deckState, fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, svgDataUrl, type HeaderInput } from "../lib/render.js";
+import { attrStripFeedback, deckKeySvg, deckState, fixtureStatusSvg, fixtureStripFeedback, selectStripFeedback, stripLabel, svgDataUrl, type HeaderInput } from "../lib/render.js";
 import { runSetupCommand, type SetupCommand } from "../fixtures/setupCommands.js";
 import { rt } from "../runtime.js";
 import { draw, Flasher, logEvent } from "./util.js";
@@ -84,7 +84,7 @@ export class FixtureAttrDial extends SingletonAction {
   }
   private view(c: Ctx): void {
     const r = svc().readout(this.dial);
-    const fb = fixtureStripFeedback({ name: r.label, value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched });
+    const fb = fixtureStripFeedback({ name: r.inverted ? stripLabel(r.label, true) : r.label, value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched });
     c.action.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
   }
 
@@ -144,8 +144,7 @@ export const fixtureDialActions = (): SingletonAction[] => FIXTURE_DIALS.map((d)
 
 // ------------------------------------------------------------------ Fixture: Attribute 1 / 2 / 3 (v0.6)
 
-/** Strip title: the channel name, shortened to what fits the strip's name field. */
-const stripName = (s: string): string => (s.length > 15 ? `${s.slice(0, 14)}…` : s);
+
 
 /**
  * A generic attribute dial: shows and drives channel `slot` of the current attribute page (◀ Page / Page ▶) of the selected fixture(s).
@@ -170,7 +169,7 @@ export class FixtureSlotDial extends SingletonAction {
   }
   private view(c: Ctx): void {
     const r = svc().attrReadout(this.slot);
-    const fb = attrStripFeedback({ name: stripName(r.label), value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched, slot: this.slot, header: deckHeader() });
+    const fb = attrStripFeedback({ name: stripLabel(r.label, r.inverted), value: r.value, fine: c.fine, multi: r.multi, untouched: !r.touched, slot: this.slot, header: deckHeader() });
     c.action.setFeedback(fb as never).catch((e) => rt.log.warn("setFeedback failed", e));
   }
   override onWillAppear(ev: WillAppearEvent): void {

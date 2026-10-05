@@ -1,5 +1,5 @@
 /* Setup table (plain JS) for the Property Inspector (fixtures.js).
- * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill | idle | autowake, ...}) goes to the plugin; the plugin's
+ * SetupCore.start({send}) wires the page; send({cmd: get | resync | set | clear | autofill | idle | autowake | invert, ...}) goes to the plugin; the plugin's
  * answer is handed to the returned object's receive(view, error) (error: text, null = none, undefined = leave the shown error alone). */
 (function () {
   "use strict";
@@ -118,7 +118,19 @@
     clear.onclick = () => { u.value = ""; a.value = ""; toPlugin({ cmd: "clear", key: f.key }); };
     l3.append(el("label", "", "Universe"), u, el("label", "", "Address"), a, clear, src);
     r.appendChild(l3);
+    // v0.12.0 (Handoff 31): Invert Pan / Invert Tilt (the knob direction only), for the axes the type has; editable in patch mode too
+    const inv = el("div", "inv");
+    for (const axis of ["pan", "tilt"]) {
+      const lab = el("label", "inv-" + axis);
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.onchange = () => toPlugin({ cmd: "invert", key: f.key, axis, on: cb.checked });
+      lab.append(cb, document.createTextNode(axis === "pan" ? " Invert Pan" : " Invert Tilt"));
+      inv.appendChild(lab);
+    }
+    r.appendChild(inv);
     r.appendChild(el("div", "st"));
+    r.appendChild(el("div", "conflict hidden"));
     const unp = el("div", "unproven hidden", "Check this type against Capture's patch view: the channel list parsed consistently, but the parser could not prove it is the only possible reading.");
     r.appendChild(unp);
     const det = el("details", "chans");
@@ -174,10 +186,20 @@
     else if (!f.parsed) { st.classList.add("err"); text = "Not controllable: channel list not read safely — " + f.parseError; }
     else if (f.controllable) { st.classList.add("ok"); text = "Controllable (" + f.addr.universe + "/" + f.addr.address + "–" + (f.addr.address + f.channelCount - 1) + ")"; }
     else text = patch ? "Not patched in Capture" : "No address yet";
-    if (f.shared && f.shared.length) text += " · " + f.shared.join(" · ");
     if (rowError && rowError.key === f.key) { st.classList.remove("ok"); st.classList.add("err"); text = rowError.text; }
     if (f.parsed && f.notes.length) text += " · " + f.notes.length + " note(s) in the plugin log";
     st.textContent = text;
+    // v0.12.0: an overlap in Capture's patch is a patch conflict (both rows), shown on its own line
+    const conflict = r.querySelector(".conflict");
+    conflict.textContent = f.shared && f.shared.length ? f.shared.join(" · ") : "";
+    conflict.classList.toggle("hidden", !(f.shared && f.shared.length));
+    const axes = f.axes || [];
+    r.querySelector(".inv").classList.toggle("hidden", !axes.length);
+    for (const axis of ["pan", "tilt"]) {
+      const lab = r.querySelector(".inv-" + axis);
+      lab.classList.toggle("hidden", !axes.includes(axis));
+      lab.querySelector("input").checked = axis === "pan" ? !!f.invertPan : !!f.invertTilt;
+    }
     channels(r, f);
   }
 

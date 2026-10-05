@@ -114,7 +114,7 @@ test("start-up, no Deck press: addresses from Capture's patch (typed 2/1 replace
   await waitLog(/Fixtures: Capture's patch: 4 of 5 fixture\(s\) patched/, "Capture's patch taken", 8000);
   assert.match(deck.logText(), /Fixtures: address from Capture's patch Ch 202 Rogue R2X Wash -> 1\/444 \(was 2\/1, typed\)/);
   assert.match(deck.logText(), /Fixtures: address from Capture's patch Ch 207 Rogue R2X Wash 17\/1: universe not declared \(1-16\) — not controllable/);
-  assert.match(deck.logText(), /Fixtures: Capture's patch: Ch 20[35] and Ch 20[35] share 1\/285/);
+  assert.match(deck.logText(), /Fixtures: patch conflict in Capture: Ch 20[35] and Ch 20[35] both at 1\/285 \(fix the patch in Capture\)/); // v0.12.0 wording
   assert.doesNotMatch(deck.logText(), /deck control ON/);
   deck.willAppear(A.setup, "setup", {});
   deck.inspectorAppeared(A.setup, "setup");
@@ -126,8 +126,8 @@ test("start-up, no Deck press: addresses from Capture's patch (typed 2/1 replace
     assert.deepEqual(row(v, c).addr, { universe: 1, address: 285, src: "capture" });
     assert.equal(row(v, c).controllable, true, `Ch ${c} controllable despite sharing`);
   }
-  assert.deepEqual(row(v, 203).shared, ["shares 1/285 with Ch 205"]);
-  assert.deepEqual(row(v, 205).shared, ["shares 1/285 with Ch 203"]);
+  assert.deepEqual(row(v, 203).shared, ["⚠ patch conflict with Ch 205 at 1/285 — fix in Capture"]);
+  assert.deepEqual(row(v, 205).shared, ["⚠ patch conflict with Ch 203 at 1/285 — fix in Capture"]);
   assert.equal(row(v, 204).addr, null);
   assert.equal(row(v, 204).controllable, false);
   assert.equal(row(v, 207).controllable, false);

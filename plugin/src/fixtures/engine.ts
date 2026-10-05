@@ -230,16 +230,17 @@ export class DmxEngine {
   }
 
   /**
-   * The user moved a knob: each listed parameter of each target becomes `fn(its own current value, the parameter)`. Fixtures start
-   * from their defaults if new; output starts. Items without parameters are skipped; nothing happens if no item has any.
+   * The user moved a knob: each listed parameter of each target becomes `fn(its own current value, the parameter, the target)`.
+   * Fixtures start from their defaults if new; output starts. Items without parameters are skipped; nothing happens if no item has any.
+   * (v0.12.0: the target is passed so the knob direction can be inverted per fixture; the value written is always what `fn` returns.)
    */
-  adjust(items: ParamTarget[], fn: (current: number, p: Param) => number): boolean {
+  adjust(items: ParamTarget[], fn: (current: number, p: Param, t: Target) => number): boolean {
     const hit = items.filter((i) => i.params.length);
     if (!hit.length || !this.ok()) return false;
     for (const { target, params } of hit) {
       const st = this.touch(target);
       for (const p of params) {
-        st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p)));
+        st.values.set(p.id, clamp(fn(st.values.get(p.id) ?? p.home, p, target)));
         st.deckSet.add(p.id);
       }
       this.recordDeck(st, params);

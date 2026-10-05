@@ -6,7 +6,10 @@
  * universe/address; proven on Reza's Mac). Then the addresses come from Capture's patch (FixtureService.onPatchList) and are stored
  * here marked `src: "capture"`, replacing typed entries. Without Capture's patch (fallback) the user types them, as before.
  * Overlaps: two entries that BOTH come from Capture's patch may share slots (a real patch can do that: both stay controllable);
- * an overlap involving a typed entry is refused as before.
+ * an overlap involving a typed entry is refused as before. v0.12.0 (Handoff 31): such an overlap is shown and logged as a PATCH CONFLICT
+ * ("fix in Capture"); behaviour unchanged (both stay controllable).
+ * v0.12.0: per show and per fixture KEY (not per address, so a re-patch keeps it), the Pan / Tilt knob direction can be inverted
+ * (`invertPan`, `invertTilt`, default false), stored beside the addresses under INVERT_KEY in the global settings.
  */
 import type { GlobalSettings } from "../lib/globals.js";
 
@@ -20,6 +23,14 @@ export type SetupData = Record<string, Record<string, Address>>;
 
 export const MAX_UNIVERSE = 16;
 export const SETUP_KEY = "fixtureSetup";
+/** v0.12.0: show -> fixture key -> { invertPan?: true, invertTilt?: true } (only true flags are stored). */
+export const INVERT_KEY = "fixtureInvert";
+export type Axis = "pan" | "tilt";
+export interface Invert {
+  invertPan: boolean;
+  invertTilt: boolean;
+}
+type InvertData = Record<string, Record<string, { invertPan?: true; invertTilt?: true }>>;
 export const showKey = (showName: string | null | undefined): string => (showName && showName.trim() ? showName : "(unnamed show)");
 
 /** null when fine. channelCount (optional) also checks that the fixture fits in the universe. */
@@ -71,7 +82,7 @@ export function checkSetup(entries: SetupEntry[]): Map<string, string[]> {
   return out;
 }
 
-/** v0.10.0: "shares 1/285 with Ch 205" per fixture key, for entries from Capture's patch that overlap each other. */
+/** v0.10.0 / v0.12.0: "⚠ patch conflict with Ch 205 at 1/285 — fix in Capture" per fixture key, for entries from Capture's patch that overlap each other. */
 export function sharedNotes(entries: SetupEntry[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   const add = (k: string, m: string): void => void out.set(k, [...(out.get(k) ?? []), m]);
@@ -85,8 +96,8 @@ export function sharedNotes(entries: SetupEntry[]): Map<string, string[]> {
       const bEnd = b.addr.address + b.channelCount - 1;
       if (a.addr.address <= bEnd && b.addr.address <= aEnd) {
         const at = `${a.addr.universe}/${Math.max(a.addr.address, b.addr.address)}`;
-        add(a.key, `shares ${at} with ${b.short ?? b.label}`);
-        add(b.key, `shares ${at} with ${a.short ?? a.label}`);
+        add(a.key, `⚠ patch conflict with ${b.short ?? b.label} at ${at} — fix in Capture`);
+        add(b.key, `⚠ patch conflict with ${a.short ?? a.label} at ${at} — fix in Capture`);
       }
     }
   }
@@ -125,6 +136,8 @@ const cleanAddress = (v: unknown): Address | undefined => {
 
 export class SetupStore {
   private data: SetupData = {};
+  /** v0.12.0: the Pan / Tilt invert flags. */
+  private inv: InvertData = {};
   private listeners: (() => void)[] = [];
   constructor(private globals: GlobalSettings) {}
 
@@ -148,9 +161,52 @@ export class SetupStore {
         }
       }
       this.data = data;
+      const rawInv = g[INVERT_KEY];
+      const inv: InvertData = {};
+      if (rawInv && typeof rawInv === "object") {
+        for (const [show, m] of Object.entries(rawInv as Record<string, unknown>)) {
+          if (!m || typeof m !== "object") continue;
+          for (const [k, v] of Object.entries(m as Record<string, unknown>)) {
+            if (!v || typeof v !== "object") continue;
+            const f = v as Record<string, unknown>;
+            const e = { ...(f.invertPan === true ? { invertPan: true as const } : {}), ...(f.invertTilt === true ? { invertTilt: true as const } : {}) };
+            if (Object.keys(e).length) (inv[show] ??= {})[k] = e;
+          }
+        }
+      }
+      this.inv = inv;
     } catch {
       /* keep what we have */
     }
+  }
+
+  /** v0.12.0: the invert flags of one fixture (by its key) in one show. */
+  invert(showName: string | null, key: string): Invert {
+    const e = this.inv[showKey(showName)]?.[key];
+    return { invertPan: !!e?.invertPan, invertTilt: !!e?.invertTilt };
+  }
+
+  /** v0.12.0: set one axis of one fixture's invert (by key, not address). Returns an error text, or null when saved. */
+  async setInvert(showName: string | null, key: string, axis: Axis, on: boolean): Promise<string | null> {
+    const s = showKey(showName);
+    const flag = axis === "pan" ? "invertPan" : "invertTilt";
+    const next: InvertData = { ...this.inv, [s]: { ...(this.inv[s] ?? {}) } };
+    const e = { ...(next[s][key] ?? {}) };
+    if (on) e[flag] = true;
+    else delete e[flag];
+    if (Object.keys(e).length) next[s][key] = e;
+    else delete next[s][key];
+    if (!Object.keys(next[s]).length) delete next[s];
+    const prev = this.inv;
+    this.inv = next;
+    try {
+      await this.globals.update({ [INVERT_KEY]: next });
+    } catch (e2) {
+      this.inv = prev;
+      return `could not save the invert setting: ${(e2 as Error).message}`;
+    }
+    for (const fn of this.listeners) fn();
+    return null;
   }
 
   forShow(showName: string | null): Record<string, Address> {

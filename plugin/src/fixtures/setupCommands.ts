@@ -11,12 +11,14 @@ export interface SetupCommand {
   address?: number;
   keys?: string[];
   seconds?: number;
-  /** v0.11.0: "autowake" — wake automatically when Capture opens the show. */
+  /** v0.11.0: "autowake" — wake automatically when Capture opens the show; v0.12.0: "invert" — the axis on/off. */
   on?: boolean;
+  /** v0.12.0: "invert" — "pan" | "tilt". */
+  axis?: string;
 }
 
 /**
- * Runs one command: get | resync | set | clear | autofill | idle | autowake (anything else = get). Returns an error text, or null when it worked.
+ * Runs one command: get | resync | set | clear | autofill | idle | autowake | invert (anything else = get). Returns an error text, or null when it worked.
  * `interim` is called once before a (slow) re-read of the show so the caller can show "Reading…".
  */
 export async function runSetupCommand(svc: FixtureService, m: SetupCommand, interim?: () => Promise<void>): Promise<string | null> {
@@ -33,6 +35,8 @@ export async function runSetupCommand(svc: FixtureService, m: SetupCommand, inte
       return svc.deck ? svc.deck.setIdleSeconds(Number(m.seconds)) : "Deck Control is not available";
     case "autowake":
       return svc.deck ? svc.deck.setAutoWake(m.on === true) : "Deck Control is not available";
+    case "invert": // v0.12.0: allowed in Capture-patch mode too (not an address)
+      return svc.setInvert(String(m.key), m.axis as "pan" | "tilt", m.on === true);
     case "autofill":
       return svc.autoFill(Array.isArray(m.keys) ? m.keys.map(String) : [], { universe: Number(m.universe), address: Number(m.address) });
     default:
